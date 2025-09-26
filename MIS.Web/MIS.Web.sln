@@ -1,0 +1,55 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36221.1 d17.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MIS.Web", "MIS.Web.csproj", "{00A570C1-BF35-4E28-B9EB-D02877D36A07}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Common", "..\Common\Common.csproj", "{9F0601AB-EA31-A20F-1B21-30C901BDC579}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MIS.DAL", "..\MIS.DAL\MIS.DAL.csproj", "{70FAC995-AEED-87B7-2F97-53BD6AF32AA4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MIS.Models", "..\MIS.Models\MIS.Models.csproj", "{C7B60439-1E43-013F-56C2-3E8C9B69FF93}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Toll.Reporting.Api", "..\Toll.Reporting.Api\Toll.Reporting.Api.csproj", "{567F5CFF-58D7-3735-76D4-A76A954048E8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TollReportingSystem.Data", "..\TollReportingSystem.Data\TollReportingSystem.Data.csproj", "{D53F602B-0F65-3B51-94A7-403EFF45D730}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{00A570C1-BF35-4E28-B9EB-D02877D36A07}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{00A570C1-BF35-4E28-B9EB-D02877D36A07}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{00A570C1-BF35-4E28-B9EB-D02877D36A07}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{00A570C1-BF35-4E28-B9EB-D02877D36A07}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9F0601AB-EA31-A20F-1B21-30C901BDC579}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9F0601AB-EA31-A20F-1B21-30C901BDC579}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9F0601AB-EA31-A20F-1B21-30C901BDC579}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9F0601AB-EA31-A20F-1B21-30C901BDC579}.Release|Any CPU.Build.0 = Release|Any CPU
+		{70FAC995-AEED-87B7-2F97-53BD6AF32AA4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{70FAC995-AEED-87B7-2F97-53BD6AF32AA4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{70FAC995-AEED-87B7-2F97-53BD6AF32AA4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{70FAC995-AEED-87B7-2F97-53BD6AF32AA4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C7B60439-1E43-013F-56C2-3E8C9B69FF93}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C7B60439-1E43-013F-56C2-3E8C9B69FF93}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C7B60439-1E43-013F-56C2-3E8C9B69FF93}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C7B60439-1E43-013F-56C2-3E8C9B69FF93}.Release|Any CPU.Build.0 = Release|Any CPU
+		{567F5CFF-58D7-3735-76D4-A76A954048E8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{567F5CFF-58D7-3735-76D4-A76A954048E8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{567F5CFF-58D7-3735-76D4-A76A954048E8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{567F5CFF-58D7-3735-76D4-A76A954048E8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D53F602B-0F65-3B51-94A7-403EFF45D730}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D53F602B-0F65-3B51-94A7-403EFF45D730}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D53F602B-0F65-3B51-94A7-403EFF45D730}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D53F602B-0F65-3B51-94A7-403EFF45D730}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {E57E4228-938E-4252-8A21-405233B44391}
+	EndGlobalSection
+EndGlobal

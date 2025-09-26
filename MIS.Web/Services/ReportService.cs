@@ -6,7 +6,7 @@ namespace MIS.Web.Services
     public class ReportService : IReportService
     {
         private readonly IHttpClientFactory _httpClientFactory;
-        private readonly String baseURL = "http://localhost:5142/";
+        private readonly String baseURL = "http://localhost:5000/";
 
         public ReportService(IHttpClientFactory httpClientFactory)
         {
@@ -17,7 +17,7 @@ namespace MIS.Web.Services
         {
             var url = baseURL + "api/Lookup/shifts";
             var client = _httpClientFactory.CreateClient();
-            var response = await client.GetAsync(baseURL);
+            var response = await client.GetAsync(url);
             return await response.Content.ReadAsStringAsync();
         }
     }

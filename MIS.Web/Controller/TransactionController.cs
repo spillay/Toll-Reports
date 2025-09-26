@@ -11,9 +11,9 @@ namespace MIS.Web.Controller
         {
             reportService = _reportService;
         }
-        public IActionResult Index()
+        public async Task<IActionResult> Index() 
         {
-            var data = reportService.GetShiftsAsync().GetAwaiter().GetResult();
+            var data = await reportService.GetShiftsAsync();
             return View();
         }
     }

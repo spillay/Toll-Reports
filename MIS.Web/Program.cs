@@ -1,8 +1,11 @@
+using MIS.Web.Services;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorPages();
 builder.Services.AddHttpClient();
+builder.Services.AddScoped<IReportService, ReportService>();
 
 var app = builder.Build();
 
@@ -17,11 +20,16 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 app.UseRouting();
+app.MapControllerRoute(
+    name: "Transaction",
+    pattern: "{controller=Transaction}/{action=Index}/");
 
 app.UseAuthorization();
 
 app.MapStaticAssets();
 app.MapRazorPages()
    .WithStaticAssets();
+
+
 
 app.Run();

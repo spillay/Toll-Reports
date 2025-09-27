@@ -1,20 +1,31 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Http;
+using MIS.Web.Models;
 using MIS.Web.Services;
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
-namespace MIS.Web.Controller
+namespace MIS.Web.Controllers
 {
-    public class TransactionController : Microsoft.AspNetCore.Mvc.Controller
+    public class TransactionController : Controller
     {
-        private readonly IReportService reportService;
-        public TransactionController(IReportService _reportService)
+        private readonly IReportService _reportService;
+
+        public TransactionController(IReportService reportService)
         {
-            reportService = _reportService;
+            _reportService = reportService;
         }
-        public async Task<IActionResult> Index() 
+
+        // Razor page
+        public async Task<IActionResult> Index(TransactionReportViewModel times)
         {
-            var data = await reportService.GetShiftsAsync();
-            return View();
+            //var sDate = startDate ?? new DateTime(2025/08/19);
+            //var eDate = endDate ?? new DateTime(2025/08/22);
+
+            // Fetch data from API via ReportService
+            var model = await _reportService.GetTransactionDetailsAsync(times.StartDate, times.EndDate);
+
+            return View(model);
         }
     }
 }

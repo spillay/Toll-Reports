@@ -39,7 +39,6 @@
         <!-- Header -->
         <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
             <div class="d-flex align-items-center">
-                <img src="~/images/lCC Logo.jpg" alt="LCC Logo" style="height: 60px; margin-right: 15px;" />
                 <img src="~/images/ICT-Works Logo.jpg" alt="ICT Works Logo" style="height: 60px;" />
             </div>
             <h2 class="mb-0 fw-bold text-primary">Discrepancy Report</h2>
@@ -110,7 +109,7 @@
                    asp-route-EndDate="@Model.EndDate.ToString("yyyy-MM-ddTHH:mm")"
                    asp-route-Shift="@Model.Shift"
                    asp-route-PaymentMethod="@Model.PaymentMethod"
-                   asp-route-SortOrder="@Model.SortOrder"
+                   asp-route-takenAction="@Model.takenAction"
                    class="btn btn-success w-100 shadow-sm">
                     <i class="bi bi-file-earmark-excel"></i> Export Excel
                 </a>
@@ -159,13 +158,36 @@
                                 bool tollCorrect = tollExists && t.toll_Collector_Class == t.final_Class;
                                 bool correctAVC = avcExists && t.avC_Class == t.final_Class;
 
-                                if (tollCorrect && correctAVC) action = "Both Correct";
-                                else if (tollCorrect) action = "Toll Collector Correct";
-                                else if (correctAVC) action = "AVC Correct";
-                                else if ((tollExists && !tollCorrect) && (avcExists && !correctAVC)) action = "Both Incorrect";
-                                else if (tollExists && !tollCorrect) action = "Toll Collector Incorrect";
-                                else if (avcExists && !correctAVC) action = "AVC Incorrect";
+                                if (tollCorrect && correctAVC)
+                                {
+                                    action = "Both Correct";
+                                }
+                                else if (tollCorrect && !avcExists)
+                                {
+                                    action = "Toll Collector Correct";
+                                }
+                                else if (!tollExists && correctAVC)
+                                {
+                                    action = "AVC Correct";
+                                }
+                                else if (tollExists && !tollCorrect && avcExists && !correctAVC)
+                                {
+                                    action = "Both Incorrect";
+                                }
+                                else if (tollExists && !tollCorrect && (!avcExists || correctAVC))
+                                {
+                                    action = "Toll Collector Incorrect";
+                                }
+                                else if (avcExists && !correctAVC && (!tollExists || tollCorrect))
+                                {
+                                    action = "AVC Incorrect";
+                                }
+                                else
+                                {
+                                    action = "No Action Taken";
+                                }
                             }
+
 
                             <tr>
                                 <td>@t.lane_Nr</td>
@@ -228,58 +250,146 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
-<script>
-    const filteredData = @Html.Raw(Json.Serialize(Model.AllDiscrepancys));
+@using System.Text.Json
 
-    document.getElementById("btnDownloadPdf")?.addEventListener("click", function () {
+<script>
+    const filteredData = @Html.Raw(JsonSerializer.Serialize(Model.AllDiscrepancys));
+
+    // Serialize filters properly
+    const appliedFilters = {
+        StartDate: '@Model.StartDate.ToString("dd/MM/yyyy HH:mm")',
+        EndDate: '@Model.EndDate.ToString("dd/MM/yyyy HH:mm")',
+        Lane: '@(string.IsNullOrEmpty(Model.lane_Nr) ? "All" : Model.lane_Nr)',
+        Shift: '@(string.IsNullOrEmpty(Model.Shift) ? "All" : Model.Shift)',
+        PaymentMethod: '@(string.IsNullOrEmpty(Model.PaymentMethod) ? "All" : Model.PaymentMethod)',
+        ActionTaken: '@(string.IsNullOrEmpty(Model.takenAction) ? "All" : Model.takenAction)'
+    };
+
+    // Footer values
+    const totalCount = filteredData.length;
+    const totalDiff = filteredData.reduce((sum, t) => sum + (t.updated_tariff - t.tariff), 0);
+    const tollCollectorCorrect = filteredData.filter(t => t.toll_Collector_Class && t.toll_Collector_Class === t.final_Class).length;
+    const avcCorrect = filteredData.filter(t => t.avC_Class && t.avC_Class === t.final_Class).length;
+    const bothIncorrect = filteredData.filter(t => (t.toll_Collector_Class && t.toll_Collector_Class !== t.final_Class) && (t.avC_Class && t.avC_Class !== t.final_Class)).length;
+
+    const reportGeneratedAt = '@DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")';
+    const currentUserId = '@(User.Identity?.Name ?? "Unknown User")';
+    const reportVersion = "1.0.0";
+
+    document.getElementById("btnDownloadPdf").addEventListener("click", function () {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
 
-        doc.setFontSize(16);
-        doc.text("Discrepancy Report", 40, 40);
+        // Ensure both logos are loaded before generating PDF
+        Promise.all([
+            new Promise(resolve => { const img = new Image(); img.src = '/images/lCC Logo.jpg'; img.onload = () => resolve(img); }),
+            new Promise(resolve => { const img = new Image(); img.src = '/images/ICT-Works Logo.jpg'; img.onload = () => resolve(img); })
+        ]).then(([llcLogo, ictLogo]) => {
+            // Logos
+            doc.addImage(llcLogo, 'JPEG', 40, 20, 60, 60);
+            doc.addImage(ictLogo, 'JPEG', 110, 20, 60, 60);
 
-        const headers = [
-            "Lane","Trx #","Date","Time","Shift","Operator",
-            "Payment","Collector Class","AVC Class","Final Class",
-            "Tariff","Updated Tariff","Difference","Action Taken"
-        ];
+            // Title
+            doc.setFontSize(18);
+            doc.setFont("helvetica", "bold");
+            const title = "LEKKI CONCESSION COMPANY LIMITED CONSERVATION TOLL PLAZA";
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const titleLines = doc.splitTextToSize(title, pageWidth - 200);
+            let yPos = 100;
+            titleLines.forEach(line => {
+                doc.text(line, pageWidth / 2, yPos, { align: 'center' });
+                yPos += 20;
+            });
 
-        const rows = filteredData.map(t => {
-            const diff = t.updated_tariff - t.tariff;
-            let action = "No Action Taken";
+            // Filters
+            doc.setFontSize(11);
+            doc.setFont("helvetica", "normal");
+            yPos += 10;
+            Object.entries(appliedFilters).forEach(([key, value]) => {
+                doc.text(`${key}: ${value}`, 40, yPos);
+                yPos += 15;
+            });
 
-            if (t.final_Class) {
+            // Table
+            const headers = ["Lane","Trx #","Date","Time","Shift","Operator",
+                "Payment","Collector Class","AVC Class","Final Class",
+                "Tariff","Updated Tariff","Difference","Action Taken"];
+            const rows = filteredData.map(t => {
+                const diff = t.updated_tariff - t.tariff;
+                let action = "No Action Taken";
+                    if (t.final_Class) {
                 const tollExists = t.toll_Collector_Class !== null && t.toll_Collector_Class !== "";
                 const avcExists = t.avC_Class !== null && t.avC_Class !== "";
 
                 const tollCorrect = tollExists && t.toll_Collector_Class === t.final_Class;
-                const avcCorrect = avcExists && t.avC_Class === t.final_Class;
+                const avcCorrectFlag = avcExists && t.avC_Class === t.final_Class;
 
-                if (tollCorrect && avcCorrect) action = "Both Correct";
-                else if (tollCorrect) action = "Toll Collector Correct";
-                else if (avcCorrect) action = "AVC Correct";
-                else if ((tollExists && !tollCorrect) && (avcExists && !avcCorrect)) action = "Both Incorrect";
-                else if (tollExists && !tollCorrect) action = "Toll Collector Incorrect";
-                else if (avcExists && !avcCorrect) action = "AVC Incorrect";
+                if (tollCorrect && avcCorrectFlag) {
+                    action = "Both Correct";
+                }
+                else if (tollCorrect && !avcExists) {
+                    action = "Toll Collector Correct";
+                }
+                else if (!tollExists && avcCorrectFlag) {
+                    action = "AVC Correct";
+                }
+                else if (tollExists && !tollCorrect && avcExists && !avcCorrectFlag) {
+                    action = "Both Incorrect";
+                }
+                else if (tollExists && !tollCorrect && (!avcExists || avcCorrectFlag)) {
+                    action = "Toll Collector Incorrect";
+                }
+                else if (avcExists && !avcCorrectFlag && (!tollExists || tollCorrect)) {
+                    action = "AVC Incorrect";
+                }
+                else {
+                    action = "No Action Taken";
+                }
             }
 
-            return [
-                t.lane_Nr, t.trx_Sequence_Nr, t.trx_Date, t.trx_Time,
-                t.operational_Shift, t.toll_Operator_ID, t.method_of_Payment,
-                t.toll_Collector_Class, t.avC_Class, t.final_Class,
-                t.tariff, t.updated_tariff, diff, action
-            ];
-        });
+                return [t.lane_Nr, t.trx_Sequence_Nr, t.trx_Date, t.trx_Time,
+                    t.operational_Shift, t.toll_Operator_ID, t.method_of_Payment,
+                    t.toll_Collector_Class, t.avC_Class, t.final_Class,
+                    t.tariff, t.updated_tariff, diff, action];
+            });
 
-        doc.autoTable({
-            head: [headers],
-            body: rows,
-            startY: 60,
-            theme: 'grid',
-            headStyles: { fillColor: [52, 152, 219] },
-            styles: { fontSize: 9, cellPadding: 4, overflow: 'linebreak' }
-        });
+            doc.autoTable({
+                head: [headers],
+                body: rows,
+                startY: yPos + 10,
+                theme: 'grid',
+                headStyles: { fillColor: [52, 152, 219] },
+                styles: { fontSize: 9, cellPadding: 4, overflow: 'linebreak' }
+            });
 
-        doc.save("DiscrepancyReport.pdf");
+            // Footer summary
+            const finalY = doc.lastAutoTable.finalY + 20;
+            doc.setFontSize(12);
+            doc.setFont("helvetica", "bold");
+            doc.text("Discrepancy Summary", 40, finalY);
+            doc.setFont("helvetica", "normal");
+            let footerY = finalY + 15;
+            doc.text(`Total Discrepancy Count: ${totalCount}`, 40, footerY);
+            doc.text(`Total Tariff Difference: ${totalDiff}`, 300, footerY);
+            footerY += 15;
+            doc.text(`Operator Correct: ${tollCollectorCorrect}`, 40, footerY);
+            doc.text(`AVC Correct: ${avcCorrect}`, 300, footerY);
+            footerY += 15;
+            doc.text(`Both Incorrect: ${bothIncorrect}`, 40, footerY);
+
+            // Report info
+            footerY += 30;
+            doc.setFont("helvetica", "bold");
+            doc.text(`Report Name: Discrepancy Details Report`, 40, footerY);
+            doc.setFont("helvetica", "normal");
+            doc.text(`Date & Time: ${reportGeneratedAt}`, 40, footerY + 15);
+            doc.text(`User ID: ${currentUserId}`, 300, footerY + 15);
+            doc.text(`Reports Module Version: ${reportVersion}`, 550, footerY + 15);
+
+            // Save PDF
+            doc.save("DiscrepancyReport.pdf");
+        });
     });
 </script>
+
+

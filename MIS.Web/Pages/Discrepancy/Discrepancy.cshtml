@@ -1,0 +1,285 @@
+﻿@page
+@model DiscrepancyReportModel
+
+@{
+    // Sorting helper
+    string GetSortOrder(string column)
+    {
+        if (Model.SortOrder == column) return column + "_desc";
+        if (Model.SortOrder == column + "_desc") return column;
+        return column;
+    }
+
+    // Summary counts
+    var totalCount = Model.AllDiscrepancys.Count;
+    var totalDiff = Model.AllDiscrepancys.Sum(t => t.updated_tariff - t.tariff);
+
+    var tollCollectorCorrect = Model.AllDiscrepancys.Count(t =>
+        !string.IsNullOrEmpty(t.toll_Collector_Class) && t.toll_Collector_Class == t.final_Class);
+
+    var avcCorrect = Model.AllDiscrepancys.Count(t =>
+        !string.IsNullOrEmpty(t.avC_Class) && t.avC_Class == t.final_Class);
+
+    var bothCorrect = Model.AllDiscrepancys.Count(t =>
+        !string.IsNullOrEmpty(t.toll_Collector_Class) && !string.IsNullOrEmpty(t.avC_Class) &&
+        t.toll_Collector_Class == t.final_Class && t.avC_Class == t.final_Class);
+
+    var bothIncorrect = Model.AllDiscrepancys.Count(t =>
+        (string.IsNullOrEmpty(t.toll_Collector_Class) || t.toll_Collector_Class != t.final_Class) &&
+        (string.IsNullOrEmpty(t.avC_Class) || t.avC_Class != t.final_Class));
+
+    var reportGeneratedAt = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
+    var currentUserId = User.Identity?.Name ?? "Unknown User";
+    var reportVersion = "1.0.0";
+    var reportName = "Discrepancy Report";
+}
+
+<div class="card shadow-lg mb-4">
+    <div class="card-body">
+        <!-- Header -->
+        <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
+            <div class="d-flex align-items-center">
+                <img src="~/images/lCC Logo.jpg" alt="LCC Logo" style="height: 60px; margin-right: 15px;" />
+                <img src="~/images/ICT-Works Logo.jpg" alt="ICT Works Logo" style="height: 60px;" />
+            </div>
+            <h2 class="mb-0 fw-bold text-primary">Discrepancy Report</h2>
+        </div>
+
+        <!-- Filters -->
+        <form method="get" class="row g-3 mb-3">
+            <div class="col-md-2">
+                <label class="form-label fw-semibold">Start Date & Time</label>
+                <input type="datetime-local" class="form-control" asp-for="StartDate" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-semibold">End Date & Time</label>
+                <input type="datetime-local" class="form-control" asp-for="EndDate" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-semibold">Lane</label>
+                <select class="form-control" asp-for="lane_Nr">
+                    <option value="">All</option>
+                    @for (int i = 1; i <= 8; i++)
+                    {
+                        <option>@i</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-semibold">Action Taken</label>
+                <select class="form-control" asp-for="takenAction">
+                    <option value="">All</option>
+                    <option>Both Correct</option>
+                    <option>Toll Collector Correct</option>
+                    <option>AVC Correct</option>
+                    <option>Both Incorrect</option>
+                    <option>No Action Taken</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-semibold">Shift</label>
+                <select class="form-control" asp-for="Shift">
+                    <option value="">All</option>
+                    <option>Shift One</option>
+                    <option>Shift Two</option>
+                    <option>Shift Three</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-semibold">Payment Method</label>
+                <select class="form-control" asp-for="PaymentMethod">
+                    <option value="">All</option>
+                    <option>Cash Transaction</option>
+                    <option>Exempt Transaction</option>
+                    <option>Violation</option>
+                    <option>Prepaid Transaction - RFID Tag</option>
+                    <option>Prepaid Transaction - Card</option>
+                    <option>Bank Card (NFC - Post Paid)</option>
+                    <option>QR Code / Barcode</option>
+                </select>
+            </div>
+
+            <div class="col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100 shadow-sm">
+                    <i class="bi bi-funnel"></i> Filter
+                </button>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <a asp-page-handler="Export"
+                   asp-route-StartDate="@Model.StartDate.ToString("yyyy-MM-ddTHH:mm")"
+                   asp-route-EndDate="@Model.EndDate.ToString("yyyy-MM-ddTHH:mm")"
+                   asp-route-Shift="@Model.Shift"
+                   asp-route-PaymentMethod="@Model.PaymentMethod"
+                   asp-route-SortOrder="@Model.SortOrder"
+                   class="btn btn-success w-100 shadow-sm">
+                    <i class="bi bi-file-earmark-excel"></i> Export Excel
+                </a>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button id="btnDownloadPdf" type="button" class="btn btn-danger w-100 shadow-sm">
+                    <i class="bi bi-file-earmark-pdf"></i> Export PDF
+                </button>
+            </div>
+        </form>
+
+        <!-- Table -->
+        <div class="table-responsive">
+            <table id="discrepancyTable" class="table table-hover table-bordered align-middle text-center">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Lane</th>
+                        <th>Trx #</th>
+                        <th>Date</th>
+                        <th>Time</th>
+                        <th>Shift</th>
+                        <th>Operator</th>
+                        <th>Payment</th>
+                        <th>Collector Class</th>
+                        <th>AVC Class</th>
+                        <th>Final Class</th>
+                        <th>Tariff</th>
+                        <th>Updated Tariff</th>
+                        <th>Difference</th>
+                        <th>Action Taken</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.Discrepancys.Any())
+                    {
+                        foreach (var t in Model.Discrepancys)
+                        {
+                            decimal diff = t.updated_tariff - t.tariff;
+                            string action = "No Action Taken";
+
+                            if (!string.IsNullOrEmpty(t.final_Class))
+                            {
+                                bool tollExists = !string.IsNullOrEmpty(t.toll_Collector_Class);
+                                bool avcExists = !string.IsNullOrEmpty(t.avC_Class);
+
+                                bool tollCorrect = tollExists && t.toll_Collector_Class == t.final_Class;
+                                bool correctAVC = avcExists && t.avC_Class == t.final_Class;
+
+                                if (tollCorrect && correctAVC) action = "Both Correct";
+                                else if (tollCorrect) action = "Toll Collector Correct";
+                                else if (correctAVC) action = "AVC Correct";
+                                else if ((tollExists && !tollCorrect) && (avcExists && !correctAVC)) action = "Both Incorrect";
+                                else if (tollExists && !tollCorrect) action = "Toll Collector Incorrect";
+                                else if (avcExists && !correctAVC) action = "AVC Incorrect";
+                            }
+
+                            <tr>
+                                <td>@t.lane_Nr</td>
+                                <td>@t.trx_Sequence_Nr</td>
+                                <td>@t.trx_Date</td>
+                                <td>@t.trx_Time</td>
+                                <td>@t.operational_Shift</td>
+                                <td>@t.toll_Operator_ID</td>
+                                <td>@t.method_of_Payment</td>
+                                <td>@t.toll_Collector_Class</td>
+                                <td>@t.avC_Class</td>
+                                <td>@t.final_Class</td>
+                                <td>@t.tariff</td>
+                                <td>@t.updated_tariff</td>
+                                <td>@diff</td>
+                                <td>@action</td>
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="14" class="text-center text-muted">No discrepancies found</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            <!-- Footer Summary -->
+            <div class="mt-4 p-3 border-top bg-light">
+                <h5 class="fw-bold text-primary">Discrepancy Summary</h5>
+                <div class="row">
+                    <div class="col-md-6 mb-2"><strong>Total Discrepancy Count:</strong> @totalCount</div>
+                    <div class="col-md-6 mb-2"><strong>Total Tariff Difference:</strong> @totalDiff</div>
+                    <div class="col-md-6 mb-2"><strong>Operator Correct:</strong> @tollCollectorCorrect</div>
+                    <div class="col-md-6 mb-2"><strong>AVC Correct:</strong> @avcCorrect</div>
+                    <div class="col-md-6 mb-2"><strong>Both Incorrect:</strong> @bothIncorrect</div>
+                </div>
+            </div>
+        </div>
+        <!-- Footer Summary on the Page -->
+        <div class="mt-4 p-3 border-top bg-light">
+            <div class="row">
+                <div class="col-md-4 mb-2">
+                    <strong>Report Name:</strong> Discrepancy Details Report<br />
+                    <strong>Date & Time:</strong> @reportGeneratedAt
+                </div>
+                <div class="col-md-4 mb-2">
+                    <strong>User ID:</strong> @currentUserId<br />
+                   
+                </div>
+                <div class="col-md-4 mb-2 text-end">
+                    <strong>Reports Module Version:</strong> @reportVersion
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+<script>
+    const filteredData = @Html.Raw(Json.Serialize(Model.AllDiscrepancys));
+
+    document.getElementById("btnDownloadPdf")?.addEventListener("click", function () {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+
+        doc.setFontSize(16);
+        doc.text("Discrepancy Report", 40, 40);
+
+        const headers = [
+            "Lane","Trx #","Date","Time","Shift","Operator",
+            "Payment","Collector Class","AVC Class","Final Class",
+            "Tariff","Updated Tariff","Difference","Action Taken"
+        ];
+
+        const rows = filteredData.map(t => {
+            const diff = t.updated_tariff - t.tariff;
+            let action = "No Action Taken";
+
+            if (t.final_Class) {
+                const tollExists = t.toll_Collector_Class !== null && t.toll_Collector_Class !== "";
+                const avcExists = t.avC_Class !== null && t.avC_Class !== "";
+
+                const tollCorrect = tollExists && t.toll_Collector_Class === t.final_Class;
+                const avcCorrect = avcExists && t.avC_Class === t.final_Class;
+
+                if (tollCorrect && avcCorrect) action = "Both Correct";
+                else if (tollCorrect) action = "Toll Collector Correct";
+                else if (avcCorrect) action = "AVC Correct";
+                else if ((tollExists && !tollCorrect) && (avcExists && !avcCorrect)) action = "Both Incorrect";
+                else if (tollExists && !tollCorrect) action = "Toll Collector Incorrect";
+                else if (avcExists && !avcCorrect) action = "AVC Incorrect";
+            }
+
+            return [
+                t.lane_Nr, t.trx_Sequence_Nr, t.trx_Date, t.trx_Time,
+                t.operational_Shift, t.toll_Operator_ID, t.method_of_Payment,
+                t.toll_Collector_Class, t.avC_Class, t.final_Class,
+                t.tariff, t.updated_tariff, diff, action
+            ];
+        });
+
+        doc.autoTable({
+            head: [headers],
+            body: rows,
+            startY: 60,
+            theme: 'grid',
+            headStyles: { fillColor: [52, 152, 219] },
+            styles: { fontSize: 9, cellPadding: 4, overflow: 'linebreak' }
+        });
+
+        doc.save("DiscrepancyReport.pdf");
+    });
+</script>

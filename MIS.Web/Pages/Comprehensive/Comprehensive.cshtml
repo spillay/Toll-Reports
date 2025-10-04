@@ -1,0 +1,141 @@
+﻿@page
+@model ComprehensiveReportModel
+@{
+    var reportGeneratedAt = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
+    var currentUserId = User.Identity?.Name ?? "Unknown User";
+    var reportVersion = "1.0.0";
+}
+
+<div class="card shadow-lg mb-4">
+    <div class="card-body">
+        <!-- Header -->
+        <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
+            <div class="d-flex align-items-center">
+                <img src="~/images/lCC Logo.jpg" alt="LCC Logo" style="height: 60px; margin-right: 15px;" />
+                <img src="~/images/ICT-Works Logo.jpg" alt="ICT Works Logo" style="height: 60px;" />
+            </div>
+            <h2 class="mb-0 fw-bold text-primary">Comprehensive Report</h2>
+        </div>
+
+        <!-- Filters -->
+        <form method="get" class="row g-3 mb-3">
+            <!-- Start Date & Time -->
+            <div class="col-md-2">
+                <label class="form-label fw-semibold">Start Date & Time</label>
+                <input type="datetime-local" class="form-control" asp-for="StartDate" value="@Model.StartDate.ToString("yyyy-MM-ddTHH:mm")" />
+            </div>
+
+            <!-- End Date & Time -->
+            <div class="col-md-2">
+                <label class="form-label fw-semibold">End Date & Time</label>
+                <input type="datetime-local" class="form-control" asp-for="EndDate" value="@Model.EndDate.ToString("yyyy-MM-ddTHH:mm")" />
+            </div>
+
+            <!-- Toll Operator ID -->
+            <div class="col-md-2">
+                <label class="form-label fw-semibold">Toll Operator ID</label>
+                <select class="form-control" >
+                    <option value="">All</option>
+                    @* Example options *@
+                    <option value="T001">0001</option>
+                    <option value="T002">0002</option>
+                    <option value="T002">0003</option>
+                </select>
+            </div>
+
+            <!-- Lane -->
+            <div class="col-md-2">
+                <label class="form-label fw-semibold">Lane</label>
+                <select class="form-control" >
+                    <option value="">All</option>
+                    @for (int i = 1; i <= 8; i++)
+                    {
+                        <option value="@i">@i</option>
+                    }
+                </select>
+            </div>
+
+            <!-- Lane Discount Type -->
+            @* <div class="col-md-2">
+                <label class="form-label fw-semibold">Lane Discount Type</label>
+                <select class="form-control" >
+                    <option value="">All</option>
+                    <option>None</option>
+                    <option>Discount 1</option>
+                    <option>Discount 2</option>
+                </select>
+            </div> *@
+
+            <!-- Classification -->
+            @* <div class="col-md-2">
+                <label class="form-label fw-semibold">Classification</label>
+                <select class="form-control" >
+                    <option value="">All</option>
+                    <option>Class I</option>
+                    <option>Class II</option>
+                    <option>Class III</option>
+                    <option>Class M</option>
+                </select>
+            </div> *@
+
+            <!-- Filter Button -->
+            <div class="col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100 shadow-sm">
+                    <i class="bi bi-funnel"></i> Filter
+                </button>
+            </div>
+        </form>
+
+        <!-- Table -->
+        <div class="table-responsive">
+            <table class="table table-hover table-bordered align-middle text-center">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Method of Payment</th>
+                        <th>Row Type</th>
+                        <th>Class I</th>
+                        <th>Class II</th>
+                        <th>Class III</th>
+                        <th>Class M</th>
+                        <th>Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.comprehensives.Any())
+                    {
+                        foreach (var group in Model.comprehensives.GroupBy(x => x.methodOfPayment))
+                        {
+                            foreach (var row in group)
+                            {
+                                <tr class="@(row.methodOfPayment == "Grand Total" ? "table-dark fw-bold" : "")">
+                                    <td>@row.methodOfPayment</td>
+                                    <td>@row.rowType</td>
+                                    <td>@row.classI</td>
+                                    <td>@row.classII</td>
+                                    <td>@row.classIII</td>
+                                    <td>@row.classM</td>
+                                    <td>@row.total</td>
+                                </tr>
+                            }
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="7" class="text-center text-muted">No transactions found</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Footer -->
+        <div class="mt-4 p-3 border-top bg-light">
+            <div class="row">
+                <div class="col-md-4">Report Name: Discrepancy Details Report<br />Date: @reportGeneratedAt</div>
+                <div class="col-md-4">User ID: @currentUserId</div>
+                <div class="col-md-4 text-end">Version: @reportVersion</div>
+            </div>
+        </div>
+    </div>
+</div>

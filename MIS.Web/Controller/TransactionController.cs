@@ -1,5 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using MIS.Web.Models;
+using MIS.Web.Models.Transaction;
 using MIS.Web.Services;
 using System;
 using System.Collections.Generic;

@@ -1,35 +1,33 @@
-﻿using MIS.Web.Models.Transaction;
+﻿using MIS.Web.Models.Comprehensive;
+using MIS.Web.Models.Discrepancy;
 using Newtonsoft.Json;
 using System.Globalization;
 
 namespace MIS.Web.Services
 {
-    public class ReportService : IReportService
+    public class ComprehensiveReportService : IComprehensiveReportService
     {
         private readonly HttpClient _httpClient;
 
-        public ReportService(HttpClient httpClient)
+        public ComprehensiveReportService(HttpClient httpClient)
         {
             _httpClient = httpClient;
         }
 
-        public async Task<List<TransactionReportViewModel>> GetTransactionDetailsAsync(
-            DateTime startDate,
-            DateTime endDate,
-            List<string>? operationalShift = null,
-            List<string>? tollOperators = null,
-            List<string>? laneNames = null,
-            List<string>? paymentMethods = null)
+
+        public async Task<List<ComprehensiveReportViewModel>> GetComprehensiveDetailsAsync(
+        DateTime startDate, DateTime endDate,
+        List<string>? operationalShift = null,
+        List<string>? tollOperators = null,
+        List<string>? laneNames = null,
+        List<string>? paymentMethods = null)
         {
-            // Format dates
             string formattedStartDate = startDate.ToString("yyyy/MM/dd");
             string formattedEndDate = endDate.ToString("yyyy/MM/dd");
-
             string encodedStartDate = Uri.EscapeDataString(formattedStartDate);
             string encodedEndDate = Uri.EscapeDataString(formattedEndDate);
 
-            
-            var url = $"http://localhost:5000/api/Transaction/details?startDate={encodedStartDate}&endDate={encodedEndDate}";
+            var url = $"http://localhost:5000/report?startDate={encodedStartDate}&endDate={encodedEndDate}";
 
             if (operationalShift != null && operationalShift.Any())
                 url += $"&operationalShift={string.Join(",", operationalShift)}";
@@ -43,11 +41,11 @@ namespace MIS.Web.Services
             if (paymentMethods != null && paymentMethods.Any())
                 url += $"&paymentMethods={string.Join(",", paymentMethods)}";
 
-            
             var response = await _httpClient.GetAsync(url);
-            response.EnsureSuccessStatusCode();
+            var content = await response.Content.ReadAsStringAsync();
+            Console.WriteLine("API Response: " + content);
 
-            var json = await response.Content.ReadAsStringAsync();
+            response.EnsureSuccessStatusCode();
 
             var settings = new JsonSerializerSettings
             {
@@ -55,9 +53,11 @@ namespace MIS.Web.Services
                 Culture = CultureInfo.InvariantCulture
             };
 
-            var transactions = JsonConvert.DeserializeObject<List<TransactionReportViewModel>>(json, settings);
+            var comprehensives = JsonConvert.DeserializeObject<List<ComprehensiveReportViewModel>>(content, settings);
 
-            return transactions ?? new List<TransactionReportViewModel>();
+            return comprehensives ?? new List<ComprehensiveReportViewModel>();
         }
+
+
     }
 }

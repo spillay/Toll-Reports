@@ -1,13 +1,15 @@
-﻿using System.Transactions;
+﻿using Toll.Reporting.Api.DTOs;
 
-namespace Toll.Reporting.Api.Repositories
+public interface IComprehensiveRepository
 {
-    public interface IComprehensiveRepository
-    {
-        /// <summary>
-        /// Returns a list of transactions used to build the comprehensive report.
-        /// </summary>
-        /// <returns>A collection of transactions.</returns>
-        Task<IEnumerable<Transaction>> GetComprehensiveReportAsync();
-    }
+    Task<IEnumerable<ComprehensiveDto>> GetComprehensiveRepositoryAsync1(
+        DateTime startDate,
+        DateTime endDate,
+        List<string>? operationalShift = null,
+        List<string>? tollOperators = null,
+        List<string>? laneNames = null ,
+        List<string>? laneDiscountType = null ,
+        List<string>? Classification = null ,
+        List<string>? paymentMethods = null);
+    Task<IEnumerable<ComprehensiveDto>> GetComprehensiveRepositoryAsync(DateTime startDate, DateTime endDate, string paymentMethods);
 }

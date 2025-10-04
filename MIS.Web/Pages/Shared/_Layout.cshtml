@@ -4,48 +4,99 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@ViewData["Title"] - MIS.Web</title>
-    <script type="importmap"></script>
+
+    <!-- Bootstrap 5 -->
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+
+    <!-- Custom styles -->
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/MIS.Web.styles.css" asp-append-version="true" />
+
+    <style>
+        /* Modern navbar */
+        .navbar {
+            background-color: #f8f9fa;
+        }
+
+        .navbar-brand {
+            font-weight: bold;
+            font-size: 1.5rem;
+        }
+
+        .nav-link {
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+            .nav-link:hover {
+                color: #0d6efd;
+            }
+
+        footer {
+            padding: 1rem 0;
+            font-size: 0.9rem;
+            text-align: center;
+        }
+    </style>
 </head>
-<body>
+<body class="bg-light">
+
     <header>
-        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
+        <nav class="navbar navbar-expand-lg navbar-light shadow-sm mb-4">
             <div class="container">
-                <a class="navbar-brand" asp-area="" asp-page="/Transaction/Index">MIS.Web</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
-                        aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
-                    <ul class="navbar-nav flex-grow-1">
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-page="/Index">Home</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-page="/Privacy">Privacy</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-page="/Transaction/Index">Reports</a>
-                        </li>
-                    </ul>
+                <!-- Left side: Logo and dropdown -->
+                <a class="navbar-brand" href="#">
+                    <img src="~/images/lCC Logo.jpg" alt="LCC Logo" style="height: 80px;" />
+                </a>
+
+               
+
+                <!-- Centered Heading -->
+                <div class="mx-auto text-center">
+                    <h2 class="fw-bold text-secondary mb-0">
+                        LEKKI CONCESSION COMPANY LIMITED <br />
+                        CONSERVATION TOLL PLAZA
+                    </h2>
                 </div>
             </div>
         </nav>
     </header>
-    <div class="container">
-        <main role="main" class="pb-3">
-            @RenderBody()
-        </main>
-    </div>
 
-    <footer class="border-top footer text-muted">
-        <div class="container">
-            &copy; 2025 - MIS.Web - <a asp-area="" asp-page="/Privacy">Privacy</a>
+
+    <main class="container">
+        <div class="row">
+            <!-- Left column: Dropdown menu -->
+            <div class="col-md-1 mb-3">
+                <div class="dropdown">
+                    <button class="btn btn-secondary" type="button" id="menuDropdown" data-bs-toggle="dropdown" aria-expanded="false" style="width:90px;">
+                        ☰
+                    </button>
+                    <ul class="dropdown-menu" aria-labelledby="menuDropdown">
+                        <li><a class="dropdown-item" asp-area="" asp-page="/Transaction/Index">Transactions</a></li>
+                        <li><a class="dropdown-item" asp-area="" asp-page="/Discrepancy/Discrepancy">Discrepancies</a></li>
+                        <li><a class="dropdown-item" asp-area="" asp-page="/Comprehensive/Comprehensive">Comprehensive</a></li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Right column: Table / main content -->
+            <div class="col-md-11">
+                <div class="card shadow-sm mb-5">
+                    <div class="card-body">
+                        @RenderBody()
+                    </div>
+                </div>
+            </div>
         </div>
+    </main>
+
+
+
+    <footer class="border-top bg-white text-muted">
+        &copy; 2025 - MIS.Web
     </footer>
 
+    <!-- Scripts -->
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>

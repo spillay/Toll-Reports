@@ -1,25 +1,22 @@
-﻿using MIS.Web.Models.Transaction;
+﻿using MIS.Web.Models.Discrepancy;
 using Newtonsoft.Json;
 using System.Globalization;
 
 namespace MIS.Web.Services
 {
-    public class ReportService : IReportService
+    public class DiscrepancyReportService : IDiscrepancyReportService
     {
         private readonly HttpClient _httpClient;
 
-        public ReportService(HttpClient httpClient)
+        public DiscrepancyReportService(HttpClient httpClient)
         {
             _httpClient = httpClient;
         }
 
-        public async Task<List<TransactionReportViewModel>> GetTransactionDetailsAsync(
-            DateTime startDate,
-            DateTime endDate,
-            List<string>? operationalShift = null,
-            List<string>? tollOperators = null,
-            List<string>? laneNames = null,
-            List<string>? paymentMethods = null)
+
+       public async Task<List<DiscrepancyReportViewModel>> GetDiscrepancyDetailsAsync(
+            DateTime startDate, DateTime endDate, List<string>? operationalShift, List<string>? tollOperators, List<string>? laneNames, List<string>? paymentMethods)
+        
         {
             // Format dates
             string formattedStartDate = startDate.ToString("yyyy/MM/dd");
@@ -28,8 +25,8 @@ namespace MIS.Web.Services
             string encodedStartDate = Uri.EscapeDataString(formattedStartDate);
             string encodedEndDate = Uri.EscapeDataString(formattedEndDate);
 
-            
-            var url = $"http://localhost:5000/api/Transaction/details?startDate={encodedStartDate}&endDate={encodedEndDate}";
+
+            var url = $"http://localhost:5000/discrepancy?startDate=08%2F08%2F2025&endDate=09%2F09%2F2025";
 
             if (operationalShift != null && operationalShift.Any())
                 url += $"&operationalShift={string.Join(",", operationalShift)}";
@@ -43,7 +40,7 @@ namespace MIS.Web.Services
             if (paymentMethods != null && paymentMethods.Any())
                 url += $"&paymentMethods={string.Join(",", paymentMethods)}";
 
-            
+
             var response = await _httpClient.GetAsync(url);
             response.EnsureSuccessStatusCode();
 
@@ -55,9 +52,9 @@ namespace MIS.Web.Services
                 Culture = CultureInfo.InvariantCulture
             };
 
-            var transactions = JsonConvert.DeserializeObject<List<TransactionReportViewModel>>(json, settings);
+            var discrepancys = JsonConvert.DeserializeObject<List<DiscrepancyReportViewModel>>(json, settings);
 
-            return transactions ?? new List<TransactionReportViewModel>();
+            return discrepancys ?? new List<DiscrepancyReportViewModel>();
         }
-    }
+    } 
 }

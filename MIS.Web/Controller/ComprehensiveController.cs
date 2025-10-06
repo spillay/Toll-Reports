@@ -19,12 +19,12 @@ namespace MIS.Web.Controllers
         public async Task<IActionResult> Index(ComprehensiveReportViewModel times)
         {
             // Debug logging
-            Console.WriteLine(times.methodOfPayment);
+            Console.WriteLine(times.TransactionType);
 
             // Fetch data from service
             var model = await _reportService.GetComprehensiveDetailsAsync(times.StartDate, times.EndDate);
 
-            Console.WriteLine(times.methodOfPayment);
+            Console.WriteLine(times.TransactionType);
             return View(model);
         }
     }

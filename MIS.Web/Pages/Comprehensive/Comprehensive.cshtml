@@ -1,5 +1,5 @@
 ﻿@page
-@model ComprehensiveReportModel
+@model MIS.Web.Pages.ComprehensiveReportModel
 @{
     var reportGeneratedAt = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
     var currentUserId = User.Identity?.Name ?? "Unknown User";
@@ -10,76 +10,36 @@
     <div class="card-body">
         <!-- Header -->
         <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
-            <div class="d-flex align-items-center">
-                <img src="~/images/lCC Logo.jpg" alt="LCC Logo" style="height: 60px; margin-right: 15px;" />
-                <img src="~/images/ICT-Works Logo.jpg" alt="ICT Works Logo" style="height: 60px;" />
-            </div>
+            <img src="~/images/ICT-Works Logo.jpg" alt="ICT Works Logo" style="height: 60px;" />
             <h2 class="mb-0 fw-bold text-primary">Comprehensive Report</h2>
         </div>
 
         <!-- Filters -->
         <form method="get" class="row g-3 mb-3">
             <!-- Start Date & Time -->
-            <div class="col-md-2">
+            <div class="col-md-3">
                 <label class="form-label fw-semibold">Start Date & Time</label>
-                <input type="datetime-local" class="form-control" asp-for="StartDate" value="@Model.StartDate.ToString("yyyy-MM-ddTHH:mm")" />
+                <input type="datetime-local" class="form-control" asp-for="StartDate" />
             </div>
 
             <!-- End Date & Time -->
-            <div class="col-md-2">
+            <div class="col-md-3">
                 <label class="form-label fw-semibold">End Date & Time</label>
-                <input type="datetime-local" class="form-control" asp-for="EndDate" value="@Model.EndDate.ToString("yyyy-MM-ddTHH:mm")" />
+                <input type="datetime-local" class="form-control" asp-for="EndDate" />
             </div>
 
-            <!-- Toll Operator ID -->
-            <div class="col-md-2">
-                <label class="form-label fw-semibold">Toll Operator ID</label>
-                <select class="form-control" >
+            <!-- Shift -->
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">Shift</label>
+                <select class="form-select" asp-for="Shift">
                     <option value="">All</option>
-                    @* Example options *@
-                    <option value="T001">0001</option>
-                    <option value="T002">0002</option>
-                    <option value="T002">0003</option>
-                </select>
-            </div>
-
-            <!-- Lane -->
-            <div class="col-md-2">
-                <label class="form-label fw-semibold">Lane</label>
-                <select class="form-control" >
-                    <option value="">All</option>
-                    @for (int i = 1; i <= 8; i++)
-                    {
-                        <option value="@i">@i</option>
-                    }
+                    <option>Shift One</option>
+                    <option>Shift Two</option>
+                    <option>Shift Three</option>
                 </select>
             </div>
 
-            <!-- Lane Discount Type -->
-            @* <div class="col-md-2">
-                <label class="form-label fw-semibold">Lane Discount Type</label>
-                <select class="form-control" >
-                    <option value="">All</option>
-                    <option>None</option>
-                    <option>Discount 1</option>
-                    <option>Discount 2</option>
-                </select>
-            </div> *@
-
-            <!-- Classification -->
-            @* <div class="col-md-2">
-                <label class="form-label fw-semibold">Classification</label>
-                <select class="form-control" >
-                    <option value="">All</option>
-                    <option>Class I</option>
-                    <option>Class II</option>
-                    <option>Class III</option>
-                    <option>Class M</option>
-                </select>
-            </div> *@
-
-            <!-- Filter Button -->
-            <div class="col-md-2 d-flex align-items-end">
+            <div class="col-md-3 d-flex align-items-end">
                 <button type="submit" class="btn btn-primary w-100 shadow-sm">
                     <i class="bi bi-funnel"></i> Filter
                 </button>
@@ -88,42 +48,62 @@
 
         <!-- Table -->
         <div class="table-responsive">
-            <table class="table table-hover table-bordered align-middle text-center">
-                <thead class="table-dark">
+            <table class="table table-bordered table-striped text-center align-middle">
+                <thead class="table-primary">
                     <tr>
-                        <th>Method of Payment</th>
-                        <th>Row Type</th>
-                        <th>Class I</th>
-                        <th>Class II</th>
-                        <th>Class III</th>
-                        <th>Class M</th>
-                        <th>Total</th>
+                        <th>METHOD OF PAYMENT</th>
+                        @foreach (var cls in Model.TollClasses)
+                        {
+                            <th>@cls</th>
+                        }
+                        <th>TOTAL</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @if (Model.comprehensives.Any())
+                    @if (Model.GroupedData.Any())
                     {
-                        foreach (var group in Model.comprehensives.GroupBy(x => x.methodOfPayment))
+                        foreach (var row in Model.GroupedData)
                         {
-                            foreach (var row in group)
-                            {
-                                <tr class="@(row.methodOfPayment == "Grand Total" ? "table-dark fw-bold" : "")">
-                                    <td>@row.methodOfPayment</td>
-                                    <td>@row.rowType</td>
-                                    <td>@row.classI</td>
-                                    <td>@row.classII</td>
-                                    <td>@row.classIII</td>
-                                    <td>@row.classM</td>
-                                    <td>@row.total</td>
-                                </tr>
-                            }
+                            <tr>
+                                <td class="fw-bold">@row.Method</td>
+                                @foreach (var cls in Model.TollClasses)
+                                {
+                                    var data = row.Classes[cls];
+                                    <td>
+                                        Count: @data.Count<br />
+                                        Count %: @data.CountPercent.ToString("0.##")%<br />
+                                        Revenue: @data.Revenue.ToString("N2")<br />
+                                        Revenue %: @data.RevenuePercent.ToString("0.##")%
+                                    </td>
+                                }
+                                <td>
+                                    Count: @row.TotalCount<br />
+                                    Revenue: @row.TotalRevenue.ToString("N2")
+                                </td>
+                            </tr>
                         }
+
+                        <!-- Grand Total -->
+                        <tr class="fw-bold bg-light">
+                            <td>Grand Total</td>
+                            @foreach (var cls in Model.TollClasses)
+                            {
+                                var totalCount = Model.comprehensives.Count(x => x.ManualTollClass == cls);
+                                var totalRevenue = Model.comprehensives.Where(x => x.ManualTollClass == cls).Sum(x => x.AmountInclusive);
+                                <td>
+                                    Count: @totalCount<br />
+                                    Revenue: @totalRevenue.ToString("N2")
+                                </td>
+                            }
+                            <td>
+                                Count: @Model.comprehensives.Count()<br />
+                                Revenue: @Model.comprehensives.Sum(x => x.AmountInclusive).ToString("N2")
+                            </td>
+                        </tr>
                     }
                     else
                     {
-                        <tr>
-                            <td colspan="7" class="text-center text-muted">No transactions found</td>
-                        </tr>
+                        <tr><td colspan="@(Model.TollClasses.Count + 2)" class="text-center text-muted">No data found</td></tr>
                     }
                 </tbody>
             </table>
@@ -132,7 +112,10 @@
         <!-- Footer -->
         <div class="mt-4 p-3 border-top bg-light">
             <div class="row">
-                <div class="col-md-4">Report Name: Discrepancy Details Report<br />Date: @reportGeneratedAt</div>
+                <div class="col-md-4">
+                    Report Name: Comprehensive Report<br />
+                    Date: @reportGeneratedAt
+                </div>
                 <div class="col-md-4">User ID: @currentUserId</div>
                 <div class="col-md-4 text-end">Version: @reportVersion</div>
             </div>

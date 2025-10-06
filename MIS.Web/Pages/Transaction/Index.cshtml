@@ -43,11 +43,13 @@
                 <label class="form-label fw-semibold">Payment Method</label>
                 <select class="form-control" asp-for="PaymentMethod">
                     <option value="">All</option>
-                    <option>Cash</option>
-                    <option>Bank Deposit</option>
-                    <option>EFT</option>
-                    <option>NFC</option>
-                    <option>InterSwitch</option>
+                    <option>Cash Transaction</option>
+                    <option>Exempt Transaction</option>
+                    <option>Violation</option>
+                    <option>Prepaid Transaction - RFID Tag</option>
+                    <option>Prepaid Transaction - Card</option>
+                    <option>Bank Card (NFC - Post Paid)</option>
+                    <option>QR Code / Barcode</option>
                 </select>
             </div>
 

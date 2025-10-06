@@ -14,6 +14,6 @@ namespace MIS.Web.Services
             List<string>? operationalShift = null,
             List<string>? tollOperators = null,
             List<string>? laneNames = null,
-            List<string>? paymentMethods = null);
+            List<string>? TransactionType = null);
     }
 }

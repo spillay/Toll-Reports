@@ -29,33 +29,62 @@ namespace MIS.Web.Pages
         public string? Shift { get; set; }
 
         [BindProperty(SupportsGet = true)]
-        public string? methodOfPayment { get; set; }
+        public string? TransactionType { get; set; }
 
         public List<ComprehensiveReportViewModel> comprehensives { get; set; } = new();
 
-        public string? ErrorMessage { get; set; }
+        public List<string> TollClasses { get; set; } = new(); // e.g., Class 1–4
+        public List<dynamic> GroupedData { get; set; } = new();
 
         public async Task OnGetAsync()
         {
-            try
-            {
-                // Fetch all records
-                var data = await _reportService.GetComprehensiveDetailsAsync(StartDate, EndDate);
+            var data = await _reportService.GetComprehensiveDetailsAsync(StartDate, EndDate);
 
-                // Apply filters
-                if (!string.IsNullOrEmpty(Shift))
-                    data = data.Where(t => t.operational_Shift == Shift).ToList();
+            // Apply filters
+            if (!string.IsNullOrEmpty(Shift))
+                data = data.Where(t => t.Shift == Shift).ToList();
 
-                if (!string.IsNullOrEmpty(methodOfPayment))
-                    data = data.Where(t => t.methodOfPayment == methodOfPayment).ToList();
+            if (!string.IsNullOrEmpty(TransactionType))
+                data = data.Where(t => t.TransactionType == TransactionType).ToList();
 
-                comprehensives = data;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Error fetching report: " + ex);
-                ErrorMessage = "Failed to load report data. Please try again later.";
-            }
+            comprehensives = data;
+
+            // Get distinct toll classes dynamically
+            TollClasses = data
+                .Select(d => d.ManualTollClass)
+                .Where(c => !string.IsNullOrEmpty(c))
+                .Distinct()
+                .OrderBy(c => c)
+                .ToList();
+
+            // Group by Method of Payment (TransactionType)
+            GroupedData = data
+                .GroupBy(t => t.TransactionType ?? "Unknown")
+                .Select(g =>
+                {
+                    var totalCount = g.Count();
+                    var totalRevenue = g.Sum(x => x.AmountInclusive);
+
+                    // Generate dynamic dictionary for classes
+                    var classData = TollClasses.ToDictionary(
+                        c => c,
+                        c => new
+                        {
+                            Count = g.Count(x => x.ManualTollClass == c),
+                            CountPercent = totalCount == 0 ? 0 : (decimal)g.Count(x => x.ManualTollClass == c) / totalCount * 100,
+                            Revenue = g.Where(x => x.ManualTollClass == c).Sum(x => x.AmountInclusive),
+                            RevenuePercent = totalRevenue == 0 ? 0 : (decimal)(g.Where(x => x.ManualTollClass == c).Sum(x => x.AmountInclusive) / totalRevenue * 100)
+                        });
+
+                    return new
+                    {
+                        Method = g.Key,
+                        Classes = classData,
+                        TotalCount = totalCount,
+                        TotalRevenue = totalRevenue
+                    };
+                })
+                .ToList<dynamic>();
         }
     }
 }

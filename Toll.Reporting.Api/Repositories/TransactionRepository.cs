@@ -37,8 +37,10 @@ namespace Toll.Reporting.Api.Repositories
                         from l in laneGroup.DefaultIfEmpty()
 
                             // LEFT JOIN PaymentMethod
-                        join pm in _context.PaymentMethods on t.TransactionTypeId equals pm.PaymentMethodId into paymentGroup
-                        from pm in paymentGroup.DefaultIfEmpty()
+                            // LEFT JOIN TransactionType
+                        join tt in _context.TransactionTypes
+                            on t.TransactionTypeId equals tt.TransactionTypeId into typeGroup
+                        from tt in typeGroup.DefaultIfEmpty()
 
                             // LEFT JOIN TollClass (Manual, Automatic, Actual)
                         join tc1 in _context.TollClasses on t.ManualTollClassId equals tc1.TollClassId into tc1Group
@@ -63,7 +65,7 @@ namespace Toll.Reporting.Api.Repositories
                         where (operationalShift == null || operationalShift.Contains("-- All --") || operationalShift.Contains(s.Description))
                            && (tollOperators == null || tollOperators.Contains("-- All --") || tollOperators.Contains(su.Username))
                            && (laneNames == null || laneNames.Contains("-- All --") || laneNames.Contains(l.LaneName))
-                           && (paymentMethods == null || paymentMethods.Contains("-- All --") || paymentMethods.Contains(pm.Description))
+                           && (paymentMethods == null || paymentMethods.Contains("-- All --") || paymentMethods.Contains(tt.Description))
 
                         orderby t.TransactionDateTime descending
 
@@ -77,7 +79,7 @@ namespace Toll.Reporting.Api.Repositories
                             Operational_Shift = s.Description ?? "-- None --",
                             Toll_Operator_ID = su.Username ?? "-- None --",
                             Lane_Name = l.LaneName ?? "-- None --",
-                            Method_of_Payment = pm.Description ?? "-- None --",
+                            Method_of_Payment = tt.Description ?? "-- None --",
                             Toll_Collector_Class = tc1.ClassDescription,
                             AVC_Class = tc2.ClassDescription,
                             Final_Class = tc3.ClassDescription,

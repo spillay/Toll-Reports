@@ -77,7 +77,7 @@ namespace MIS.Web.Pages.Reports
                 allTransactions = allTransactions.Where(t => t.operational_Shift == Shift).ToList();
 
             if (!string.IsNullOrEmpty(PaymentMethod))
-                allTransactions = allTransactions.Where(t => t.method_of_Payment == PaymentMethod).ToList();
+                allTransactions = allTransactions.Where(t => t.method_of_Payment.Trim() == PaymentMethod).ToList();
 
             if (!string.IsNullOrEmpty(TollOperatorID))
                 allTransactions = allTransactions.Where(t => t.toll_Operator_ID == TollOperatorID).ToList();

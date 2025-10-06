@@ -4,44 +4,34 @@
     {
         internal readonly int RevenueI;
 
-        public string? methodOfPayment { get; set; }
-        public string? rowType { get; set; }
-        public string operational_Shift { get; set; } = string.Empty;
-        public string? toll_Operator_ID { get; set; }
-        public string? lane_Name { get; set; }
-        public decimal classI { get; set; }
-        public decimal classII { get; set; }
-        public decimal classIII { get; set; }
-        public decimal classM { get; set; }
-        public decimal total { get; set; }
-        
+        // Transaction info
+        public string? MethodOfPayment { get; set; }
+        public string? RowType { get; set; }
+        public string OperationalShift { get; set; } = string.Empty;
+        public string? TollOperatorID { get; set; }
+        public string LaneName { get; set; } = string.Empty;
+        public double AmountInclusive { get; set; }
+        public long TransactionNumber { get; set; }
+        public string TransactionType { get; set; } = string.Empty;
 
+        // Added missing properties
+        public string? ManualTollClass { get; set; }
+        public string? Shift { get; set; }
+
+        // Date filters (do not remove)
         public DateTime StartDate { get; set; } = new DateTime(2025, 08, 19, 0, 0, 0, DateTimeKind.Utc);
         public DateTime EndDate { get; set; } = new DateTime(2025, 08, 22, 0, 0, 0, DateTimeKind.Utc);
-        public class GrandTotalRow
-{
-    public string RowType { get; set; } = string.Empty; // "Count", "Count %", "Revenue", "Revenue %"
-    public decimal ClassI { get; set; }
-    public decimal ClassII { get; set; }
-    public decimal ClassIII { get; set; }
-    public decimal ClassM { get; set; }
-    public decimal Total { get; set; }
-}
 
-        
+        // Vehicle classes (six total)
+        public int Class0 { get; set; }
+        public int Class1 { get; set; }
+        public int Class2 { get; set; }
+        public int Class3 { get; set; }
+        public int Class4 { get; set; }
+        public int Danfo { get; set; }
+        public int MotorCycle { get; set; }
 
-        /*
-         * 
-         *  {
-    "methodOfPayment": "string",
-    "rowType": "string",
-    "classI": 0,
-    "classII": 0,
-    "classIII": 0,
-    "classM": 0,
-    "total": 0
-  }
-         * 
-         * */
+        // Optional: computed total of all classes
+        public int TotalVehicles => Class0 + Class1 + Class2 + Class3 + Class4 + Danfo + MotorCycle;
     }
 }

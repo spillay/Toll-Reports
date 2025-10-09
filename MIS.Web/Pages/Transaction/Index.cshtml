@@ -1,4 +1,5 @@
 ﻿@page
+@using System.Text.Json
 @model MIS.Web.Pages.Reports.TransactionReportModel
 @{
     var reportGeneratedAt = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
@@ -157,56 +158,62 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 <script>
-    const transactions = @Html.Raw(transactionsJson);
+    const transactions1 = @Html.Raw(transactionsJson);
+    const transactions = @Html.Raw(JsonSerializer.Serialize(Model.Transactions));
+    const reportGeneratedAt = '@DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")';
+    const currentUserId = '@(User.Identity?.Name ?? "Unknown User")';
+    const reportVersion = "1.0.0";
 
     document.getElementById("btnDownloadPdf").addEventListener("click", async function () {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const margin = 40;
 
-        // === Load logos ===
+        // Load logos
         const [logo1, logo2] = await Promise.all([
-            new Promise(resolve => { const img = new Image(); img.src = "/images/lCC Logo.jpg"; img.onload = () => resolve(img); }),
-            new Promise(resolve => { const img = new Image(); img.src = "/images/ICT-Works Logo.jpg"; img.onload = () => resolve(img); })
+            new Promise(resolve => { const img = new Image(); img.src = "/images/lCC Logo.jpg"; img.onload = () => resolve(img); img.onerror = () => resolve(null); }),
+            new Promise(resolve => { const img = new Image(); img.src = "/images/ICT-Works Logo.jpg"; img.onload = () => resolve(img); img.onerror = () => resolve(null); })
         ]);
 
-        // === Logos 
-        doc.addImage(logo1, "JPEG", 40, 40, 100, 100);   
-        doc.addImage(logo2, "JPEG", 700, 40, 100, 100);  
+        // Add logos
+        if (logo1) doc.addImage(logo1, "JPEG", margin, 30, 100, 100);
+        if (logo2) doc.addImage(logo2, "JPEG", pageWidth - margin - 80, 30, 100, 100);
 
-        // === Title (center, away from logos) ===
-        doc.setFontSize(18);
+        // Multi-line company title first
+        doc.setFontSize(16);
         doc.setFont("helvetica", "bold");
-        const pageWidth = doc.internal.pageSize.getWidth();
-        const title = "LEKKI CONCESSION COMPANY LIMITED\nCONSERVATION TOLL PLAZA";
-        const titleLines = doc.splitTextToSize(title, pageWidth - 200);
-        let yPos = 80; // start above logos
+        const titleLines = ["LEKKI CONCESSION COMPANY LIMITED", "CONSERVATION TOLL PLAZA"];
+        let yPos = 50;
         titleLines.forEach(line => {
             doc.text(line, pageWidth / 2, yPos, { align: "center" });
             yPos += 25;
         });
 
-        // Optional: add a divider line under title
-        // doc.setLineWidth(0.5);
-        // doc.line(40, yPos, pageWidth - 40, yPos);
-        // yPos += 20;
+        // Smaller report header below the title
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
+        doc.text("TRANSACTION DETAILS REPORT", pageWidth / 2, yPos + 10, { align: "center" });
+        yPos += 40; // leave space below header for filters or table
 
-        // === Applied Filters (start after logos) ===
-        yPos = 200; // leave space below stacked logos
+        // Applied filters
         doc.setFontSize(10);
+        doc.setFont("helvetica", "normal");
         const appliedFilters = {
-            "Start Date": document.querySelector('input[name="StartDate"]').value || "All",
-            "End Date": document.querySelector('input[name="EndDate"]').value || "All",
-            "Lane": document.querySelector('input[name="lane_Nr"]').value || "All",
-            "Operator": document.querySelector('input[name="TollOperatorID"]').value || "All",
-            "Shift": document.querySelector('select[name="Shift"]').value || "All",
-            "Payment Method": document.querySelector('select[name="PaymentMethod"]').value || "All"
+            "Start Date": document.querySelector('input[name="StartDate"]')?.value || "All",
+            "End Date": document.querySelector('input[name="EndDate"]')?.value || "All",
+            "Lane": document.querySelector('input[name="lane_Nr"]')?.value || "All",
+            "Operator": document.querySelector('input[name="TollOperatorID"]')?.value || "All",
+            "Shift": document.querySelector('select[name="Shift"]')?.value || "All",
+            "Payment Method": document.querySelector('select[name="PaymentMethod"]')?.value || "All"
         };
-        for (const [k, v] of Object.entries(appliedFilters)) {
-            doc.text(`${k}: ${v}`, 40, yPos);
+        Object.entries(appliedFilters).forEach(([k, v]) => {
+            doc.text(`${k}: ${v}`, margin, yPos);
             yPos += 12;
-        }
+        });
 
-        // === Table with ALL rows ===
+        // Table
         const headers = [[
             "Lane","Trx #","Date","Time","Shift","Operator","Lane Name",
             "Payment","Collector","AVC","Final","Amount","Card"
@@ -231,37 +238,57 @@
         doc.autoTable({
             head: headers,
             body: rows,
-            startY: yPos + 20,
+            startY: yPos + 10,
             theme: "grid",
-            headStyles: { fillColor: [52, 152, 219] },
-            styles: { fontSize: 8, cellPadding: 3, overflow: "linebreak" },
+            headStyles: { fillColor: [52, 152, 219], textColor: 255 },
+            styles: { fontSize: 8, cellPadding: 3, overflow: "linebreak", valign: "middle", halign: "center" },
             margin: { top: 50, bottom: 30 },
             pageBreak: "auto",
             didDrawPage: function (data) {
-                // Repeat title on each page (optional)
-                doc.setFontSize(18);
-                doc.text("TRANSACTION DETAILS REPORT", pageWidth / 2, 175, { align: "center" });
+                const pageNumber = doc.internal.getNumberOfPages();
+                if (pageNumber > 1) { // repeat header only on pages > 1
+                    // Title
+                    doc.setFontSize(16);
+                    doc.setFont("helvetica", "bold");
+                    let headerY = 50;
+                    titleLines.forEach(line => {
+                        doc.text(line, pageWidth / 2, headerY, { align: "center" });
+                        headerY += 25;
+                    });
+                    // Report header
+                    doc.setFontSize(12);
+                    doc.setFont("helvetica", "bold");
+                    doc.text("TRANSACTION DETAILS REPORT", pageWidth / 2, headerY + 10, { align: "center" });
+                }
+
+                // Page number on all pages
+                doc.setFontSize(9);
+                doc.setFont("helvetica", "normal");
+                doc.text(`Page ${pageNumber}`, pageWidth - margin, doc.internal.pageSize.getHeight() - 10, { align: "right" });
             }
         });
 
-        // === Summary Section ===
+        // Summary
         const finalY = doc.lastAutoTable.finalY + 20;
         doc.setFontSize(12);
         doc.setFont("helvetica", "bold");
-        doc.text("Summary", 40, finalY);
+        doc.text("Summary", margin, finalY);
         doc.setFont("helvetica", "normal");
-        doc.text(`Filtered Count: @Model.FilteredRowCount | Filtered Sum: @Model.FilteredTariffSum`, 40, finalY + 15);
-        doc.text(`Total Count: @Model.TotalRowCount | Total Sum: @Model.TotalTariffSum`, 40, finalY + 30);
+        doc.text(`Filtered Count: @Model.FilteredRowCount | Filtered Sum: @Model.FilteredTariffSum`, margin, finalY + 15);
+        doc.text(`Total Count: @Model.TotalRowCount | Total Sum: @Model.TotalTariffSum`, margin, finalY + 30);
 
-        // === Footer Metadata ===
+        // Footer
         const footerY = finalY + 60;
-        doc.text(`Report Generated: @reportGeneratedAt`, 40, footerY);
-        doc.text(`User ID: @currentUserId`, 300, footerY);
-        doc.text(`Version: @reportVersion`, 550, footerY);
+        doc.text(`Report Generated: ${reportGeneratedAt}`, margin, footerY);
+        doc.text(`User ID: ${currentUserId}`, pageWidth / 2 - 50, footerY);
+        doc.text(`Version: ${reportVersion}`, pageWidth - margin - 50, footerY);
 
         // Save PDF
-        doc.save("TransactionReport.pdf");
+        doc.save(`TransactionReport_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
     });
 </script>
+
+
+
 
 

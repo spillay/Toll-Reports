@@ -253,9 +253,10 @@
 @using System.Text.Json
 
 <script>
+    // server-side data
     const filteredData = @Html.Raw(JsonSerializer.Serialize(Model.AllDiscrepancys));
 
-    // Serialize filters properly
+    // filters snapshot (string formatted on server)
     const appliedFilters = {
         StartDate: '@Model.StartDate.ToString("dd/MM/yyyy HH:mm")',
         EndDate: '@Model.EndDate.ToString("dd/MM/yyyy HH:mm")',
@@ -265,9 +266,9 @@
         ActionTaken: '@(string.IsNullOrEmpty(Model.takenAction) ? "All" : Model.takenAction)'
     };
 
-    // Footer values
+    // footer metrics
     const totalCount = filteredData.length;
-    const totalDiff = filteredData.reduce((sum, t) => sum + (t.updated_tariff - t.tariff), 0);
+    const totalDiff = filteredData.reduce((sum, t) => sum + (Number(t.updated_tariff || 0) - Number(t.tariff || 0)), 0);
     const tollCollectorCorrect = filteredData.filter(t => t.toll_Collector_Class && t.toll_Collector_Class === t.final_Class).length;
     const avcCorrect = filteredData.filter(t => t.avC_Class && t.avC_Class === t.final_Class).length;
     const bothIncorrect = filteredData.filter(t => (t.toll_Collector_Class && t.toll_Collector_Class !== t.final_Class) && (t.avC_Class && t.avC_Class !== t.final_Class)).length;
@@ -280,117 +281,169 @@
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
 
-        // Ensure both logos are loaded before generating PDF
+        // layout constants
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const margin = 40;
+        const logoWidth = 90;
+        const logoHeight = 90;
+        const logoY = 20;
+        const titleFontSize = 16;
+        const subtitleFontSize = 12;
+        const headingFontSize = 14;
+
+        // logo paths
+        const leftLogoPath = '/images/lCC Logo.jpg';
+        const rightLogoPath = '/images/ICT-Works Logo.jpg';
+
+        const imgFormatFromSrc = (src) => {
+            if (!src) return 'JPEG';
+            const s = src.toLowerCase();
+            if (s.endsWith('.png')) return 'PNG';
+            if (s.endsWith('.jpg') || s.endsWith('.jpeg')) return 'JPEG';
+            return 'JPEG';
+        };
+
         Promise.all([
-            new Promise(resolve => { const img = new Image(); img.src = '/images/lCC Logo.jpg'; img.onload = () => resolve(img); }),
-            new Promise(resolve => { const img = new Image(); img.src = '/images/ICT-Works Logo.jpg'; img.onload = () => resolve(img); })
-           ]).then(([llcLogo, ictLogo]) => {
-            // === Logos (stacked on top-left) ===
-            doc.addImage(llcLogo, 'JPEG', 40, 40, 100, 100);   // first logo
-            doc.addImage(ictLogo, 'JPEG', 40, 160, 100, 100);  // second logo underneath
+            new Promise(resolve => {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.onload = () => resolve(img);
+                img.onerror = () => resolve(null);
+                img.src = leftLogoPath;
+            }),
+            new Promise(resolve => {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.onload = () => resolve(img);
+                img.onerror = () => resolve(null);
+                img.src = rightLogoPath;
+            })
+        ]).then(([leftLogo, rightLogo]) => {
+            const leftX = margin;
+            const rightX = pageWidth - margin - logoWidth;
 
-            // === Title (centered, away from logos) ===
-            doc.setFontSize(18);
+            if (leftLogo) {
+                const leftFormat = imgFormatFromSrc(leftLogo.src);
+                try { doc.addImage(leftLogo, leftFormat, leftX, logoY, logoWidth, logoHeight); } catch {}
+            }
+            if (rightLogo) {
+                const rightFormat = imgFormatFromSrc(rightLogo.src);
+                try { doc.addImage(rightLogo, rightFormat, rightX, logoY, logoWidth, logoHeight); } catch {}
+            }
+
+            // Title block
             doc.setFont("helvetica", "bold");
-            const title = "LEKKI CONCESSION COMPANY LIMITED\nCONSERVATION TOLL PLAZA";
-            // Splitting the title into two lines for clarity
-            const pageWidth = doc.internal.pageSize.getWidth();
-            const titleLines = doc.splitTextToSize(title, pageWidth - 200);
-            let yPos = 60; // place title higher than logos
-            titleLines.forEach(line => {
-                doc.text(line, pageWidth / 2, yPos, { align: 'center' });
-                yPos += 25;
-            });
+            doc.setFontSize(titleFontSize);
+            const titleLine1 = "LEKKI CONCESSION COMPANY LIMITED";
+            const titleLine2 = "CONSERVATION TOLL PLAZA";
+            const titleBaseY = logoY + (logoHeight / 2) - 6;
 
-            // === Filters (start after logos area) ===
-            yPos = 280; // below logos block
-            doc.setFontSize(11);
+            doc.text(titleLine1, pageWidth / 2, titleBaseY, { align: 'center' });
             doc.setFont("helvetica", "normal");
-            Object.entries(appliedFilters).forEach(([key, value]) => {
-                doc.text(`${key}: ${value}`, 40, yPos);
-                yPos += 15;
+            doc.setFontSize(subtitleFontSize);
+            doc.text(titleLine2, pageWidth / 2, titleBaseY + 16, { align: 'center' });
+
+            // Report heading
+            const headingY = logoY + logoHeight + 20;
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(headingFontSize);
+            doc.text("Discrepancy Details Report", pageWidth / 2, headingY, { align: 'center' });
+
+            // --- Filters (all on the right side) ---
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(10);
+            const filtersStartY = headingY + 18;
+            const lineHeight = 14;
+            const filtersX = margin ; // right side block width ~200px
+
+            Object.entries(appliedFilters).forEach((kv, i) => {
+                doc.text(`${kv[0]}: ${kv[1]}`, filtersX, filtersStartY + (i * lineHeight));
             });
 
-            // Table
+            const tableStartY = filtersStartY + (Object.keys(appliedFilters).length * lineHeight) + 12;
+
+            // Table headers
             const headers = ["Lane","Trx #","Date","Time","Shift","Operator",
                 "Payment","Collector Class","AVC Class","Final Class",
                 "Tariff","Updated Tariff","Difference","Action Taken"];
+
             const rows = filteredData.map(t => {
-                const diff = t.updated_tariff - t.tariff;
+                const diff = Number(t.updated_tariff || 0) - Number(t.tariff || 0);
                 let action = "No Action Taken";
-                    if (t.final_Class) {
-                const tollExists = t.toll_Collector_Class !== null && t.toll_Collector_Class !== "";
-                const avcExists = t.avC_Class !== null && t.avC_Class !== "";
-
-                const tollCorrect = tollExists && t.toll_Collector_Class === t.final_Class;
-                const avcCorrectFlag = avcExists && t.avC_Class === t.final_Class;
-
-                if (tollCorrect && avcCorrectFlag) {
-                    action = "Both Correct";
+                if (t.final_Class) {
+                    const tollExists = t.toll_Collector_Class;
+                    const avcExists = t.avC_Class;
+                    const tollCorrect = tollExists && t.toll_Collector_Class === t.final_Class;
+                    const avcCorrectFlag = avcExists && t.avC_Class === t.final_Class;
+                    if (tollCorrect && avcCorrectFlag) action = "Both Correct";
+                    else if (tollCorrect && !avcExists) action = "Toll Collector Correct";
+                    else if (!tollExists && avcCorrectFlag) action = "AVC Correct";
+                    else if (tollExists && !tollCorrect && avcExists && !avcCorrectFlag) action = "Both Incorrect";
+                    else if (tollExists && !tollCorrect && (!avcExists || avcCorrectFlag)) action = "Toll Collector Incorrect";
+                    else if (avcExists && !avcCorrectFlag && (!tollExists || tollCorrect)) action = "AVC Incorrect";
                 }
-                else if (tollCorrect && !avcExists) {
-                    action = "Toll Collector Correct";
-                }
-                else if (!tollExists && avcCorrectFlag) {
-                    action = "AVC Correct";
-                }
-                else if (tollExists && !tollCorrect && avcExists && !avcCorrectFlag) {
-                    action = "Both Incorrect";
-                }
-                else if (tollExists && !tollCorrect && (!avcExists || avcCorrectFlag)) {
-                    action = "Toll Collector Incorrect";
-                }
-                else if (avcExists && !avcCorrectFlag && (!tollExists || tollCorrect)) {
-                    action = "AVC Incorrect";
-                }
-                else {
-                    action = "No Action Taken";
-                }
-            }
-
-                return [t.lane_Nr, t.trx_Sequence_Nr, t.trx_Date, t.trx_Time,
-                    t.operational_Shift, t.toll_Operator_ID, t.method_of_Payment,
-                    t.toll_Collector_Class, t.avC_Class, t.final_Class,
-                    t.tariff, t.updated_tariff, diff, action];
+                return [
+                    t.lane_Nr ?? '',
+                    t.trx_Sequence_Nr ?? '',
+                    t.trx_Date ?? '',
+                    t.trx_Time ?? '',
+                    t.operational_Shift ?? '',
+                    t.toll_Operator_ID ?? '',
+                    t.method_of_Payment ?? '',
+                    t.toll_Collector_Class ?? '',
+                    t.avC_Class ?? '',
+                    t.final_Class ?? '',
+                    Number(t.tariff || 0).toFixed(2),
+                    Number(t.updated_tariff || 0).toFixed(2),
+                    diff.toFixed(2),
+                    action
+                ];
             });
 
             doc.autoTable({
                 head: [headers],
                 body: rows,
-                startY: yPos + 10,
+                startY: tableStartY,
                 theme: 'grid',
-                headStyles: { fillColor: [52, 152, 219] },
-                styles: { fontSize: 9, cellPadding: 4, overflow: 'linebreak' }
+                headStyles: { fillColor: [52, 152, 219], textColor: 255 },
+                styles: { fontSize: 9, cellPadding: 4, overflow: 'linebreak' },
+                didDrawPage: function () {
+                    const pageNumber = doc.internal.getNumberOfPages();
+                    doc.setFontSize(9);
+                    doc.text(`Page ${pageNumber}`, pageWidth - margin, pageHeight - 10, { align: 'right' });
+                }
             });
 
             // Footer summary
-            const finalY = doc.lastAutoTable.finalY + 20;
+            const finalY = (doc.lastAutoTable?.finalY) ? doc.lastAutoTable.finalY + 18 : tableStartY + 200;
+            doc.setFont("helvetica", "bold");
             doc.setFontSize(12);
-            doc.setFont("helvetica", "bold");
-            doc.text("Discrepancy Summary", 40, finalY);
-            doc.setFont("helvetica", "normal");
-            let footerY = finalY + 15;
-            doc.text(`Total Discrepancy Count: ${totalCount}`, 40, footerY);
-            doc.text(`Total Tariff Difference: ${totalDiff}`, 300, footerY);
-            footerY += 15;
-            doc.text(`Operator Correct: ${tollCollectorCorrect}`, 40, footerY);
-            doc.text(`AVC Correct: ${avcCorrect}`, 300, footerY);
-            footerY += 15;
-            doc.text(`Both Incorrect: ${bothIncorrect}`, 40, footerY);
+            doc.text("Discrepancy Summary", margin, finalY);
 
-            // Report info
-            footerY += 30;
-            doc.setFont("helvetica", "bold");
-            doc.text(`Report Name: Discrepancy Details Report`, 40, footerY);
             doc.setFont("helvetica", "normal");
-            doc.text(`Date & Time: ${reportGeneratedAt}`, 40, footerY + 15);
-            doc.text(`User ID: ${currentUserId}`, 300, footerY + 15);
-            doc.text(`Reports Module Version: ${reportVersion}`, 550, footerY + 15);
+            doc.setFontSize(10);
+            let footerY = finalY + 14;
+            doc.text(`Total Discrepancy Count: ${totalCount}`, margin, footerY);
+            doc.text(`Total Tariff Difference: ${totalDiff.toFixed(2)}`, pageWidth / 2, footerY);
+            footerY += 14;
+            doc.text(`Operator Correct: ${tollCollectorCorrect}`, margin, footerY);
+            doc.text(`AVC Correct: ${avcCorrect}`, pageWidth / 2, footerY);
+            footerY += 14;
+            doc.text(`Both Incorrect: ${bothIncorrect}`, margin, footerY);
+            footerY += 22;
+            doc.setFont("helvetica", "bold");
+            doc.text(`Report Name: Discrepancy Details Report`, margin, footerY);
+            doc.setFont("helvetica", "normal");
+            doc.text(`Date & Time: ${reportGeneratedAt}`, margin, footerY + 14);
+            doc.text(`User ID: ${currentUserId}`, pageWidth / 2, footerY + 14);
+            doc.text(`Reports Module Version: ${reportVersion}`, pageWidth - margin - 120, footerY + 14, { align: 'left' });
 
-            // Save PDF
-            doc.save("DiscrepancyReport.pdf");
+            doc.save(`DiscrepancyReport_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
         });
     });
 </script>
+
+
 
 

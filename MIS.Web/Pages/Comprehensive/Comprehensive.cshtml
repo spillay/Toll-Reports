@@ -1,5 +1,7 @@
 ﻿@page
 @model MIS.Web.Pages.ComprehensiveReportModel
+@using System.Text.Json
+
 @{
     var reportGeneratedAt = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
     var currentUserId = User.Identity?.Name ?? "Unknown User";
@@ -30,28 +32,12 @@
                 <label class="form-label fw-semibold">Shift</label>
                 <select class="form-select" asp-for="Shift">
                     <option value="">All</option>
-                    
-                    
-                        <option value="Shift One">Shift 1</option>
-                        <option value="Shift Two">Shift 2</option>
-                        <option value="Shift Three">Shift 3</option>
-                    
+                    <option value="Shift One">Shift 1</option>
+                    <option value="Shift Two">Shift 2</option>
+                    <option value="Shift Three">Shift 3</option>
                 </select>
             </div>
 
-            <!-- Toll Operator -->
-            @* <div class="col-md-3">
-                <label class="form-label fw-semibold">Toll Operator</label>
-                <select class="form-select" asp-for="TollOperatorID">
-                    <option value="">All</option>
-                    @foreach (var op in Model.TollOperators)
-                    {
-                        <option value="@op">@op</option>
-                    }
-                </select>
-            </div> *@
-
-            <!-- Lane -->
             <div class="col-md-3">
                 <label class="form-label fw-semibold">Lane</label>
                 <select class="form-select" asp-for="LaneName">
@@ -63,11 +49,9 @@
                 </select>
             </div>
 
-            <!-- Method of Payment -->
             <div class="col-md-3">
                 <label class="form-label fw-semibold">Method of Payment</label>
                 <select class="form-select" asp-for="MethodOfPayment">
-                    <option value="">All</option>
                     <option value="">All</option>
                     <option>Cash Transaction</option>
                     <option>Exempt Transaction</option>
@@ -77,10 +61,8 @@
                     <option>Bank Card (NFC - Post Paid)</option>
                     <option>QR Code / Barcode</option>
                 </select>
-               
             </div>
 
-            <!-- Discount Type -->
             <div class="col-md-3">
                 <label class="form-label fw-semibold">Discount Type</label>
                 <select class="form-select" asp-for="DiscountType">
@@ -92,7 +74,6 @@
                 </select>
             </div>
 
-            <!-- Classification -->
             <div class="col-md-3">
                 <label class="form-label fw-semibold">Classification</label>
                 <select class="form-select" asp-for="Classification">
@@ -103,19 +84,19 @@
                     }
                 </select>
             </div>
-            <div class="col-md-2 d-flex align-items-end">
-                <a asp-page-handler="Export"
-                   
-                   class="btn btn-success w-100 shadow-sm">
+
+            @* <div class="col-md-2 d-flex align-items-end">
+                <a asp-page-handler="Export" class="btn btn-success w-100 shadow-sm">
                     <i class="bi bi-file-earmark-excel"></i> Export Excel
                 </a>
-            </div>
+            </div> *@
+
+            <!-- PDF export: handled client-side in JS below -->
             <div class="col-md-2 d-flex align-items-end">
                 <button id="btnDownloadPdf" type="button" class="btn btn-danger w-100 shadow-sm">
                     <i class="bi bi-file-earmark-pdf"></i> Export PDF
                 </button>
             </div>
-
 
             <div class="col-md-3 d-flex align-items-end">
                 <button type="submit" class="btn btn-primary w-100 shadow-sm">
@@ -139,9 +120,9 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @if (Model.GroupedData.Any())
+                    @if (Model.GroupedDataTyped.Any())
                     {
-                        foreach (var row in Model.GroupedData)
+                        foreach (var row in Model.GroupedDataTyped)
                         {
                             <tr>
                                 <td class="fw-bold">@row.Method</td>
@@ -151,9 +132,10 @@
                                     Revenue: <br />
                                     Revenue %:
                                 </td>
+
                                 @foreach (var cls in Model.TollClasses)
                                 {
-                                    var data = row.Classes[cls];
+                                    var data = row.Classes.ContainsKey(cls) ? row.Classes[cls] : new MIS.Web.Pages.ComprehensiveReportModel.ClassMetrics();
                                     <td>
                                         @data.Count<br />
                                         @data.CountPercent.ToString("0.##")<br />
@@ -161,6 +143,7 @@
                                         @data.RevenuePercent.ToString("0.##")
                                     </td>
                                 }
+
                                 <td>
                                     @row.TotalCount<br />
                                     100<br />
@@ -169,6 +152,7 @@
                                 </td>
                             </tr>
                         }
+
                         <!-- Grand Total -->
                         <tr class="fw-bold bg-light">
                             <td>Grand Total</td>
@@ -218,3 +202,150 @@
         </div>
     </div>
 </div>
+
+<!-- PDF libraries (CDN) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+
+<!--
+    Client-side PDF generation.
+    We serialize the typed grouped data (Model.GroupedDataTyped) and toll classes, then build a table
+    where each cell contains 4 lines (Count / Count% / Revenue / Revenue%).
+-->
+<script>
+    const groupedData = @Html.Raw(JsonSerializer.Serialize(Model.GroupedDataTyped));
+    const tollClasses = @Html.Raw(JsonSerializer.Serialize(Model.TollClasses));
+    const groupByLabel = '@(Model.GroupBy == "TransactionType" ? "TRANSACTION TYPE" : "METHOD OF PAYMENT")';
+
+    // Filters snapshot
+    const appliedFilters = {
+        StartDate: '@Model.StartDate.ToString("dd/MM/yyyy HH:mm")',
+        EndDate: '@Model.EndDate.ToString("dd/MM/yyyy HH:mm")',
+        Shift: '@(string.IsNullOrEmpty(Model.Shift) ? "All" : Model.Shift)',
+        Lane: '@(string.IsNullOrEmpty(Model.LaneName) ? "All" : Model.LaneName)',
+        PaymentMethod: '@(string.IsNullOrEmpty(Model.MethodOfPayment) ? "All" : Model.MethodOfPayment)',
+        Classification: '@(string.IsNullOrEmpty(Model.Classification) ? "All" : Model.Classification)'
+    };
+
+    const reportGeneratedAt = '@DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")';
+    const currentUserId = '@(User.Identity?.Name ?? "Unknown User")';
+    const reportVersion = "1.0.0";
+
+    document.getElementById("btnDownloadPdf").addEventListener("click", function () {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const margin = 40;
+
+        // Load both logos
+        Promise.all([
+            new Promise(resolve => {
+                const img = new Image();
+                img.src = '/images/lCC Logo.jpg';
+                img.onload = () => resolve(img);
+                img.onerror = () => resolve(null);
+            }),
+            new Promise(resolve => {
+                const img = new Image();
+                img.src = '/images/ICT-Works Logo.jpg';
+                img.onload = () => resolve(img);
+                img.onerror = () => resolve(null);
+            })
+        ]).then(([logoLeft, logoRight]) => {
+            // Left logo
+            if (logoLeft) doc.addImage(logoLeft, 'JPEG', margin, 30, 80, 80);
+            // Right logo
+            if (logoRight) doc.addImage(logoRight, 'JPEG', pageWidth - margin - 80, 30, 80, 80);
+
+            //  header below title
+            doc.setFontSize(12);
+            doc.setFont("helvetica", "bold");
+            doc.text("COMPREHENSIVE REPORT", pageWidth / 2, 100, { align: "center" });
+
+            // Title
+            doc.setFontSize(16);
+            doc.setFont("helvetica", "bold");
+            doc.text(
+                ["LEKKI CONCESSION COMPANY LIMITED", "CONSERVATION TOLL PLAZA"],
+                pageWidth / 2,
+                50, 
+                { align: "center" }
+            );
+
+            // Filters block
+            doc.setFontSize(10);
+            doc.setFont("helvetica", "normal");
+            const filtersX = margin;
+            let filtersY = 150;
+            Object.entries(appliedFilters).forEach(([k, v]) => {
+                doc.text(`${k}: ${v}`, filtersX, filtersY);
+                filtersY += 14;
+            });
+
+            // Table header
+            const headers = [groupByLabel, ""].concat(tollClasses).concat(["TOTAL"]);
+
+            // Table rows
+            const rows = groupedData.map(g => {
+                const secondCol = "Count\nCount %\nRevenue\nRevenue %";
+                const classCells = tollClasses.map(cls => {
+                    const cm = (g.Classes && g.Classes[cls]) ? g.Classes[cls] :
+                        { Count: 0, CountPercent: 0, Revenue: 0, RevenuePercent: 0 };
+                    return `${cm.Count}\n${Number(cm.CountPercent).toFixed(2)}\n${Number(cm.Revenue).toFixed(2)}\n${Number(cm.RevenuePercent).toFixed(2)}`;
+                });
+                const totalCell = `${g.TotalCount}\n100\n${Number(g.TotalRevenue).toFixed(2)}\n100`;
+                return [g.Method || "", secondCol, ...classCells, totalCell];
+            });
+
+            // AutoTable
+            doc.autoTable({
+                head: [headers],
+                body: rows,
+                startY: filtersY + 10,
+                theme: 'grid',
+                headStyles: { fillColor: [52, 152, 219], textColor: 255 },
+                styles: { fontSize: 9, cellPadding: 4, overflow: 'linebreak', halign: 'center', valign: 'middle' },
+                columnStyles: {
+                    0: { cellWidth: 120, halign: 'left' },
+                    1: { cellWidth: 80, halign: 'left' }
+                },
+                didDrawPage: function (data) {
+                    const pageNumber = doc.internal.getNumberOfPages();
+                    doc.setFontSize(9);
+                    doc.text(`Page ${pageNumber}`, pageWidth - margin, pageHeight - 10, { align: 'right' });
+                }
+            });
+
+            // Footer
+            const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 20 : (filtersY + 200);
+            doc.setFont("helvetica", "bold");
+            doc.text("Summary", margin, finalY);
+            doc.setFont("helvetica", "normal");
+
+            const totalGroups = groupedData.length;
+            const grandTotals = {
+                totalCount: groupedData.reduce((s, g) => s + (g.TotalCount || 0), 0),
+                totalRevenue: groupedData.reduce((s, g) => s + (Number(g.TotalRevenue) || 0), 0)
+            };
+
+            doc.text(`Groups: ${totalGroups}`, margin, finalY + 15);
+            doc.text(`Total Revenue: ${grandTotals.totalRevenue.toFixed(2)}`, margin + 200, finalY + 15);
+
+            // Report info
+            doc.setFont("helvetica", "bold");
+            doc.text(`Report Name: Comprehensive Report`, margin, finalY + 40);
+            doc.setFont("helvetica", "normal");
+            doc.text(`Date & Time: ${reportGeneratedAt}`, margin, finalY + 55);
+            doc.text(`User ID: ${currentUserId}`, margin + 250, finalY + 55);
+            doc.text(`Version: ${reportVersion}`, pageWidth - margin - 100, finalY + 55);
+
+            // Save PDF
+            doc.save(`ComprehensiveReport_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
+        });
+    });
+</script>
+
+
+

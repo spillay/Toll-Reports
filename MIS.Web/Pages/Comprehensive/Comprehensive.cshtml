@@ -10,34 +10,112 @@
     <div class="card-body">
         <!-- Header -->
         <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
-            <img src="~/images/ICT-Works Logo.jpg" alt="ICT Works Logo" style="height: 60px;" />
+            <img src="~/images/ICT-Works Logo.jpg" alt="ICT Works Logo" style="height: 120px;width:120px;" />
             <h2 class="mb-0 fw-bold text-primary">Comprehensive Report</h2>
         </div>
 
         <!-- Filters -->
         <form method="get" class="row g-3 mb-3">
-            <!-- Start Date & Time -->
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label fw-semibold">Start Date & Time</label>
                 <input type="datetime-local" class="form-control" asp-for="StartDate" />
             </div>
 
-            <!-- End Date & Time -->
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label fw-semibold">End Date & Time</label>
                 <input type="datetime-local" class="form-control" asp-for="EndDate" />
             </div>
 
-            <!-- Shift -->
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label fw-semibold">Shift</label>
                 <select class="form-select" asp-for="Shift">
                     <option value="">All</option>
-                    <option>Shift One</option>
-                    <option>Shift Two</option>
-                    <option>Shift Three</option>
+                    
+                    
+                        <option value="Shift One">Shift 1</option>
+                        <option value="Shift Two">Shift 2</option>
+                        <option value="Shift Three">Shift 3</option>
+                    
                 </select>
             </div>
+
+            <!-- Toll Operator -->
+            @* <div class="col-md-3">
+                <label class="form-label fw-semibold">Toll Operator</label>
+                <select class="form-select" asp-for="TollOperatorID">
+                    <option value="">All</option>
+                    @foreach (var op in Model.TollOperators)
+                    {
+                        <option value="@op">@op</option>
+                    }
+                </select>
+            </div> *@
+
+            <!-- Lane -->
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">Lane</label>
+                <select class="form-select" asp-for="LaneName">
+                    <option value="">All</option>
+                    @foreach (var l in Model.Lanes)
+                    {
+                        <option value="@l">@l</option>
+                    }
+                </select>
+            </div>
+
+            <!-- Method of Payment -->
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">Method of Payment</label>
+                <select class="form-select" asp-for="MethodOfPayment">
+                    <option value="">All</option>
+                    <option value="">All</option>
+                    <option>Cash Transaction</option>
+                    <option>Exempt Transaction</option>
+                    <option>Violation</option>
+                    <option>Prepaid Transaction - RFID Tag</option>
+                    <option>Prepaid Transaction - Card</option>
+                    <option>Bank Card (NFC - Post Paid)</option>
+                    <option>QR Code / Barcode</option>
+                </select>
+               
+            </div>
+
+            <!-- Discount Type -->
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">Discount Type</label>
+                <select class="form-select" asp-for="DiscountType">
+                    <option value="">All</option>
+                    <option value="Nominal">Nominal</option>
+                    <option value="Anonymous">Anonymous</option>
+                    <option value="Frequent User">Frequent User</option>
+                    <option value="Exempt Passage">Exempt Passage</option>
+                </select>
+            </div>
+
+            <!-- Classification -->
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">Classification</label>
+                <select class="form-select" asp-for="Classification">
+                    <option value="">All</option>
+                    @foreach (var c in Model.Classifications)
+                    {
+                        <option value="@c">@c</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <a asp-page-handler="Export"
+                   
+                   class="btn btn-success w-100 shadow-sm">
+                    <i class="bi bi-file-earmark-excel"></i> Export Excel
+                </a>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button id="btnDownloadPdf" type="button" class="btn btn-danger w-100 shadow-sm">
+                    <i class="bi bi-file-earmark-pdf"></i> Export PDF
+                </button>
+            </div>
+
 
             <div class="col-md-3 d-flex align-items-end">
                 <button type="submit" class="btn btn-primary w-100 shadow-sm">
@@ -51,7 +129,8 @@
             <table class="table table-bordered table-striped text-center align-middle">
                 <thead class="table-primary">
                     <tr>
-                        <th>METHOD OF PAYMENT</th>
+                        <th>@(Model.GroupBy == "TransactionType" ? "TRANSACTION TYPE" : "METHOD OF PAYMENT")</th>
+                        <th></th>
                         @foreach (var cls in Model.TollClasses)
                         {
                             <th>@cls</th>
@@ -66,38 +145,55 @@
                         {
                             <tr>
                                 <td class="fw-bold">@row.Method</td>
+                                <td>
+                                    Count: <br />
+                                    Count %: <br />
+                                    Revenue: <br />
+                                    Revenue %:
+                                </td>
                                 @foreach (var cls in Model.TollClasses)
                                 {
                                     var data = row.Classes[cls];
                                     <td>
-                                        Count: @data.Count<br />
-                                        Count %: @data.CountPercent.ToString("0.##")%<br />
-                                        Revenue: @data.Revenue.ToString("N2")<br />
-                                        Revenue %: @data.RevenuePercent.ToString("0.##")%
+                                        @data.Count<br />
+                                        @data.CountPercent.ToString("0.##")<br />
+                                        @data.Revenue.ToString("N2")<br />
+                                        @data.RevenuePercent.ToString("0.##")
                                     </td>
                                 }
                                 <td>
-                                    Count: @row.TotalCount<br />
-                                    Revenue: @row.TotalRevenue.ToString("N2")
+                                    @row.TotalCount<br />
+                                    100<br />
+                                    @row.TotalRevenue.ToString("N2")<br />
+                                    100
                                 </td>
                             </tr>
                         }
-
                         <!-- Grand Total -->
                         <tr class="fw-bold bg-light">
                             <td>Grand Total</td>
+                            <td>
+                                Count: <br />
+                                Count %: <br />
+                                Revenue: <br />
+                                Revenue %:
+                            </td>
                             @foreach (var cls in Model.TollClasses)
                             {
                                 var totalCount = Model.comprehensives.Count(x => x.ManualTollClass == cls);
                                 var totalRevenue = Model.comprehensives.Where(x => x.ManualTollClass == cls).Sum(x => x.AmountInclusive);
                                 <td>
-                                    Count: @totalCount<br />
-                                    Revenue: @totalRevenue.ToString("N2")
+                                    @totalCount<br />
+                                    100<br />
+                                    @totalRevenue.ToString("N2") <br />
+                                    100
                                 </td>
                             }
                             <td>
-                                Count: @Model.comprehensives.Count()<br />
-                                Revenue: @Model.comprehensives.Sum(x => x.AmountInclusive).ToString("N2")
+                                @Model.comprehensives.Count()<br />
+                                100<br />
+                                @Model.comprehensives.Sum(x => x.AmountInclusive).ToString("N2") <br />
+                                100
                             </td>
                         </tr>
                     }

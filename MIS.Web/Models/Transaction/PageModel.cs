@@ -4,7 +4,6 @@ using MIS.Web.Models.Transaction;
 using MIS.Web.Services;
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using System.IO;
@@ -21,7 +20,7 @@ namespace MIS.Web.Pages.Reports
             _reportService = reportService;
         }
 
-        // Filters
+        // Filters (bind from querystring)
         [BindProperty(SupportsGet = true)]
         public DateTime StartDate { get; set; } = DateTime.Now.AddDays(-90);
 
@@ -43,7 +42,6 @@ namespace MIS.Web.Pages.Reports
         [BindProperty(SupportsGet = true)]
         public string? SortOrder { get; set; }
 
-        // Pagination
         public int PageSize { get; set; } = 10;
 
         [BindProperty(SupportsGet = true)]
@@ -53,7 +51,6 @@ namespace MIS.Web.Pages.Reports
 
         public List<TransactionReportViewModel> Transactions { get; set; } = new();
 
-        // Totals
         public int TotalRowCount { get; set; }
         public decimal TotalTariffSum { get; set; }
         public int FilteredRowCount { get; set; }
@@ -69,15 +66,15 @@ namespace MIS.Web.Pages.Reports
 
         public async Task OnGetAsync()
         {
-            // Fetch all transactions from the service
+            // Get transactions from report service (service sends ISO formatted dates)
             var allTransactions = await _reportService.GetTransactionDetailsAsync(StartDate, EndDate);
 
-            // Apply filters manually
+            // Apply filters in-memory:
             if (!string.IsNullOrEmpty(Shift))
                 allTransactions = allTransactions.Where(t => t.operational_Shift == Shift).ToList();
 
             if (!string.IsNullOrEmpty(PaymentMethod))
-                allTransactions = allTransactions.Where(t => t.method_of_Payment.Trim() == PaymentMethod).ToList();
+                allTransactions = allTransactions.Where(t => t.method_of_Payment?.Trim() == PaymentMethod?.Trim()).ToList();
 
             if (!string.IsNullOrEmpty(TollOperatorID))
                 allTransactions = allTransactions.Where(t => t.toll_Operator_ID == TollOperatorID).ToList();
@@ -85,20 +82,19 @@ namespace MIS.Web.Pages.Reports
             if (!string.IsNullOrEmpty(lane_Nr))
                 allTransactions = allTransactions.Where(t => t.lane_Nr == lane_Nr).ToList();
 
-
-            // Totals
+            // Totals overall (before page filters)
             TotalRowCount = allTransactions.Count;
             TotalTariffSum = allTransactions.Sum(t => t.tariff);
 
-            // Apply filters for current page
+            // Apply date filter for the current page view
             var query = allTransactions
-                .Where(t => t.TransactionDateTime >= StartDate && t.TransactionDateTime <= EndDate)
+                .Where(t => t.TransactionDateTime != DateTime.MinValue && t.TransactionDateTime >= StartDate && t.TransactionDateTime <= EndDate)
                 .AsQueryable();
 
             FilteredRowCount = query.Count();
             FilteredTariffSum = query.Sum(t => t.tariff);
 
-            // Sorting
+            // Sorting (same as before)
             query = SortOrder switch
             {
                 "lane_Nr" => query.OrderBy(t => t.lane_Nr),
@@ -112,7 +108,6 @@ namespace MIS.Web.Pages.Reports
                 _ => query.OrderByDescending(t => t.TransactionDateTime)
             };
 
-            // Pagination
             var totalRecords = query.Count();
             TotalPages = (int)Math.Ceiling(totalRecords / (double)PageSize);
 
@@ -122,13 +117,11 @@ namespace MIS.Web.Pages.Reports
                 .ToList();
         }
 
-        // Excel export
+        // Excel export remains largely the same — we call the same service so we get same dataset.
         public async Task<IActionResult> OnGetExportExcelAsync()
         {
-            // Fetch all transactions within the date range
             var transactions = await _reportService.GetTransactionDetailsAsync(StartDate, EndDate);
 
-            // Apply filters in-memory
             if (!string.IsNullOrEmpty(Shift))
                 transactions = transactions.Where(t => t.operational_Shift == Shift).ToList();
 
@@ -141,27 +134,25 @@ namespace MIS.Web.Pages.Reports
             if (!string.IsNullOrEmpty(lane_Nr))
                 transactions = transactions.Where(t => t.lane_Nr == lane_Nr).ToList();
 
-
             using var package = new ExcelPackage();
             var ws = package.Workbook.Worksheets.Add("Transactions");
 
-            // Headers
             string[] headers = { "Lane", "Transaction #", "Date", "Time", "Shift", "Operator", "Lane Name",
                 "Payment", "Collector Class", "AVC Class", "Final Class", "Amount", "Card Number" };
+
             for (int col = 0; col < headers.Length; col++)
             {
                 ws.Cells[1, col + 1].Value = headers[col];
                 ws.Cells[1, col + 1].Style.Font.Bold = true;
             }
 
-            // Rows
             for (int i = 0; i < transactions.Count; i++)
             {
                 var t = transactions[i];
                 ws.Cells[i + 2, 1].Value = t.lane_Nr;
                 ws.Cells[i + 2, 2].Value = t.trx_Sequence_Nr;
-                ws.Cells[i + 2, 3].Value = t.TransactionDateTime.ToString("dd/MM/yyyy");
-                ws.Cells[i + 2, 4].Value = t.TransactionDateTime.ToString("HH:mm:ss");
+                ws.Cells[i + 2, 3].Value = t.TransactionDateTime == DateTime.MinValue ? t.trx_Date : t.TransactionDateTime.ToString("dd/MM/yyyy");
+                ws.Cells[i + 2, 4].Value = t.TransactionDateTime == DateTime.MinValue ? t.trx_Time : t.TransactionDateTime.ToString("HH:mm:ss");
                 ws.Cells[i + 2, 5].Value = t.operational_Shift;
                 ws.Cells[i + 2, 6].Value = t.toll_Operator_ID;
                 ws.Cells[i + 2, 7].Value = t.lane_Name;

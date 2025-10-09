@@ -75,7 +75,7 @@ namespace Toll.Reporting.Api.Repositories
                             //Trx_Sequence_Nr = t.TransactionNumber,
                             Trx_Sequence_Nr = t.TransactionNumber.ToString(),
                             Trx_Date = t.TransactionDateTime.ToString("dd/MM/yyyy"),
-                            Trx_Time = t.TransactionDateTime.ToString("HH:mm:ss:fff"),
+                            Trx_Time = t.TransactionDateTime.ToString("HH:mm:ss"),
                             Operational_Shift = s.Description ?? "-- None --",
                             Toll_Operator_ID = su.Username ?? "-- None --",
                             Lane_Name = l.LaneName ?? "-- None --",

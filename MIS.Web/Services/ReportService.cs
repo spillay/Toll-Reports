@@ -1,6 +1,10 @@
 ﻿using MIS.Web.Models.Transaction;
 using Newtonsoft.Json;
-using System.Globalization;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net.Http;
+using System.Threading.Tasks;
 
 namespace MIS.Web.Services
 {
@@ -21,41 +25,33 @@ namespace MIS.Web.Services
             List<string>? laneNames = null,
             List<string>? paymentMethods = null)
         {
-            // Format dates
-            string formattedStartDate = startDate.ToString("yyyy/MM/dd");
-            string formattedEndDate = endDate.ToString("yyyy/MM/dd");
+            string formattedStart = startDate.ToString("s"); // yyyy-MM-ddTHH:mm:ss
+            string formattedEnd = endDate.ToString("s");
 
-            string encodedStartDate = Uri.EscapeDataString(formattedStartDate);
-            string encodedEndDate = Uri.EscapeDataString(formattedEndDate);
-
-            
-            var url = $"http://localhost:5000/api/Transaction/details?startDate={encodedStartDate}&endDate={encodedEndDate}";
+            var url = $"http://localhost:5000/api/Transaction/details?startDate={Uri.EscapeDataString(formattedStart)}&endDate={Uri.EscapeDataString(formattedEnd)}";
 
             if (operationalShift != null && operationalShift.Any())
-                url += $"&operationalShift={string.Join(",", operationalShift)}";
+                url += $"&operationalShift={Uri.EscapeDataString(string.Join(",", operationalShift))}";
 
             if (tollOperators != null && tollOperators.Any())
-                url += $"&tollOperators={string.Join(",", tollOperators)}";
+                url += $"&tollOperators={Uri.EscapeDataString(string.Join(",", tollOperators))}";
 
             if (laneNames != null && laneNames.Any())
-                url += $"&laneNames={string.Join(",", laneNames)}";
+                url += $"&laneNames={Uri.EscapeDataString(string.Join(",", laneNames))}";
 
             if (paymentMethods != null && paymentMethods.Any())
-                url += $"&paymentMethods={string.Join(",", paymentMethods)}";
+                url += $"&paymentMethods={Uri.EscapeDataString(string.Join(",", paymentMethods))}";
 
-            
             var response = await _httpClient.GetAsync(url);
-            response.EnsureSuccessStatusCode();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return new List<TransactionReportViewModel>();
+            }
 
             var json = await response.Content.ReadAsStringAsync();
 
-            var settings = new JsonSerializerSettings
-            {
-                DateFormatString = "dd/MM/yyyy",
-                Culture = CultureInfo.InvariantCulture
-            };
-
-            var transactions = JsonConvert.DeserializeObject<List<TransactionReportViewModel>>(json, settings);
+            var transactions = JsonConvert.DeserializeObject<List<TransactionReportViewModel>>(json);
 
             return transactions ?? new List<TransactionReportViewModel>();
         }

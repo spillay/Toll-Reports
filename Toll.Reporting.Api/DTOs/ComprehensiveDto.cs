@@ -1,74 +1,42 @@
 ﻿using Microsoft.AspNetCore.Mvc.ModelBinding;
-using System.Text.Json.Serialization;
+using System;
 
 namespace Toll.Reporting.Api.DTOs
 {
     public class ComprehensiveDto
     {
-
         /*
-         * L.LaneName,
-		T.TransactionNumber,
-		TT.Description AS TransactionType,
-		DT.Description AS DiscountType,
-		T.TransactionDateTime,
-		S.Description AS Shift,
-		T.ShiftDate,
-		U.Username,
-		TC.ClassDescription AS ManualTollClass,
-		TP.TariffPlanId,
-		TP.EffectiveDate,
-		TP.CurrencyId,
-		TPD.AmountInclusive
-         * */
+         * DTO represents a single output row for the Comprehensive report.
+         * Properties are populated inside the repository by looking up related entities.
+         */
 
-        //Start of Testing
-        [BindNever]
-        public string LaneName { get; set; }
-        [BindNever]
+        // primary (populated)
+        public string? LaneName { get; set; }
         public long TransactionNumber { get; set; }
-        [BindNever]
-        public string TransactionType { get; set; }
-        [BindNever]
-        public string DiscountType { get; set; }
-        [BindNever]
+        public string? TransactionType { get; set; }
+        public string? DiscountType { get; set; }
         public DateTime TransactionDateTime { get; set; }
-        [BindNever]
-        public string Shift { get; set; }
-        [BindNever]
+        public string? Shift { get; set; }
         public DateTime ShiftDate { get; set; }
-        [BindNever]
-        public string Username { get; set; }
-        [BindNever]
-        public string ManualTollClass { get; set; }
-        [BindNever]
+        public string? Username { get; set; }
+        public string? ManualTollClass { get; set; }
         public int TariffPlanId { get; set; }
-        [BindNever]
         public DateTime EffectiveDate { get; set; }
-        [BindNever]
         public int CurrencyId { get; set; }
-        [BindNever]
         public double AmountInclusive { get; set; }
-        [BindNever]
-        //End of Testing
+
+        // Additional metadata (optional)
         public byte LaneId { get; set; }
-        [BindNever]
         public byte TransactionTypeId { get; set; }
-        [BindNever]
-        public string MethodOfPayment { get; set; }
+        public string? MethodOfPayment { get; set; }
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
-        
-        [BindNever]
+
+        // other fields retained if needed for advanced filtering
         public byte DiscountTypeId { get; set; }
-        [BindNever]
         public byte ShiftId { get; set; }
-        [BindNever]
         public long? SystemUserId { get; set; }
-        [BindNever]
         public byte ManualTollClassId { get; set; }
-        [BindNever]
         public int TariffPlanDetailId { get; set; }
-        public List<Dictionary<string, object>> TariffPlanDetails { get; set; } = new List<Dictionary<string, object>>();
     }
 }

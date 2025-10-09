@@ -1,7 +1,11 @@
 ﻿using MIS.Web.Models.Comprehensive;
-using MIS.Web.Models.Discrepancy;
 using Newtonsoft.Json;
 using System.Globalization;
+using System.Net.Http;
+using System.Threading.Tasks;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace MIS.Web.Services
 {
@@ -14,36 +18,53 @@ namespace MIS.Web.Services
             _httpClient = httpClient;
         }
 
-
+        /// <summary>
+        /// Calls the backend API (Toll.Reporting.Api) and passes optional filters as comma-separated query parameters.
+        /// </summary>
         public async Task<List<ComprehensiveReportViewModel>> GetComprehensiveDetailsAsync(
-        DateTime startDate, DateTime endDate,
-        List<string>? operationalShift = null,
-        List<string>? tollOperators = null,
-        List<string>? laneNames = null,
-        List<string>? paymentMethods = null)
+            DateTime startDate,
+            DateTime endDate,
+            List<string>? operationalShift = null,
+            List<string>? tollOperators = null,
+            List<string>? laneNames = null,
+            List<string>? paymentMethods = null,
+            List<string>? laneDiscountTypes = null,
+            List<string>? classification = null,
+            List<string>? transactionTypes = null)
         {
             string formattedStartDate = startDate.ToString("yyyy/MM/dd");
             string formattedEndDate = endDate.ToString("yyyy/MM/dd");
             string encodedStartDate = Uri.EscapeDataString(formattedStartDate);
             string encodedEndDate = Uri.EscapeDataString(formattedEndDate);
 
-            var url = $"http://localhost:5000/report?startDate={encodedStartDate}&endDate={encodedEndDate}";
+            var queryParts = new List<string>
+            {
+                $"startDate={encodedStartDate}",
+                $"endDate={encodedEndDate}"
+            };
 
-            if (operationalShift != null && operationalShift.Any())
-                url += $"&operationalShift={string.Join(",", operationalShift)}";
+            // Helper to append list as comma separated values
+            void AddIfAny(string key, List<string>? list)
+            {
+                if (list != null && list.Any())
+                    queryParts.Add($"{key}={Uri.EscapeDataString(string.Join(",", list))}");
+            }
 
-            if (tollOperators != null && tollOperators.Any())
-                url += $"&tollOperators={string.Join(",", tollOperators)}";
+            AddIfAny("operationalShift", operationalShift);
+            AddIfAny("tollOperators", tollOperators);
+            AddIfAny("laneNames", laneNames);
+            AddIfAny("paymentMethods", paymentMethods);
+            AddIfAny("laneDiscountTypes", laneDiscountTypes);
+            AddIfAny("classification", classification);
+            AddIfAny("transactionTypes", transactionTypes);
 
-            if (laneNames != null && laneNames.Any())
-                url += $"&laneNames={string.Join(",", laneNames)}";
-
-            if (paymentMethods != null && paymentMethods.Any())
-                url += $"&paymentMethods={string.Join(",", paymentMethods)}";
+            var url = $"http://localhost:5000/report?{string.Join("&", queryParts)}";
 
             var response = await _httpClient.GetAsync(url);
             var content = await response.Content.ReadAsStringAsync();
-            Console.WriteLine("API Response: " + content);
+
+            // debug log
+            Console.WriteLine("API Response length: " + (content?.Length ?? 0));
 
             response.EnsureSuccessStatusCode();
 
@@ -57,7 +78,5 @@ namespace MIS.Web.Services
 
             return comprehensives ?? new List<ComprehensiveReportViewModel>();
         }
-
-
     }
 }

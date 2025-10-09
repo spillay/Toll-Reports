@@ -18,5 +18,7 @@
         public string Final_Class { get; set; }
         public decimal? Tariff { get; set; }
         public string Tac_Card_Number { get; set; }
+        public DateTime StartDate { get; set; }
+        public DateTime EndDate { get; set; }
     }
 }

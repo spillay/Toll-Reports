@@ -1,9 +1,11 @@
-﻿using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using System.Threading.Tasks;
 using Toll.Reporting.Api.Repositories;
-using MIS.Models;
-using Toll.Reporting.Api.DTOs;
-//using Toll.Reporting.Api.Interfaces;
 
 namespace Toll.Reporting.Api.Controllers
 {
@@ -14,7 +16,6 @@ namespace Toll.Reporting.Api.Controllers
         private readonly ITransactionRepository _transactionRepository;
         private readonly ILogger<TransactionController> _logger;
 
-        // Constructor with Dependency Injection
         public TransactionController(ITransactionRepository transactionRepository, ILogger<TransactionController> logger)
         {
             _transactionRepository = transactionRepository;
@@ -23,18 +24,13 @@ namespace Toll.Reporting.Api.Controllers
 
         /// <summary>
         /// Get Transaction Details Report with optional filters.
+        /// Accepts a large set of common date formats (ISO, yyyy-MM-ddTHH:mm[:ss], yyyy-MM-dd, yyyy/MM/dd, dd/MM/yyyy).
+        /// If the end date is supplied without a time part, the method treats the end as inclusive end-of-day.
         /// </summary>
-        /// <param name="startDate">Start date (yyyy-MM-dd)</param>
-        /// <param name="endDate">End date (yyyy-MM-dd)</param>
-        /// <param name="operationalShift">Optional list of shift names</param>
-        /// <param name="tollOperators">Optional list of toll operators</param>
-        /// <param name="laneNames">Optional list of lane names</param>
-        /// <param name="paymentMethods">Optional list of payment methods</param>
-        /// <returns>Filtered TransactionDetailsDto records</returns>
         [HttpGet("details")]
         public async Task<IActionResult> GetTransactionDetails(
-            [FromQuery] DateTime startDate,
-            [FromQuery] DateTime endDate,
+            [FromQuery] string? startDate,
+            [FromQuery] string? endDate,
             [FromQuery] List<string>? operationalShift = null,
             [FromQuery] List<string>? tollOperators = null,
             [FromQuery] List<string>? laneNames = null,
@@ -42,14 +38,49 @@ namespace Toll.Reporting.Api.Controllers
         {
             try
             {
-                if (startDate == default || endDate == default)
+                if (string.IsNullOrWhiteSpace(startDate) || string.IsNullOrWhiteSpace(endDate))
                 {
-                    return BadRequest("StartDate and EndDate are required.");
+                    return BadRequest("StartDate and EndDate are required. Accepts formats: ISO 8601, yyyy-MM-ddTHH:mm[:ss], yyyy-MM-dd, yyyy/MM/dd, dd/MM/yyyy.");
                 }
 
+                // Supported formats - keep these in sync with what the client sends.
+                var formats = new[]
+                {
+                    "o",           // ISO 8601 round-trip
+                    "s",           // Sortable: yyyy-MM-ddTHH:mm:ss
+                    "yyyy-MM-ddTHH:mm:ss",
+                    "yyyy-MM-ddTHH:mm",
+                    "yyyy-MM-dd",
+                    "yyyy/MM/dd",
+                    "dd/MM/yyyy",
+                    "dd/MM/yyyy HH:mm:ss"
+                };
+
+                // Try strict parse first, otherwise fall back to TryParse with invariant culture
+                if (!DateTime.TryParseExact(startDate, formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedStart)
+                    && !DateTime.TryParse(startDate, CultureInfo.InvariantCulture, DateTimeStyles.None, out parsedStart))
+                {
+                    return BadRequest($"Unable to parse StartDate '{startDate}'. Supported formats: yyyy-MM-ddTHH:mm[:ss], yyyy-MM-dd, yyyy/MM/dd, dd/MM/yyyy, ISO 8601.");
+                }
+
+                if (!DateTime.TryParseExact(endDate, formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedEnd)
+                    && !DateTime.TryParse(endDate, CultureInfo.InvariantCulture, DateTimeStyles.None, out parsedEnd))
+                {
+                    return BadRequest($"Unable to parse EndDate '{endDate}'.");
+                }
+
+                // If user sent a plain date (no 'T' or ':'), treat the end as inclusive end-of-day
+                bool endHasTime = endDate.Contains("T") || endDate.Contains(":");
+                if (!endHasTime)
+                {
+                    parsedEnd = parsedEnd.Date.AddDays(1).AddTicks(-1); // end-of-day inclusive
+                }
+
+                _logger.LogInformation("Parsed filters: Start={Start}, End={End}", parsedStart, parsedEnd);
+
                 var result = await _transactionRepository.GetTransactionDetailsAsync(
-                    startDate,
-                    endDate,
+                    parsedStart,
+                    parsedEnd,
                     operationalShift,
                     tollOperators,
                     laneNames,

@@ -1,27 +1,6 @@
 ﻿@page
 @using System.Text.Json
-@model MIS.Web.Pages.Reports.TransactionReportModel
-
-@{
-    var reportGeneratedAt = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
-    var currentUserId = User.Identity?.Name ?? "Unknown User";
-    var reportVersion = "1.0.0";
-    var transactionsJson = JsonSerializer.Serialize(Model.Transactions, new JsonSerializerOptions
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    });
-}
-@{
-    var filterModel = new MIS.Web.Pages.Shared._TransactionFiltersModel
-    {
-        StartDate = Model.StartDate,
-        EndDate = Model.EndDate,
-        PaymentMethods = string.IsNullOrEmpty(Model.PaymentMethod)
-            ? new List<string>()
-            : new List<string> { Model.PaymentMethod }
-    };
-}
-<partial name="~/Pages/Transaction/_TransactionFilters.cshtml" model="filterModel" />
+@model MIS.Web.Models.TransactionInputModel
 
 
 <div class="card shadow-lg mb-4">
@@ -35,9 +14,8 @@
         </div>
 
         <!-- Filters -->
-        <form method="get" class="row g-3 mb-3">
-            <partial name="_TransactionFilters" model="Model" />
-        </form>
+         @* @Html.Partial("_TransactionFilters", Model)  
+      *@
 
         <!-- Table -->
         <div class="table-responsive">
@@ -60,127 +38,19 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @if (Model.Transactions.Any())
-                    {
-                        foreach (var t in Model.Transactions)
-                        {
-                            <tr>
-                                <td>@t.lane_Nr</td>
-                                <td>@t.trx_Sequence_Nr</td>
-                                <td>@t.TransactionDateTime.ToString("dd/MM/yyyy")</td>
-                                <td>@t.TransactionDateTime.ToString("HH:mm:ss")</td>
-                                <td>@t.operational_Shift</td>
-                                <td>@t.toll_Operator_ID</td>
-                                <td>@t.lane_Name</td>
-                                <td>@t.method_of_Payment</td>
-                                <td>@t.toll_Collector_Class</td>
-                                <td>@t.avC_Class</td>
-                                <td>@t.final_Class</td>
-                                <td>@t.tariff</td>
-                                <td>@t.tac_Card_Number</td>
-                            </tr>
-                        }
-                    }
-                    else
-                    {
-                        <tr><td colspan="13" class="text-muted">No transactions found</td></tr>
-                    }
+                   
                 </tbody>
             </table>
         </div>
 
-        <!-- Summary -->
-        <div class="alert alert-info mt-3">
-            <strong>Summary:</strong>
-            Filtered: @Model.FilteredRowCount rows | Sum: @Model.FilteredTariffSum <br />
-            Total: @Model.TotalRowCount rows | Sum: @Model.TotalTariffSum
-        </div>
 
         <!-- Footer -->
-        <div class="mt-4 p-3 border-top bg-light">
+        @* <div class="mt-4 p-3 border-top bg-light">
             <div class="row">
                 <div class="col-md-4">Report Name: Transaction Details Report<br />Date: @reportGeneratedAt</div>
-                <div class="col-md-4">User ID: @currentUserId</div>
+                 <div class="col-md-4">User ID: @currentUserId</div> 
                 <div class="col-md-4 text-end">Version: @reportVersion</div>
             </div>
-        </div>
+        </div> *@
     </div>
 </div>
-
-<!-- Scripts -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
-
-<script>
-    const transactions = @Html.Raw(transactionsJson);
-    const reportGeneratedAt = '@reportGeneratedAt';
-    const currentUserId = '@currentUserId';
-    const reportVersion = '@reportVersion';
-
-    document.getElementById("btnDownloadPdf")?.addEventListener("click", async function () {
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
-        const margin = 40;
-        const pageWidth = doc.internal.pageSize.getWidth();
-
-        // === Load Logos ===
-        const logos = await Promise.all([
-            loadImage("/images/lCC Logo.jpg"),
-            loadImage("/images/ICT-Works Logo.jpg")
-        ]);
-
-        if (logos[0]) doc.addImage(logos[0], "JPEG", margin, 30, 100, 100);
-        if (logos[1]) doc.addImage(logos[1], "JPEG", pageWidth - margin - 80, 30, 100, 100);
-
-        // === Header ===
-        doc.setFont("helvetica", "bold").setFontSize(16);
-        ["LEKKI CONCESSION COMPANY LIMITED", "CONSERVATION TOLL PLAZA"].forEach((line, i) =>
-            doc.text(line, pageWidth / 2, 50 + (i * 25), { align: "center" })
-        );
-        doc.text("TRANSACTION DETAILS REPORT", pageWidth / 2, 120, { align: "center" });
-
-        // === Table ===
-        const headers = [["Lane", "Trx #", "Date", "Time", "Shift", "Operator", "Lane Name", "Payment", "Collector", "AVC", "Final", "Amount", "Card"]];
-        const rows = transactions.map(t => [
-            t.lane_Nr, t.trx_Sequence_Nr,
-            formatDate(t.transactionDateTime), formatTime(t.transactionDateTime),
-            t.operational_Shift, t.toll_Operator_ID,
-            t.lane_Name, t.method_of_Payment,
-            t.toll_Collector_Class, t.avC_Class, t.final_Class, t.tariff, t.tac_Card_Number
-        ]);
-
-        doc.autoTable({
-            head: headers,
-            body: rows,
-            startY: 150,
-            theme: "grid",
-            styles: { fontSize: 8, halign: "center", valign: "middle" },
-            headStyles: { fillColor: [52, 152, 219] },
-            didDrawPage: data => {
-                const pageCount = doc.internal.getNumberOfPages();
-                doc.setFontSize(9);
-                doc.text(`Page ${pageCount}`, pageWidth - margin, doc.internal.pageSize.height - 10, { align: "right" });
-            }
-        });
-
-        // === Footer ===
-        const finalY = doc.lastAutoTable.finalY + 30;
-        doc.text(`Generated: ${reportGeneratedAt}`, margin, finalY);
-        doc.text(`User: ${currentUserId}`, pageWidth / 2, finalY);
-        doc.text(`Version: ${reportVersion}`, pageWidth - margin - 50, finalY);
-
-        doc.save(`TransactionReport_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
-    });
-
-    function loadImage(src) {
-        return new Promise(resolve => {
-            const img = new Image();
-            img.src = src;
-            img.onload = () => resolve(img);
-            img.onerror = () => resolve(null);
-        });
-    }
-
-    const formatDate = date => date ? new Date(date).toLocaleDateString() : "";
-    const formatTime = date => date ? new Date(date).toLocaleTimeString() : "";
-</script>

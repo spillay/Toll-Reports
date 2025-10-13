@@ -3,7 +3,7 @@ using System.Globalization;
 
 namespace MIS.Web.Models.Transaction
 {
-    public class TransactionReportViewModel
+    public class TransactionModel
     {
         public string? lane_Nr { get; set; }
         public int trx_Sequence_Nr { get; set; }

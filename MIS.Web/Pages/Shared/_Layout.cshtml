@@ -80,6 +80,9 @@
                         <li><a class="dropdown-item" asp-area="" asp-page="/Comprehensive/Comprehensive">Comprehensive</a></li>
                     </ul>
                 </div>
+                @Html.DropDownList("myDropdown", new SelectList(new[] { "Option 1", "Option 2", "Option 3" }), "Select an option", new { @id = "myDropdown" })
+
+                
             </div>
 
             <div class="col-md-11">
@@ -87,6 +90,7 @@
                     <div class="card-body">
                         @RenderBody()
                     </div>
+
                 </div>
             </div>
         </div>
@@ -102,7 +106,23 @@
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
-
-    @await RenderSectionAsync("Scripts", required: false)
+    <script>
+        $('#myDropdown').change(function () {
+            console.log("change");
+            var selectedValue = $(this).val();
+            $.ajax({
+                url: '@Url.Action("Transaction", "Menu")',
+                type: 'GET',
+                data: { value: selectedValue },
+                success: function (response) {
+                    console.log('Action called successfully:', response);
+                },
+                error: function (error) {
+                    console.error('Error:', error);
+                }
+            });
+        });
+    </script>
+   
 </body>
 </html>

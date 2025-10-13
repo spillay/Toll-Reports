@@ -29,29 +29,29 @@ namespace MIS.Web.Pages.Reports
         [BindProperty(SupportsGet = true)] public string? PaymentMethod { get; set; }
         [BindProperty(SupportsGet = true)] public string? SortOrder { get; set; }
 
-        public List<TransactionReportViewModel> Transactions { get; set; } = new();
+        public List<TransactionModel> Transactions { get; set; } = new();
         public int TotalRowCount { get; set; }
         public decimal TotalTariffSum { get; set; }
         public int FilteredRowCount { get; set; }
         public decimal FilteredTariffSum { get; set; }
 
-        public async Task OnGetAsync()
-        {
-            var allTransactions = await _reportService.GetTransactionDetailsAsync(StartDate, EndDate);
-            allTransactions = ApplyFilters(allTransactions);
+        //public async Task OnGetAsync()
+        //{
+        //    var allTransactions = await _reportService.GetTransactionDetailsAsync(1, 10, StartDate, EndDate);
+        //    allTransactions = ApplyFilters(allTransactions);
 
-            TotalRowCount = allTransactions.Count;
-            TotalTariffSum = allTransactions.Sum(t => t.tariff);
+        //    TotalRowCount = allTransactions.Count;
+        //    TotalTariffSum = allTransactions.Sum(t => t.tariff);
 
-            var filtered = allTransactions.Where(t => t.TransactionDateTime >= StartDate && t.TransactionDateTime <= EndDate).ToList();
+        //    var filtered = allTransactions.Where(t => t.TransactionDateTime >= StartDate && t.TransactionDateTime <= EndDate).ToList();
 
-            FilteredRowCount = filtered.Count;
-            FilteredTariffSum = filtered.Sum(t => t.tariff);
+        //    FilteredRowCount = filtered.Count;
+        //    FilteredTariffSum = filtered.Sum(t => t.tariff);
 
-            Transactions = SortTransactions(filtered);
-        }
+        //    Transactions = SortTransactions(filtered);
+        //}
 
-        private List<TransactionReportViewModel> ApplyFilters(IEnumerable<TransactionReportViewModel> data)
+        private List<TransactionModel> ApplyFilters(IEnumerable<TransactionModel> data)
         {
             return data
                 .Where(t => string.IsNullOrEmpty(Shift) || t.operational_Shift == Shift)
@@ -61,7 +61,7 @@ namespace MIS.Web.Pages.Reports
                 .ToList();
         }
 
-        private List<TransactionReportViewModel> SortTransactions(IEnumerable<TransactionReportViewModel> data) =>
+        private List<TransactionModel> SortTransactions(IEnumerable<TransactionModel> data) =>
             SortOrder switch
             {
                 "lane_Nr" => data.OrderBy(t => t.lane_Nr).ToList(),
@@ -77,7 +77,7 @@ namespace MIS.Web.Pages.Reports
 
         public async Task<IActionResult> OnGetExportExcelAsync()
         {
-            var data = ApplyFilters(await _reportService.GetTransactionDetailsAsync(StartDate, EndDate));
+            //var data = ApplyFilters(await _reportService.GetTransactionDetailsAsync(1, 10, StartDate, EndDate));
 
             using var package = new ExcelPackage();
             var ws = package.Workbook.Worksheets.Add("Transactions");
@@ -91,23 +91,23 @@ namespace MIS.Web.Pages.Reports
                 ws.Cells[1, i + 1].Style.Font.Bold = true;
             }
 
-            for (int i = 0; i < data.Count; i++)
-            {
-                var t = data[i];
-                ws.Cells[i + 2, 1].Value = t.lane_Nr;
-                ws.Cells[i + 2, 2].Value = t.trx_Sequence_Nr;
-                ws.Cells[i + 2, 3].Value = t.TransactionDateTime.ToString("dd/MM/yyyy");
-                ws.Cells[i + 2, 4].Value = t.TransactionDateTime.ToString("HH:mm:ss");
-                ws.Cells[i + 2, 5].Value = t.operational_Shift;
-                ws.Cells[i + 2, 6].Value = t.toll_Operator_ID;
-                ws.Cells[i + 2, 7].Value = t.lane_Name;
-                ws.Cells[i + 2, 8].Value = t.method_of_Payment;
-                ws.Cells[i + 2, 9].Value = t.toll_Collector_Class;
-                ws.Cells[i + 2, 10].Value = t.avC_Class;
-                ws.Cells[i + 2, 11].Value = t.final_Class;
-                ws.Cells[i + 2, 12].Value = t.tariff;
-                ws.Cells[i + 2, 13].Value = t.tac_Card_Number;
-            }
+            //for (int i = 0; i < data.Count; i++)
+            //{
+            //    var t = data[i];
+            //    ws.Cells[i + 2, 1].Value = t.lane_Nr;
+            //    ws.Cells[i + 2, 2].Value = t.trx_Sequence_Nr;
+            //    ws.Cells[i + 2, 3].Value = t.TransactionDateTime.ToString("dd/MM/yyyy");
+            //    ws.Cells[i + 2, 4].Value = t.TransactionDateTime.ToString("HH:mm:ss");
+            //    ws.Cells[i + 2, 5].Value = t.operational_Shift;
+            //    ws.Cells[i + 2, 6].Value = t.toll_Operator_ID;
+            //    ws.Cells[i + 2, 7].Value = t.lane_Name;
+            //    ws.Cells[i + 2, 8].Value = t.method_of_Payment;
+            //    ws.Cells[i + 2, 9].Value = t.toll_Collector_Class;
+            //    ws.Cells[i + 2, 10].Value = t.avC_Class;
+            //    ws.Cells[i + 2, 11].Value = t.final_Class;
+            //    ws.Cells[i + 2, 12].Value = t.tariff;
+            //    ws.Cells[i + 2, 13].Value = t.tac_Card_Number;
+            //}
 
             ws.Cells[ws.Dimension.Address].AutoFitColumns();
 

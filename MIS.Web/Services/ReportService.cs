@@ -17,18 +17,23 @@ namespace MIS.Web.Services
             _httpClient = httpClient;
         }
 
-        public async Task<List<TransactionReportViewModel>> GetTransactionDetailsAsync(
+        public async Task<PageTransactionModel> GetTransactionDetailsAsync(
+            int pageNumber,
+            int pageSize,
             DateTime startDate,
             DateTime endDate,
             List<string>? operationalShift = null,
             List<string>? tollOperators = null,
             List<string>? laneNames = null,
-            List<string>? paymentMethods = null)
+            List<string>? paymentMethods = null
+            )
         {
             string formattedStart = startDate.ToString("s"); // yyyy-MM-ddTHH:mm:ss
             string formattedEnd = endDate.ToString("s");
+            string formattedPageNumber = pageNumber.ToString();
+            string formattedPageSize = pageSize.ToString();
 
-            var url = $"http://localhost:5000/api/Transaction/details?startDate={Uri.EscapeDataString(formattedStart)}&endDate={Uri.EscapeDataString(formattedEnd)}";
+             var url = $"http://localhost:5000/api/Transaction/details?startDate={Uri.EscapeDataString(formattedStart)}&endDate={Uri.EscapeDataString(formattedEnd)}&page={Uri.EscapeDataString(formattedPageNumber)}&pageSize={Uri.EscapeDataString(formattedPageSize)}";
 
             if (operationalShift != null && operationalShift.Any())
                 url += $"&operationalShift={Uri.EscapeDataString(string.Join(",", operationalShift))}";
@@ -46,14 +51,14 @@ namespace MIS.Web.Services
 
             if (!response.IsSuccessStatusCode)
             {
-                return new List<TransactionReportViewModel>();
+                return new PageTransactionModel();
             }
 
             var json = await response.Content.ReadAsStringAsync();
 
-            var transactions = JsonConvert.DeserializeObject<List<TransactionReportViewModel>>(json);
+            var transactions = JsonConvert.DeserializeObject<PageTransactionModel>(json);
 
-            return transactions ?? new List<TransactionReportViewModel>();
+            return transactions ?? new PageTransactionModel();
         }
     }
 }

@@ -39,22 +39,9 @@ public class DiscrepancyReportModel : PageModel
     [BindProperty(SupportsGet = true)]
     public string? SortOrder { get; set; }
 
-    // Pagination
-    public int PageSize { get; set; } = 10;
-    [BindProperty(SupportsGet = true)]
-    public int PageNumber { get; set; } = 1;
-    public int TotalPages { get; set; }
-
     public List<DiscrepancyReportViewModel> Discrepancys { get; set; } = new();
     public List<DiscrepancyReportViewModel> AllDiscrepancys { get; set; } = new();
 
-    public string GetSortOrder(string column)
-    {
-        if (string.IsNullOrEmpty(SortOrder)) return column;         // Default ascending
-        if (SortOrder == column) return column + "_desc";           // Toggle to descending
-        if (SortOrder == column + "_desc") return column;           // Toggle back to ascending
-        return column;
-    }
 
     public async Task OnGetAsync()
     {
@@ -123,12 +110,9 @@ public class DiscrepancyReportModel : PageModel
 
         AllDiscrepancys = query.ToList(); // Full list for summary
         var totalRecords = AllDiscrepancys.Count;
-        TotalPages = (int)Math.Ceiling(totalRecords / (double)PageSize);
+       // TotalPages = (int)Math.Ceiling(totalRecords / (double)PageSize);
 
-        Discrepancys = AllDiscrepancys
-            .Skip((PageNumber - 1) * PageSize)
-            .Take(PageSize)
-            .ToList();
+        Discrepancys = AllDiscrepancys.ToList();
     }
 
     

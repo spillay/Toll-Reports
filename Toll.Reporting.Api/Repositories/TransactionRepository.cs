@@ -1,6 +1,10 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Toll.Reporting.Api.DTOs;
 using TollReportingSystem.Data;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace Toll.Reporting.Api.Repositories
 {
@@ -13,36 +17,35 @@ namespace Toll.Reporting.Api.Repositories
             _context = context;
         }
 
-        public async Task<IEnumerable<TransactionDetailsDto>> GetTransactionDetailsAsync(
+        /// <summary>
+        /// Fetch paginated transaction details with optional filters.
+        /// </summary>
+        public async Task<PagedResult<TransactionDetailsDto>> GetTransactionDetailsAsync(
             DateTime startDate,
             DateTime endDate,
             List<string>? operationalShift = null,
             List<string>? tollOperators = null,
             List<string>? laneNames = null,
-            List<string>? paymentMethods = null)
+            List<string>? paymentMethods = null,
+            int page = 1,
+            int pageSize = 10)
         {
-            // Query Transactions with LEFT JOIN equivalents
+            // Base query joining related tables
             var query = from t in _context.Transactions
 
-                            // LEFT JOIN Shift
                         join s in _context.Shifts on t.ShiftId equals s.ShiftId into shiftGroup
                         from s in shiftGroup.DefaultIfEmpty()
 
-                            // LEFT JOIN SystemUser
                         join su in _context.SystemUsers on t.SystemUserId equals su.SystemUserId into userGroup
                         from su in userGroup.DefaultIfEmpty()
 
-                            // LEFT JOIN Lane
                         join l in _context.Lanes on t.LaneId equals l.LaneId into laneGroup
                         from l in laneGroup.DefaultIfEmpty()
 
-                            // LEFT JOIN PaymentMethod
-                            // LEFT JOIN TransactionType
                         join tt in _context.TransactionTypes
                             on t.TransactionTypeId equals tt.TransactionTypeId into typeGroup
                         from tt in typeGroup.DefaultIfEmpty()
 
-                            // LEFT JOIN TollClass (Manual, Automatic, Actual)
                         join tc1 in _context.TollClasses on t.ManualTollClassId equals tc1.TollClassId into tc1Group
                         from tc1 in tc1Group.DefaultIfEmpty()
 
@@ -52,79 +55,107 @@ namespace Toll.Reporting.Api.Repositories
                         join tc3 in _context.TollClasses on t.ActualTollClassId equals tc3.TollClassId into tc3Group
                         from tc3 in tc3Group.DefaultIfEmpty()
 
-                            // LEFT JOIN TariffPlanDetail
                         join tpd in _context.TariffPlanDetails
-                             on new { t.TariffPlanId, TollClassId = t.ManualTollClassId }
-                             equals new { tpd.TariffPlanId, tpd.TollClassId } into tariffGroup
+                            on new { t.TariffPlanId, TollClassId = t.ManualTollClassId }
+                            equals new { tpd.TariffPlanId, tpd.TollClassId } into tariffGroup
                         from tpd in tariffGroup.DefaultIfEmpty()
 
                         where t.TransactionDateTime >= startDate &&
                               t.TransactionDateTime < endDate.AddDays(1)
-
-                        // Apply filters like in the SQL
-                        where (operationalShift == null || operationalShift.Contains("-- All --") || operationalShift.Contains(s.Description))
-                           && (tollOperators == null || tollOperators.Contains("-- All --") || tollOperators.Contains(su.Username))
-                           && (laneNames == null || laneNames.Contains("-- All --") || laneNames.Contains(l.LaneName))
-                           && (paymentMethods == null || paymentMethods.Contains("-- All --") || paymentMethods.Contains(tt.Description))
-
                         orderby t.TransactionDateTime descending
 
-                        select new TransactionDetailsDto
+                        select new
                         {
-                            Lane_Nr = t.LaneId,
-                            //Trx_Sequence_Nr = t.TransactionNumber,
-                            Trx_Sequence_Nr = t.TransactionNumber.ToString(),
-                            Trx_Date = t.TransactionDateTime.ToString("dd/MM/yyyy"),
-                            Trx_Time = t.TransactionDateTime.ToString("HH:mm:ss"),
-                            Operational_Shift = s.Description ?? "-- None --",
-                            Toll_Operator_ID = su.Username ?? "-- None --",
-                            Lane_Name = l.LaneName ?? "-- None --",
-                            Method_of_Payment = tt.Description ?? "-- None --",
-                            Toll_Collector_Class = tc1.ClassDescription,
-                            AVC_Class = tc2.ClassDescription,
-                            Final_Class = tc3.ClassDescription,
-                           // Tariff = tpd.AmountInclusive,
-                            Tariff = Convert.ToDecimal(tpd.AmountInclusive),
-                            Tac_Card_Number = t.CardNumber
+                            Transaction = t,
+                            Shift = s,
+                            User = su,
+                            Lane = l,
+                            Type = tt,
+                            TollClass1 = tc1,
+                            TollClass2 = tc2,
+                            TollClass3 = tc3,
+                            Tariff = tpd
                         };
 
-            // Execute query asynchronously
-            return await query.ToListAsync();
-        }
+            // ✅ Apply optional filters dynamically
+            if (operationalShift != null && operationalShift.Any() && !operationalShift.Contains("-- All --"))
+            {
+                query = query.Where(x => operationalShift.Contains(x.Shift.Description));
+            }
 
+            if (tollOperators != null && tollOperators.Any() && !tollOperators.Contains("-- All --"))
+            {
+                query = query.Where(x => tollOperators.Contains(x.User.Username));
+            }
+
+            if (laneNames != null && laneNames.Any() && !laneNames.Contains("-- All --"))
+            {
+                query = query.Where(x => laneNames.Contains(x.Lane.LaneName));
+            }
+
+            if (paymentMethods != null && paymentMethods.Any() && !paymentMethods.Contains("-- All --"))
+            {
+                query = query.Where(x => paymentMethods.Contains(x.Type.Description));
+            }
+
+            // Count total records before pagination
+            var totalCount = await query.CountAsync();
+
+            // Apply pagination
+            var pagedItems = await query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(x => new TransactionDetailsDto
+                {
+                    Lane_Nr = x.Transaction.LaneId,
+                    Trx_Sequence_Nr = x.Transaction.TransactionNumber.ToString(),
+                    Trx_Date = x.Transaction.TransactionDateTime.ToString("dd/MM/yyyy"),
+                    Trx_Time = x.Transaction.TransactionDateTime.ToString("HH:mm:ss"),
+                    Operational_Shift = x.Shift.Description ?? "-- None --",
+                    Toll_Operator_ID = x.User.Username ?? "-- None --",
+                    Lane_Name = x.Lane.LaneName ?? "-- None --",
+                    Method_of_Payment = x.Type.Description ?? "-- None --",
+                    Toll_Collector_Class = x.TollClass1.ClassDescription ?? "-- None --",
+                    AVC_Class = x.TollClass2.ClassDescription ?? "-- None --",
+                    Final_Class = x.TollClass3.ClassDescription ?? "-- None --",
+                    Tariff = Convert.ToDecimal(x.Tariff != null ? x.Tariff.AmountInclusive : 0),
+                    Tac_Card_Number = x.Transaction.CardNumber,
+                    StartDate = startDate,
+                    EndDate = endDate
+                })
+                .ToListAsync();
+
+            //  Return paged result
+            return new PagedResult<TransactionDetailsDto>
+            {
+                Items = pagedItems,
+                TotalCount = totalCount,
+                Page = page,
+                PageSize = pageSize
+            };
+
+        }
 
         // ==================== LOOKUP QUERIES ====================
 
-        /// <summary>
-        /// Returns distinct shift descriptions.
-        /// Equivalent SQL: SELECT DISTINCT Description FROM Shift ORDER BY Description;
-        /// </summary>
         public async Task<IEnumerable<string>> GetShiftsAsync()
         {
             return await _context.Shifts
                                  .Select(s => s.Description)
                                  .Distinct()
-                                 .OrderBy(s => s) // ORDER BY
+                                 .OrderBy(s => s)
                                  .ToListAsync();
         }
 
-        /// <summary>
-        /// Returns distinct usernames.
-        /// Equivalent SQL: SELECT DISTINCT Username FROM SystemUser;
-        /// </summary>
         public async Task<IEnumerable<string>> GetTollOperatorsAsync()
         {
             return await _context.SystemUsers
                                  .Select(su => su.Username)
                                  .Distinct()
-                                 .OrderBy(su => su) // Optional ordering
+                                 .OrderBy(su => su)
                                  .ToListAsync();
         }
 
-        /// <summary>
-        /// Returns distinct lane names.
-        /// Equivalent SQL: SELECT DISTINCT LaneName FROM Lane;
-        /// </summary>
         public async Task<IEnumerable<string>> GetLanesAsync()
         {
             return await _context.Lanes
@@ -134,10 +165,6 @@ namespace Toll.Reporting.Api.Repositories
                                  .ToListAsync();
         }
 
-        /// <summary>
-        /// Returns distinct payment method descriptions.
-        /// Equivalent SQL: SELECT DISTINCT Description FROM PaymentMethod;
-        /// </summary>
         public async Task<IEnumerable<string>> GetPaymentMethodsAsync()
         {
             return await _context.PaymentMethods
@@ -147,5 +174,4 @@ namespace Toll.Reporting.Api.Repositories
                                  .ToListAsync();
         }
     }
-
 }

@@ -15,6 +15,14 @@ builder.Services.AddHttpClient<IReportService, ReportService>();
 builder.Services.AddScoped<IDiscrepancyReportService, DiscrepancyReportService>();
 builder.Services.AddScoped<IComprehensiveReportService, ComprehensiveReportService>();
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll",
+        policy => policy
+            .AllowAnyOrigin()
+            .AllowAnyMethod()
+            .AllowAnyHeader());
+});
 
 var app = builder.Build();
 
@@ -25,14 +33,15 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-app.UseStaticFiles(); 
+app.UseStaticFiles();
+
+app.UseCors("AllowAll");
 
 app.UseRouting();
 
 app.UseAuthorization();
 
 app.MapRazorPages();
-
 app.MapControllers();
 
 app.MapControllerRoute(

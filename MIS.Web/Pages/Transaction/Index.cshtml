@@ -1,89 +1,42 @@
 ﻿@page
 @using System.Text.Json
 @model MIS.Web.Pages.Reports.TransactionReportModel
+
 @{
     var reportGeneratedAt = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
     var currentUserId = User.Identity?.Name ?? "Unknown User";
     var reportVersion = "1.0.0";
-
-    var serializerOptions = new System.Text.Json.JsonSerializerOptions
+    var transactionsJson = JsonSerializer.Serialize(Model.Transactions, new JsonSerializerOptions
     {
-        PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
-    };
-    var transactionsJson = System.Text.Json.JsonSerializer.Serialize(Model.Transactions, serializerOptions);
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    });
 }
+@{
+    var filterModel = new MIS.Web.Pages.Shared._TransactionFiltersModel
+    {
+        StartDate = Model.StartDate,
+        EndDate = Model.EndDate,
+        PaymentMethods = string.IsNullOrEmpty(Model.PaymentMethod)
+            ? new List<string>()
+            : new List<string> { Model.PaymentMethod }
+    };
+}
+<partial name="~/Pages/Transaction/_TransactionFilters.cshtml" model="filterModel" />
+
 
 <div class="card shadow-lg mb-4">
     <div class="card-body">
 
         <!-- Header -->
         <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
-            <div class="d-flex align-items-center">
-                <img src="~/images/ICT-Works Logo.jpg" alt="ICT Works Logo" style="height: 120px; width 120px;" />
-            </div>
+            <div></div>
             <h2 class="mb-0 fw-bold text-primary">Transaction Report</h2>
             <div></div>
         </div>
 
         <!-- Filters -->
         <form method="get" class="row g-3 mb-3">
-            <div class="col-md-3">
-                <label class="form-label fw-semibold">Start Date & Time</label>
-                <input type="datetime-local" class="form-control" name="StartDate" value="@Model.StartDate.ToString("yyyy-MM-ddTHH:mm")" />
-            </div>
-            <div class="col-md-3">
-                <label class="form-label fw-semibold">End Date & Time</label>
-                <input type="datetime-local" class="form-control" name="EndDate" value="@Model.EndDate.ToString("yyyy-MM-ddTHH:mm")" />
-            </div>
-            <div class="col-md-2">
-                <label class="form-label fw-semibold">Lane</label>
-                <input type="text" class="form-control" asp-for="lane_Nr" placeholder="Lane #" />
-            </div>
-            <div class="col-md-2">
-                <label class="form-label fw-semibold">Operator</label>
-                <input type="text" class="form-control" asp-for="TollOperatorID" />
-            </div>
-            <div class="col-md-2">
-                <label class="form-label fw-semibold">Shift</label>
-                <select class="form-control" asp-for="Shift">
-                    <option value="">All</option>
-                    <option>Shift One</option>
-                    <option>Shift Two</option>
-                    <option>Shift Three</option>
-                </select>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label fw-semibold">Payment Method</label>
-                <select class="form-control" asp-for="PaymentMethod">
-                    <option value="">All</option>
-                    <option>Cash Transaction</option>
-                    <option>Exempt Transaction</option>
-                    <option>Violation</option>
-                    <option>Prepaid Transaction - RFID Tag</option>
-                    <option>Prepaid Transaction - Card</option>
-                    <option>Bank Card (NFC - Post Paid)</option>
-                    <option>QR Code / Barcode</option>
-                </select>
-            </div>
-            <div class="col-md-2 d-flex align-items-end">
-                <button type="submit" class="btn btn-primary w-100">Filter</button>
-            </div>
-            <div class="col-md-2 d-flex align-items-end">
-                <a asp-page-handler="ExportExcel"
-                asp-route-StartDate="@Model.StartDate.ToString("s")" 
-                asp-route-EndDate="@Model.EndDate.ToString("s")" 
-                asp-route-lane_Nr="@Model.lane_Nr" 
-                asp-route-TollOperatorID="@Model.TollOperatorID"
-                asp-route-Shift="@Model.Shift"
-                asp-route-PaymentMethod="@Model.PaymentMethod" 
-                class="btn btn-success w-100"> 
-                <i class="bi bi-file-earmark-excel"></i> Export Excel </a> 
-            </div>
-            <div class="col-md-2 d-flex align-items-end">
-                <button type="button" id="btnDownloadPdf" class="btn btn-danger w-100">
-                    <i class="bi bi-file-earmark-pdf"></i> Export PDF
-                </button>
-            </div>
+            <partial name="_TransactionFilters" model="Model" />
         </form>
 
         <!-- Table -->
@@ -157,138 +110,77 @@
 <!-- Scripts -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
-<script>
-    const transactions1 = @Html.Raw(transactionsJson);
-    const transactions = @Html.Raw(JsonSerializer.Serialize(Model.Transactions));
-    const reportGeneratedAt = '@DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")';
-    const currentUserId = '@(User.Identity?.Name ?? "Unknown User")';
-    const reportVersion = "1.0.0";
 
-    document.getElementById("btnDownloadPdf").addEventListener("click", async function () {
+<script>
+    const transactions = @Html.Raw(transactionsJson);
+    const reportGeneratedAt = '@reportGeneratedAt';
+    const currentUserId = '@currentUserId';
+    const reportVersion = '@reportVersion';
+
+    document.getElementById("btnDownloadPdf")?.addEventListener("click", async function () {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
-        const pageWidth = doc.internal.pageSize.getWidth();
-        const pageHeight = doc.internal.pageSize.getHeight();
         const margin = 40;
+        const pageWidth = doc.internal.pageSize.getWidth();
 
-        // Load logos
-        const [logo1, logo2] = await Promise.all([
-            new Promise(resolve => { const img = new Image(); img.src = "/images/lCC Logo.jpg"; img.onload = () => resolve(img); img.onerror = () => resolve(null); }),
-            new Promise(resolve => { const img = new Image(); img.src = "/images/ICT-Works Logo.jpg"; img.onload = () => resolve(img); img.onerror = () => resolve(null); })
+        // === Load Logos ===
+        const logos = await Promise.all([
+            loadImage("/images/lCC Logo.jpg"),
+            loadImage("/images/ICT-Works Logo.jpg")
         ]);
 
-        // Add logos
-        if (logo1) doc.addImage(logo1, "JPEG", margin, 30, 100, 100);
-        if (logo2) doc.addImage(logo2, "JPEG", pageWidth - margin - 80, 30, 100, 100);
+        if (logos[0]) doc.addImage(logos[0], "JPEG", margin, 30, 100, 100);
+        if (logos[1]) doc.addImage(logos[1], "JPEG", pageWidth - margin - 80, 30, 100, 100);
 
-        // Multi-line company title first
-        doc.setFontSize(16);
-        doc.setFont("helvetica", "bold");
-        const titleLines = ["LEKKI CONCESSION COMPANY LIMITED", "CONSERVATION TOLL PLAZA"];
-        let yPos = 50;
-        titleLines.forEach(line => {
-            doc.text(line, pageWidth / 2, yPos, { align: "center" });
-            yPos += 25;
-        });
+        // === Header ===
+        doc.setFont("helvetica", "bold").setFontSize(16);
+        ["LEKKI CONCESSION COMPANY LIMITED", "CONSERVATION TOLL PLAZA"].forEach((line, i) =>
+            doc.text(line, pageWidth / 2, 50 + (i * 25), { align: "center" })
+        );
+        doc.text("TRANSACTION DETAILS REPORT", pageWidth / 2, 120, { align: "center" });
 
-        // Smaller report header below the title
-        doc.setFontSize(12);
-        doc.setFont("helvetica", "bold");
-        doc.text("TRANSACTION DETAILS REPORT", pageWidth / 2, yPos + 10, { align: "center" });
-        yPos += 40; // leave space below header for filters or table
-
-        // Applied filters
-        doc.setFontSize(10);
-        doc.setFont("helvetica", "normal");
-        const appliedFilters = {
-            "Start Date": document.querySelector('input[name="StartDate"]')?.value || "All",
-            "End Date": document.querySelector('input[name="EndDate"]')?.value || "All",
-            "Lane": document.querySelector('input[name="lane_Nr"]')?.value || "All",
-            "Operator": document.querySelector('input[name="TollOperatorID"]')?.value || "All",
-            "Shift": document.querySelector('select[name="Shift"]')?.value || "All",
-            "Payment Method": document.querySelector('select[name="PaymentMethod"]')?.value || "All"
-        };
-        Object.entries(appliedFilters).forEach(([k, v]) => {
-            doc.text(`${k}: ${v}`, margin, yPos);
-            yPos += 12;
-        });
-
-        // Table
-        const headers = [[
-            "Lane","Trx #","Date","Time","Shift","Operator","Lane Name",
-            "Payment","Collector","AVC","Final","Amount","Card"
-        ]];
-
+        // === Table ===
+        const headers = [["Lane", "Trx #", "Date", "Time", "Shift", "Operator", "Lane Name", "Payment", "Collector", "AVC", "Final", "Amount", "Card"]];
         const rows = transactions.map(t => [
-            t.lane_Nr ?? "",
-            t.trx_Sequence_Nr ?? "",
-            t.transactionDateTime ? new Date(t.transactionDateTime).toLocaleDateString() : "",
-            t.transactionDateTime ? new Date(t.transactionDateTime).toLocaleTimeString() : "",
-            t.operational_Shift ?? "",
-            t.toll_Operator_ID ?? "",
-            t.lane_Name ?? "",
-            t.method_of_Payment ?? "",
-            t.toll_Collector_Class ?? "",
-            t.avC_Class ?? "",
-            t.final_Class ?? "",
-            t.tariff ?? "",
-            t.tac_Card_Number ?? ""
+            t.lane_Nr, t.trx_Sequence_Nr,
+            formatDate(t.transactionDateTime), formatTime(t.transactionDateTime),
+            t.operational_Shift, t.toll_Operator_ID,
+            t.lane_Name, t.method_of_Payment,
+            t.toll_Collector_Class, t.avC_Class, t.final_Class, t.tariff, t.tac_Card_Number
         ]);
 
         doc.autoTable({
             head: headers,
             body: rows,
-            startY: yPos + 10,
+            startY: 150,
             theme: "grid",
-            headStyles: { fillColor: [52, 152, 219], textColor: 255 },
-            styles: { fontSize: 8, cellPadding: 3, overflow: "linebreak", valign: "middle", halign: "center" },
-            margin: { top: 50, bottom: 30 },
-            pageBreak: "auto",
-            didDrawPage: function (data) {
-                const pageNumber = doc.internal.getNumberOfPages();
-                if (pageNumber > 1) { // repeat header only on pages > 1
-                    // Title
-                    doc.setFontSize(16);
-                    doc.setFont("helvetica", "bold");
-                    let headerY = 50;
-                    titleLines.forEach(line => {
-                        doc.text(line, pageWidth / 2, headerY, { align: "center" });
-                        headerY += 25;
-                    });
-                    // Report header
-                    doc.setFontSize(12);
-                    doc.setFont("helvetica", "bold");
-                    doc.text("TRANSACTION DETAILS REPORT", pageWidth / 2, headerY + 10, { align: "center" });
-                }
-
-                // Page number on all pages
+            styles: { fontSize: 8, halign: "center", valign: "middle" },
+            headStyles: { fillColor: [52, 152, 219] },
+            didDrawPage: data => {
+                const pageCount = doc.internal.getNumberOfPages();
                 doc.setFontSize(9);
-                doc.setFont("helvetica", "normal");
-                doc.text(`Page ${pageNumber}`, pageWidth - margin, doc.internal.pageSize.getHeight() - 10, { align: "right" });
+                doc.text(`Page ${pageCount}`, pageWidth - margin, doc.internal.pageSize.height - 10, { align: "right" });
             }
         });
 
-        // Summary
-        const finalY = doc.lastAutoTable.finalY + 20;
-        doc.setFontSize(12);
-        doc.setFont("helvetica", "bold");
-        doc.text("Summary", margin, finalY);
-        doc.setFont("helvetica", "normal");
-        doc.text(`Filtered Count: @Model.FilteredRowCount | Filtered Sum: @Model.FilteredTariffSum`, margin, finalY + 15);
-        doc.text(`Total Count: @Model.TotalRowCount | Total Sum: @Model.TotalTariffSum`, margin, finalY + 30);
+        // === Footer ===
+        const finalY = doc.lastAutoTable.finalY + 30;
+        doc.text(`Generated: ${reportGeneratedAt}`, margin, finalY);
+        doc.text(`User: ${currentUserId}`, pageWidth / 2, finalY);
+        doc.text(`Version: ${reportVersion}`, pageWidth - margin - 50, finalY);
 
-        // Footer
-        const footerY = finalY + 60;
-        doc.text(`Report Generated: ${reportGeneratedAt}`, margin, footerY);
-        doc.text(`User ID: ${currentUserId}`, pageWidth / 2 - 50, footerY);
-        doc.text(`Version: ${reportVersion}`, pageWidth - margin - 50, footerY);
-
-        // Save PDF
         doc.save(`TransactionReport_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
     });
+
+    function loadImage(src) {
+        return new Promise(resolve => {
+            const img = new Image();
+            img.src = src;
+            img.onload = () => resolve(img);
+            img.onerror = () => resolve(null);
+        });
+    }
+
+    const formatDate = date => date ? new Date(date).toLocaleDateString() : "";
+    const formatTime = date => date ? new Date(date).toLocaleTimeString() : "";
 </script>
-
-
-
-
-

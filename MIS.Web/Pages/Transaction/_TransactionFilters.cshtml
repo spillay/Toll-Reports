@@ -1,0 +1,28 @@
+﻿@model MIS.Web.Pages.Shared._TransactionFiltersModel
+
+<div class="row mb-3">
+    <div class="col-md-3">
+        <label for="startDate" class="form-label">Start Date</label>
+        <input type="date" id="startDate" name="StartDate" class="form-control"
+               value="@Model.StartDate.ToString("yyyy-MM-dd")" />
+    </div>
+
+    <div class="col-md-3">
+        <label for="endDate" class="form-label">End Date</label>
+        <input type="date" id="endDate" name="EndDate" class="form-control"
+               value="@Model.EndDate.ToString("yyyy-MM-dd")" />
+    </div>
+
+    <div class="col-md-3">
+        <label for="paymentMethods" class="form-label">Payment Methods</label>
+        <select id="paymentMethods" name="PaymentMethods" multiple class="form-select">
+            <option value="Cash">Cash</option>
+            <option value="Card">Card</option>
+            <option value="eTAG">eTAG</option>
+        </select>
+    </div>
+
+    <div class="col-md-3 d-flex align-items-end">
+        <button type="submit" class="btn btn-primary w-100">Filter</button>
+    </div>
+</div>

@@ -17,15 +17,15 @@ namespace MIS.Web.Controllers
         }
 
         // Razor page
-        public async Task<IActionResult> Index(TransactionModel times)
-        {
-            //var sDate = startDate ?? new DateTime(2025/08/19);
-            //var eDate = endDate ?? new DateTime(2025/08/22);
+        //public async Task<IActionResult> Index(TransactionModel times)
+        //{
+        //    //var sDate = startDate ?? new DateTime(2025/08/19);
+        //    //var eDate = endDate ?? new DateTime(2025/08/22);
 
-            // Fetch data from API via ReportService
-            var model = await _reportService.GetTransactionDetailsAsync(1,10,times.StartDate , times.EndDate );
+        //    // Fetch data from API via ReportService
+        //    //var model = await _reportService.GetTransactionDetailsAsync(1,10,times.StartDate , times.EndDate );
 
-            return View(model);
-        }
+        //    return View(model);
+        //}
     }
 }

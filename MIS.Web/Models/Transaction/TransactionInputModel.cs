@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using MIS.Models;
 
 namespace MIS.Web.Models
 {
@@ -7,6 +8,14 @@ namespace MIS.Web.Models
         public DateTime StartDate { get; set; }
         public int PageNumber { get; set; }
         public int PageSize { get; set; }
+
+        //Test
+
+
+        public DateTime EndDate { get; set; }
+
+        public List<Transaction.TransactionModel> Transactions { get; set; } = new();
+        public int TotalCount { get; set; }
         // Bound filters
         //[BindProperty(SupportsGet = true)] public int PageNumber { get; set; } 
         //[BindProperty(SupportsGet = true)] public int PageSize { get; set; }

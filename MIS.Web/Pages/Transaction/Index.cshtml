@@ -1,6 +1,12 @@
-﻿@page
-@using System.Text.Json
-@model MIS.Web.Models.TransactionInputModel
+﻿@model MIS.Web.Models.TransactionInputModel
+
+@{
+    
+    var reportVersion = "1";
+    string currentUserId = "Lucky";
+    DateTime reportGeneratedAt = DateTime.Now;
+}
+
 
 
 <div class="card shadow-lg mb-4">
@@ -19,6 +25,7 @@
 
         <!-- Table -->
         <div class="table-responsive">
+
             <table class="table table-bordered table-hover text-center align-middle">
                 <thead class="table-dark">
                     <tr>
@@ -37,20 +44,94 @@
                         <th>Card #</th>
                     </tr>
                 </thead>
-                <tbody>
-                   
-                </tbody>
+                 <tbody>
+                    @foreach (var c in Model.Transactions)
+                    { <tr>
+                        <td>@c.lane_Nr</td>
+                        <td>@c.trx_Sequence_Nr</td>
+                        <td>@c.trx_Date</td>
+                        <td>@c.trx_Time</td>
+                        <td>@c.operational_Shift</td>
+                        <td>@c.toll_Operator_ID</td>
+                        <td>@c.lane_Name</td>
+                        <td>@c.method_of_Payment</td>
+                        <td>@c.toll_Collector_Class</td>
+                        <td>@c.avC_Class</td>
+                        <td>@c.final_Class</td>
+                        <td>@c.tariff</td>
+                        <td>@c.tac_Card_Number</td>
+                        </tr>
+
+                    }
+                </tbody> 
             </table>
+            <!-- Pagination Section -->
+            <div class="mt-4 d-flex flex-column flex-md-row justify-content-between align-items-center border-top pt-3">
+                <div class="text-muted mb-2 mb-md-0">
+                    Showing page <strong>@Model.PageNumber</strong> of
+                    <strong>@((int)Math.Ceiling((double)Model.TotalCount / Model.PageSize))</strong> —
+                    Total records: <strong>@Model.TotalCount</strong>
+                </div>
+
+                <nav aria-label="Transaction pagination">
+                    <ul class="pagination pagination-sm mb-0 flex-wrap justify-content-center">
+                        @if (Model.PageNumber > 1)
+                        {
+                            <li class="page-item">
+                                <a class="page-link" href="@Url.Action("Transaction", "Menu", new { page = Model.PageNumber - 1, pageSize = Model.PageSize })">
+                                    &laquo; Previous
+                                </a>
+                            </li>
+                        }
+                        else
+                        {
+                            <li class="page-item disabled">
+                                <span class="page-link">&laquo; Previous</span>
+                            </li>
+                        }
+
+                        @{
+                            int totalPages = (int)Math.Ceiling((double)Model.TotalCount / Model.PageSize);
+                            int startPage = Math.Max(1, Model.PageNumber - 2);
+                            int endPage = Math.Min(totalPages, Model.PageNumber + 2);
+
+                            for (int i = startPage; i <= endPage; i++)
+                            {
+                                <li class="page-item @(i == Model.PageNumber ? "active" : "")">
+                                    <a class="page-link" href="@Url.Action("Transaction", "Menu", new { page = i, pageSize = Model.PageSize })">@i</a>
+                                </li>
+                            }
+                        }
+
+                        @if (Model.PageNumber < (int)Math.Ceiling((double)Model.TotalCount / Model.PageSize))
+                        {
+                            <li class="page-item">
+                                <a class="page-link" href="@Url.Action("Transaction", "Menu", new { page = Model.PageNumber + 1, pageSize = Model.PageSize })">
+                                    Next &raquo;
+                                </a>
+                            </li>
+                        }
+                        else
+                        {
+                            <li class="page-item disabled">
+                                <span class="page-link">Next &raquo;</span>
+                            </li>
+                        }
+                    </ul>
+                </nav>
+            </div>
+
+
         </div>
 
 
         <!-- Footer -->
-        @* <div class="mt-4 p-3 border-top bg-light">
+         <div class="mt-4 p-3 border-top bg-light">
             <div class="row">
                 <div class="col-md-4">Report Name: Transaction Details Report<br />Date: @reportGeneratedAt</div>
                  <div class="col-md-4">User ID: @currentUserId</div> 
                 <div class="col-md-4 text-end">Version: @reportVersion</div>
             </div>
-        </div> *@
+        </div> 
     </div>
 </div>

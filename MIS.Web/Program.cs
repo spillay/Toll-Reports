@@ -14,6 +14,8 @@ builder.Services.AddControllers();
 builder.Services.AddHttpClient<IReportService, ReportService>();
 builder.Services.AddScoped<IDiscrepancyReportService, DiscrepancyReportService>();
 builder.Services.AddScoped<IComprehensiveReportService, ComprehensiveReportService>();
+builder.Services.AddScoped<IVarientPerfomanceReportService, VarientPerfomanceReportService>();
+
 
 builder.Services.AddCors(options =>
 {

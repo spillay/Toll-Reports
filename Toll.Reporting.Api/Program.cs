@@ -31,6 +31,8 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 builder.Services.AddScoped<ITransactionRepository, TransactionRepository>();
 builder.Services.AddScoped<IComprehensiveRepository, ComprehensiveRepository>();
 builder.Services.AddScoped<IDiscrepancyRepository, DiscrepancyRepository>();
+builder.Services.AddScoped<IVarientPerformanceRepository, VarientPerformanceRepository>();
+
 
 // Program.cs - inside builder.Services section
 //builder.Services.Configure<SSRSOptions>(builder.Configuration.GetSection("SSRS"));

@@ -105,7 +105,7 @@
         <nav class="sidebar bg-body bg-transparent p-3 vh-100">
             <ul class="nav flex-column">
                 <li class="nav-item mb-2">
-                    <a class="nav-link text-dark" asp-area="" asp-page="/Transaction/Index">
+                    <a class="nav-link text-dark" asp-controller="menu" asp-action="transaction" asp-route-page="1" asp-route-pageSize="10">
                         <i class="bi bi-cash-stack me-2"></i> Transactions
                     </a>
                 </li>
@@ -117,6 +117,11 @@
                 <li class="nav-item mb-2">
                     <a class="nav-link text-dark" asp-area="" asp-page="/Comprehensive/Comprehensive">
                         <i class="bi bi-graph-up me-2"></i> Comprehensive
+                    </a>
+                </li>
+                <li class="nav-item mb-2">
+                    <a class="nav-link text-dark" asp-controller="VarientPerfomance" asp-action="VarientPerfomances" asp-route-page="1" asp-route-pageSize="10">
+                        <i class="bi bi-graph-up me-2"></i> VarientPerfomance
                     </a>
                 </li>
             </ul>

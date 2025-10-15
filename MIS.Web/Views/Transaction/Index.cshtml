@@ -1,4 +1,5 @@
-﻿@model MIS.Web.Models.VarientPerfomanceInputModel
+﻿@model MIS.Web.Models.TransactionInputModel
+
 @{
     
     var reportVersion = "1";
@@ -14,13 +15,13 @@
         <!-- Header -->
         <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
             <div></div>
-            <h2 class="mb-0 fw-bold text-primary">VarientPerfomances Report</h2>
+            <h2 class="mb-0 fw-bold text-primary">Transaction Report</h2>
             <div></div>
         </div>
 
         <!-- Filters -->
-         @* @Html.Partial("_TransactionFilters", Model)  
-      *@
+          @Html.Partial("_TransactionFilters", Model)  
+      
 
         <!-- Table -->
         <div class="table-responsive">
@@ -28,26 +29,37 @@
             <table class="table table-bordered table-hover text-center align-middle">
                 <thead class="table-dark">
                     <tr>
-                       
-                        <th>Shift Date</th>
-                        <th>Shift Discreption</th>
+                        <th>Lane</th>
+                        <th>Transaction #</th>
+                        <th>Date</th>
+                        <th>Time</th>
+                        <th>Shift</th>
                         <th>Operator</th>
-                        <th>Cash Expected</th>
-                        <th>Cash declared</th>
-                        <th>Cash declared Difference</th>
-                        
+                        <th>Lane Name</th>
+                        <th>Payment</th>
+                        <th>Collector Class</th>
+                        <th>AVC Class</th>
+                        <th>Final Class</th>
+                        <th>Amount</th>
+                        <th>Card #</th>
                     </tr>
                 </thead>
                  <tbody>
-                    @foreach (var c in Model.VarientPerfomances)
+                    @foreach (var c in Model.items)
                     { <tr>
-                       
-                        <td>@c.shiftDate</td>
-                        <td>@c.shiftDescription</td>
-                        <td>@c.tollOperator</td>
-                        <td>@c.NominalTariff</td>
-                        <td>@c.NettAmount</td>
-                         <td>@(c.NettAmount - c.NominalTariff)</td>
+                        <td>@c.lane_Nr</td>
+                        <td>@c.trx_Sequence_Nr</td>
+                        <td>@c.trx_Date</td>
+                        <td>@c.trx_Time</td>
+                        <td>@c.operational_Shift</td>
+                        <td>@c.toll_Operator_ID</td>
+                        <td>@c.lane_Name</td>
+                        <td>@c.method_of_Payment</td>
+                        <td>@c.toll_Collector_Class</td>
+                        <td>@c.avC_Class</td>
+                        <td>@c.final_Class</td>
+                        <td>@c.tariff</td>
+                        <td>@c.tac_Card_Number</td>
                         </tr>
 
                     }
@@ -56,17 +68,17 @@
             <!-- Pagination Section -->
             <div class="mt-4 d-flex flex-column flex-md-row justify-content-between align-items-center border-top pt-3">
                 <div class="text-muted mb-2 mb-md-0">
-                    Showing page <strong>@Model.PageNumber</strong> of
-                    <strong>@((int)Math.Ceiling((double)Model.TotalCount / Model.PageSize))</strong> —
-                    Total records: <strong>@Model.TotalCount</strong>
+                    Showing page <strong>@Model.totalPages</strong> of
+                    <strong>@Model.pageCount</strong> 
+                    Total records: <strong>@Model.totalCount</strong>
                 </div>
 
-                <nav aria-label="VarientPerfomance pagination">
+                <nav aria-label="Transaction pagination">
                     <ul class="pagination pagination-sm mb-0 flex-wrap justify-content-center">
-                        @if (Model.PageNumber > 1)
+                        @if (Model.page > 1)
                         {
                             <li class="page-item">
-                                <a class="page-link" href="@Url.Action("VarientPerfomances", "VarientPerfomance", new { page = Model.PageNumber - 1, pageSize = Model.PageSize })">
+                                <a class="page-link" href="@Url.Action("Transaction", "Menu", new { page = Model.page - 1, pageSize = Model.pageSize })">
                                     &laquo; Previous
                                 </a>
                             </li>
@@ -78,7 +90,7 @@
                             </li>
                         }
 
-                        @{
+                        @* @{
                             int totalPages = (int)Math.Ceiling((double)Model.TotalCount / Model.PageSize);
                             int startPage = Math.Max(1, Model.PageNumber - 2);
                             int endPage = Math.Min(totalPages, Model.PageNumber + 2);
@@ -86,7 +98,7 @@
                             for (int i = startPage; i <= endPage; i++)
                             {
                                 <li class="page-item @(i == Model.PageNumber ? "active" : "")">
-                                    <a class="page-link" href="@Url.Action("VarientPerfomances", "VarientPerfomance", new { page = i, pageSize = Model.PageSize })">@i</a>
+                                    <a class="page-link" href="@Url.Action("Transaction", "Menu", new { page = i, pageSize = Model.PageSize })">@i</a>
                                 </li>
                             }
                         }
@@ -94,7 +106,7 @@
                         @if (Model.PageNumber < (int)Math.Ceiling((double)Model.TotalCount / Model.PageSize))
                         {
                             <li class="page-item">
-                                <a class="page-link" href="@Url.Action("VarientPerfomances", "VarientPerfomance", new { page = Model.PageNumber + 1, pageSize = Model.PageSize })">
+                                <a class="page-link" href="@Url.Action("Transaction", "Menu", new { page = Model.PageNumber + 1, pageSize = Model.PageSize })">
                                     Next &raquo;
                                 </a>
                             </li>
@@ -104,7 +116,7 @@
                             <li class="page-item disabled">
                                 <span class="page-link">Next &raquo;</span>
                             </li>
-                        }
+                        } *@
                     </ul>
                 </nav>
             </div>
@@ -116,7 +128,7 @@
         <!-- Footer -->
          <div class="mt-4 p-3 border-top bg-light">
             <div class="row">
-                <div class="col-md-4">Report Name: VarientPerfomances Details Report<br />Date: @reportGeneratedAt</div>
+                <div class="col-md-4">Report Name: Transaction Details Report<br />Date: @reportGeneratedAt</div>
                  <div class="col-md-4">User ID: @currentUserId</div> 
                 <div class="col-md-4 text-end">Version: @reportVersion</div>
             </div>

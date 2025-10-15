@@ -13,6 +13,8 @@ namespace MIS.Web.Controllers
         {
             _reportService = reportService;
         }
+
+        
         public async Task<IActionResult> VarientPerfomances(int page = 1, int pageSize = 10)
         {
             // For now, we use static date range (you can later make this dynamic)
@@ -33,7 +35,7 @@ namespace MIS.Web.Controllers
                 EndDate = endDate
             };
 
-            return View("Pages/VarientPerfomance/Index.cshtml", model);
+            return View("Views/VarientPerfomance/Index.cshtml", model);
         }
     }
 }

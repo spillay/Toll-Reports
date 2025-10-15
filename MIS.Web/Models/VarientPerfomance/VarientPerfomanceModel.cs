@@ -10,9 +10,10 @@ namespace MIS.Web.Models.VarientPerfomance
         public string? tollOperator { get; set; }
         public double NominalTariff { get; set; }
         public double NettAmount { get; set; }
+        public double difference { get { return NominalTariff - NettAmount; } }
         public DateTime? StartDate { get; set; } = DateTime.MinValue;
         public DateTime? EndDate { get; set; } = DateTime.MinValue;
+        
 
-    
     }
 }

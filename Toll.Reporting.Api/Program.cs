@@ -32,6 +32,8 @@ builder.Services.AddScoped<ITransactionRepository, TransactionRepository>();
 builder.Services.AddScoped<IComprehensiveRepository, ComprehensiveRepository>();
 builder.Services.AddScoped<IDiscrepancyRepository, DiscrepancyRepository>();
 builder.Services.AddScoped<IVarientPerformanceRepository, VarientPerformanceRepository>();
+builder.Services.AddScoped<ITrafficRepository, TrafficRepository>();
+
 
 
 // Program.cs - inside builder.Services section

@@ -1,6 +1,10 @@
 ﻿using MIS.Web.Models.VarientPerfomance;
 using Newtonsoft.Json;
-
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net.Http;
+using System.Threading.Tasks;
 
 namespace MIS.Web.Services
 {
@@ -19,15 +23,12 @@ namespace MIS.Web.Services
             DateTime startDate,
             DateTime endDate,
             List<string>? operationalShift = null,
-            List<string>? tollOperators = null
-            )
+            List<string>? tollOperators = null)
         {
-            string formattedStart = startDate.ToString("s"); // yyyy-MM-ddTHH:mm:ss
-            string formattedEnd = endDate.ToString("s");
-            string formattedPageNumber = pageNumber.ToString();
-            string formattedPageSize = pageSize.ToString();
-
-             var url = $"http://localhost:5000/api/VarientPerformance/details?startDate={Uri.EscapeDataString(formattedStart)}&endDate={Uri.EscapeDataString(formattedEnd)}&page={Uri.EscapeDataString(formattedPageNumber)}&pageSize={Uri.EscapeDataString(formattedPageSize)}";
+            var url = $"http://localhost:5000/api/VarientPerformance/details?" +
+          $"startDate={Uri.EscapeDataString(startDate.ToString("s"))}" +
+          $"&endDate={Uri.EscapeDataString(endDate.ToString("s"))}" +
+          $"&page={pageNumber}&pageSize={pageSize}";
 
             if (operationalShift != null && operationalShift.Any())
                 url += $"&operationalShift={Uri.EscapeDataString(string.Join(",", operationalShift))}";
@@ -37,16 +38,10 @@ namespace MIS.Web.Services
 
             var response = await _httpClient.GetAsync(url);
 
-            if (!response.IsSuccessStatusCode)
-            {
-                return new PageVarientPerfomanceModel();
-            }
+            if (!response.IsSuccessStatusCode) return new PageVarientPerfomanceModel();
 
             var json = await response.Content.ReadAsStringAsync();
-
-            var varientPerfomances = JsonConvert.DeserializeObject<PageVarientPerfomanceModel>(json);
-
-            return varientPerfomances ?? new PageVarientPerfomanceModel();
+            return JsonConvert.DeserializeObject<PageVarientPerfomanceModel>(json) ?? new PageVarientPerfomanceModel();
         }
     }
 }

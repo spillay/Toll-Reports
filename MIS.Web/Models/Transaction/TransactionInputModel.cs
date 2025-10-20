@@ -9,7 +9,6 @@ namespace MIS.Web.Models
         public DateTime StartDate { get; set; }
 
         public DateTime EndDate { get; set; }
-        // Bound filters
 
         [BindProperty(SupportsGet = true)] public string? lane_Nr { get; set; }
         [BindProperty(SupportsGet = true)] public string? TollOperatorID { get; set; }

@@ -8,12 +8,11 @@ namespace MIS.Web.Services
     public interface IVarientPerfomanceReportService
     {
         Task<PageVarientPerfomanceModel> GetVarientPerfomanceDetailsAsync(
-        int pageNumber,
-        int pageSize,
-        DateTime startDate,
-        DateTime endDate,
-        List<string>? operationalShift = null,
-        List<string>? tollOperators = null);
-
+            int pageNumber,
+            int pageSize,
+            DateTime startDate,
+            DateTime endDate,
+            List<string>? operationalShift = null,
+            List<string>? tollOperators = null);
     }
 }

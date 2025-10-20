@@ -2,8 +2,6 @@
 using MIS.Web.Models.Transaction;
 using Newtonsoft.Json;
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
 
@@ -18,63 +16,40 @@ namespace MIS.Web.Services
             _httpClient = httpClient;
         }
 
-        public async Task<TransactionInputModel> GetTransactionDetailsAsync(TransactionInputModel model)      
-           
+        public async Task<TransactionInputModel> GetTransactionDetailsAsync(TransactionInputModel model)
         {
-            string formattedStart = model.StartDate.ToString("s"); // yyyy-MM-ddTHH:mm:ss
-            string formattedEnd = model.EndDate.ToString("s");
-            string formattedPageNumber = model.page.ToString();
-            string formattedPageSize = model.pageSize.ToString();
+            string start = model.StartDate.ToString("s");
+            string end = model.EndDate.ToString("s");
 
-             var url = $"http://localhost:5000/api/Transaction/details?startDate={Uri.EscapeDataString(formattedStart)}&endDate={Uri.EscapeDataString(formattedEnd)}&page={Uri.EscapeDataString(formattedPageNumber)}&pageSize={Uri.EscapeDataString(formattedPageSize)}";
+            var url = $"http://localhost:5000/api/Transaction/details?startDate={Uri.EscapeDataString(start)}&endDate={Uri.EscapeDataString(end)}&page={model.page}&pageSize={model.pageSize}";
 
-            //if (operationalShift != null && operationalShift.Any())
-            //    url += $"&operationalShift={Uri.EscapeDataString(string.Join(",", operationalShift))}";
-
-            //if (tollOperators != null && tollOperators.Any())
-            //    url += $"&tollOperators={Uri.EscapeDataString(string.Join(",", tollOperators))}";
-
-            //if (laneNames != null && laneNames.Any())
-            //    url += $"&laneNames={Uri.EscapeDataString(string.Join(",", laneNames))}";
-
-            //if (paymentMethods != null && paymentMethods.Any())
-            //    url += $"&paymentMethods={Uri.EscapeDataString(string.Join(",", paymentMethods))}";
+            if (!string.IsNullOrEmpty(model.lane_Nr)) url += $"&lane_Nr={Uri.EscapeDataString(model.lane_Nr)}";
+            if (!string.IsNullOrEmpty(model.TollOperatorID)) url += $"&TollOperatorID={Uri.EscapeDataString(model.TollOperatorID)}";
+            if (!string.IsNullOrEmpty(model.Shift)) url += $"&Shift={Uri.EscapeDataString(model.Shift)}";
+            if (!string.IsNullOrEmpty(model.PaymentMethod)) url += $"&PaymentMethod={Uri.EscapeDataString(model.PaymentMethod)}";
 
             var response = await _httpClient.GetAsync(url);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                return new TransactionInputModel();
-            }
+            if (!response.IsSuccessStatusCode) return new TransactionInputModel();
 
             var json = await response.Content.ReadAsStringAsync();
-
             var pageTransactions = JsonConvert.DeserializeObject<PageTransactionModel>(json);
-            if (pageTransactions != null)
+
+            if (pageTransactions == null) return new TransactionInputModel();
+
+            return new TransactionInputModel
             {
-                var newModel = new TransactionInputModel
-                {
-                    page = pageTransactions.page,
-                    pageSize = pageTransactions.pageSize,
-                    totalCount = pageTransactions.totalCount,
-                    totalPages = pageTransactions.totalPages,
-                    items = pageTransactions.items,
-                    StartDate = model.StartDate,
-                    EndDate = model.EndDate,
-                    lane_Nr = model.lane_Nr,
-                    TollOperatorID = model.TollOperatorID,
-                    Shift = model.Shift,
-                    PaymentMethod = model.PaymentMethod
-
-                };
-                return newModel;
-            }
-            return new TransactionInputModel();
+                page = pageTransactions.page,
+                pageSize = pageTransactions.pageSize,
+                totalCount = pageTransactions.totalCount,
+                totalPages = pageTransactions.totalPages,
+                items = pageTransactions.items,
+                StartDate = model.StartDate,
+                EndDate = model.EndDate,
+                lane_Nr = model.lane_Nr,
+                TollOperatorID = model.TollOperatorID,
+                Shift = model.Shift,
+                PaymentMethod = model.PaymentMethod
+            };
         }
-
-        //public Task<TransactionInputModel> GetTransactionDetailsAsync(TransactionInputModel model)
-        //{
-        //    return TransactionDetailsAsync(model.StartDate)
-        //}
     }
 }

@@ -169,7 +169,6 @@ namespace MIS.Web.Pages
         }
 
         // === Excel export handler (OnGetExport) ===
-        // Called when user clicks the Export Excel link (asp-page-handler="Export")
         public async Task<IActionResult> OnGetExport()
         {
             // Re-load data with the same filter/grouping logic

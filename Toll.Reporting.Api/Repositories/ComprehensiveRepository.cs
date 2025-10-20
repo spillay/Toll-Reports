@@ -169,8 +169,8 @@ public class ComprehensiveRepository : IComprehensiveRepository
     }
 
     // Keep the old not-implemented variant only if you need it elsewhere - otherwise remove it
-    public Task<IEnumerable<ComprehensiveDto>> GetComprehensiveRepositoryAsync1(DateTime startDate, DateTime endDate, List<string>? operationalShift = null, List<string>? tollOperators = null, List<string>? laneNames = null, List<string>? laneDiscountType = null, List<string>? Classification = null, List<string>? paymentMethods = null)
-    {
-        throw new NotImplementedException();
-    }
+    //public Task<IEnumerable<ComprehensiveDto>> GetComprehensiveRepositoryAsync1(DateTime startDate, DateTime endDate, List<string>? operationalShift = null, List<string>? tollOperators = null, List<string>? laneNames = null, List<string>? laneDiscountType = null, List<string>? Classification = null, List<string>? paymentMethods = null)
+    //{
+    //    throw new NotImplementedException();
+    //}
 }

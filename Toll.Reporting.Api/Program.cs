@@ -25,14 +25,25 @@ var connectionString = configSection["SQLServerConnection"] ?? null;
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(connectionString));
 
-
+// Add CORS policy
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        policy.WithOrigins("https://localhost:7154") // your frontend origin
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+}); 
 // Register repositories with Dependency Injection
 // Scoped = one instance per request (recommended for DbContext)
 builder.Services.AddScoped<ITransactionRepository, TransactionRepository>();
 builder.Services.AddScoped<IComprehensiveRepository, ComprehensiveRepository>();
 builder.Services.AddScoped<IDiscrepancyRepository, DiscrepancyRepository>();
 builder.Services.AddScoped<IVarientPerformanceRepository, VarientPerformanceRepository>();
-builder.Services.AddScoped<ITrafficRepository, TrafficRepository>();
+builder.Services.AddScoped<IHourlyTrafficRepository, HourlyTrafficRepository>();
+builder.Services.AddScoped<IDailyTrafficRepository, DailyTrafficRepository>();
+builder.Services.AddScoped<IMonthlyTrafficRepository, MonthlyTrafficRepository>();
 
 
 
@@ -41,7 +52,7 @@ builder.Services.AddScoped<ITrafficRepository, TrafficRepository>();
 builder.Services.AddHttpClient();
 
 var app = builder.Build();
-
+app.UseCors("AllowFrontend");
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {

@@ -15,7 +15,11 @@ builder.Services.AddHttpClient<IReportService, ReportService>();
 builder.Services.AddScoped<IDiscrepancyReportService, DiscrepancyReportService>();
 builder.Services.AddScoped<IComprehensiveReportService, ComprehensiveReportService>();
 builder.Services.AddScoped<IVarientPerfomanceReportService, VarientPerfomanceReportService>();
-builder.Services.AddScoped<ITrafficReportService, TrafficReportService>();
+builder.Services.AddScoped<IHourlyTrafficReportService, HourlyTrafficReportService>();
+builder.Services.AddHttpClient<IHourlyTrafficReportService, HourlyTrafficReportService>();
+builder.Services.AddHttpClient<IDailyTrafficReportService, DailyTrafficReportService>();
+builder.Services.AddHttpClient<IMonthlyTrafficReportService, MonthlyTrafficReportService>();
+
 
 
 builder.Services.AddCors(options =>

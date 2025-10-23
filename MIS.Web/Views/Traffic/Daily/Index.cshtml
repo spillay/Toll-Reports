@@ -1,0 +1,296 @@
+﻿@model MIS.Web.Models.Traffic.Daily.PageDailyTrafficModel
+
+@{
+    var input = Model.Filters ?? new MIS.Web.Models.Traffic.Daily.DailyTrafficInputModel();
+    var classifications = Model.Classifications ?? new List<string>();
+}
+
+<div class="card shadow-lg mb-4">
+    <div class="card-body">
+        <!-- Header -->
+        <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
+            <div></div>
+            <h2 class="mb-0 fw-bold text-primary">Daily Traffic Report</h2>
+            <div></div>
+        </div>
+
+        <!-- Export Buttons -->
+        <div class="row mb-3">
+            <div class="col-md-2 me-2">
+                <button id="btnDownloadPdf" class="btn btn-danger w-100">
+                    <i class="bi bi-file-earmark-pdf"></i> Export PDF
+                </button>
+            </div>
+            <div class="col-md-2">
+                <button id="btnDownloadExcel" class="btn btn-success w-100">
+                    <i class="bi bi-file-earmark-excel"></i> Export Excel
+                </button>
+            </div>
+        </div>
+
+        <!-- Filter Form -->
+        <form method="get" asp-controller="DailyTraffic" asp-action="Index" id="filterForm">
+            <div class="row g-3 align-items-end">
+                <!-- Start Date -->
+                <div class="col-md-3">
+                    <label class="form-label">Start Date</label>
+                    <input type="date" name="startDate" class="form-control"
+                           value="@input.StartDate.ToString("yyyy-MM-dd")" />
+                </div>
+
+                <!-- End Date -->
+                <div class="col-md-3">
+                    <label class="form-label">End Date</label>
+                    <input type="date" name="endDate" class="form-control"
+                           value="@input.EndDate.ToString("yyyy-MM-dd")" />
+                </div>
+
+                <!-- Classification -->
+                <div class="col-md-3">
+                    <label class="form-label">Classification</label>
+                    <select name="classification" class="form-select">
+                        <option value="">All</option>
+                        @foreach (var cls in classifications)
+                        {
+                            if (input.Classification == cls)
+                            {
+                                <option value="@cls" selected="selected">@cls</option>
+                            }
+                            else
+                            {
+                                <option value="@cls">@cls</option>
+                            }
+                        }
+                    </select>
+                </div>
+
+                <!-- Operational Day -->
+                <div class="col-md-3">
+                    <div class="form-check mt-2">
+                        <input class="form-check-input" type="checkbox" name="operationalDay"
+                               value="true" @(input.OperationalDay ? "checked" : "") id="operationalDay" />
+                        <label class="form-check-label" for="operationalDay">Operational Day</label>
+                    </div>
+                </div>
+
+                <!-- Shifts -->
+                <div class="col-md-6">
+                    <label class="form-label">Shifts</label>
+                    <div>
+                        @for (int i = 1; i <= 3; i++)
+                        {
+                            var shiftName = i switch { 1 => "Shift 1", 2 => "Shift 2", 3 => "Shift 3", _ => "" };
+                            bool isChecked = input.Shifts?.Contains(i) == true;
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input shift-checkbox" type="checkbox"
+                                       name="shifts" value="@i" @(isChecked ? "checked" : "") id="shift_@i"
+                                       @(!input.OperationalDay ? "disabled" : "") />
+                                <label class="form-check-label" for="shift_@i">@shiftName</label>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-primary w-100">Filter</button>
+                </div>
+            </div>
+        </form>
+
+        <!-- Data Table -->
+        <div class="table-responsive mt-3">
+            <table class="table table-bordered table-striped text-center align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Date</th>
+                        <th>Traffic / %</th>
+                        @foreach (var cls in classifications)
+                        {
+                            <th>@cls</th>
+                        }
+                        <th>Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.Items != null && Model.Items.Any())
+                    {
+                        var grouped = Model.Items.GroupBy(x => x.Date.Date).OrderBy(g => g.Key);
+                        var totalsPerClass = classifications.ToDictionary(c => c, c => 0);
+
+                        foreach (var group in grouped)
+                        {
+                            int rowTotal = group.Sum(x => x.Count);
+
+                            <!-- Traffic Row -->
+                            <tr>
+                                <td>@group.Key.ToString("dd/MM/yyyy")</td>
+                                <td>Traffic</td>
+                                @foreach (var cls in classifications)
+                                {
+                                    int count = group.FirstOrDefault(x => x.Classification == cls)?.Count ?? 0;
+                                    <td>@count</td>
+                                    totalsPerClass[cls] += count;
+                                }
+                                <td>@rowTotal</td>
+                            </tr>
+
+                            <!-- Percentage Row -->
+                            <tr>
+                                <td></td>
+                                <td>Percentage</td>
+                                @foreach (var cls in classifications)
+                                {
+                                    int count = group.FirstOrDefault(x => x.Classification == cls)?.Count ?? 0;
+                                    double percent = rowTotal > 0 ? (double)count / rowTotal * 100 : 0;
+                                    <td>@percent.ToString("0.00")%</td>
+                                }
+                                <td>100%</td>
+                            </tr>
+                        }
+
+                        <!-- Calculate statistics -->
+                        var grandTotal = totalsPerClass.Values.Sum();
+                        var daysCount = grouped.Count();
+                        var averages = totalsPerClass.ToDictionary(kv => kv.Key, kv => daysCount > 0 ? (int)Math.Round((double)kv.Value / daysCount) : 0);
+
+                        var maximums = new Dictionary<string, int>();
+                        foreach (var cls in classifications)
+                        {
+                            var max = Model.Items
+                            .Where(x => x.Classification == cls)
+                            .GroupBy(x => x.Date.Date)
+                            .Select(g => g.Sum(x => x.Count))
+                            .DefaultIfEmpty(0)
+                            .Max();
+                            maximums[cls] = max;
+                        }
+
+                        <!-- Statistics Rows -->
+                        <tr class="table-secondary fw-bold">
+                            <td>Total for the Month</td>
+                            <td></td>
+                            @foreach (var cls in classifications)
+                            {
+                                <td>@totalsPerClass[cls]</td>
+                            }
+                            <td>@grandTotal</td>
+                        </tr>
+
+                        <tr class="table-secondary fw-bold">
+                            <td>Average</td>
+                            <td></td>
+                            @foreach (var cls in classifications)
+                            {
+                                <td>@averages[cls]</td>
+                            }
+                            <td>@averages.Values.Sum()</td>
+                        </tr>
+
+                        <tr class="table-secondary fw-bold">
+                            <td>Maximum</td>
+                            <td></td>
+                            @foreach (var cls in classifications)
+                            {
+                                <td>@maximums[cls]</td>
+                            }
+                            <td>@maximums.Values.Sum()</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="@(classifications.Count + 3)" class="text-center text-muted py-4">
+                                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                                No data available for the selected filters.
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const opCheckbox = document.getElementById('operationalDay');
+            const shiftBoxes = document.querySelectorAll('.shift-checkbox');
+            const filterForm = document.getElementById('filterForm');
+
+            if (!filterForm) {
+                return;
+            }
+
+            // safe toggle function — guard if opCheckbox missing
+            function toggleShifts() {
+                const isOperationalDay = opCheckbox ? opCheckbox.checked : false;
+
+                shiftBoxes.forEach(cb => {
+                    cb.disabled = !isOperationalDay;         
+                });
+            }
+
+            // On submit: ensure we send exactly one operationalDay value and enable shift checkboxes
+            filterForm.addEventListener('submit', function (e) {
+               
+
+                // Remove any existing operationalDay inputs to avoid duplicate values
+                const existingOpFields = filterForm.querySelectorAll('input[name="operationalDay"]');
+                existingOpFields.forEach(el => {
+                    // keep the actual checkbox element; remove hidden duplicates only
+                    if (el !== opCheckbox) el.remove();
+                });
+
+                if (opCheckbox) {
+                   
+                    const opHidden = document.createElement('input');
+                    opHidden.type = 'hidden';
+                    opHidden.name = 'operationalDay';
+                    opHidden.value = opCheckbox.checked ? 'true' : 'false';
+                    filterForm.appendChild(opHidden);
+                   
+                } else {
+                    // If checkbox missing, still ensure a value is sent (false)
+                    const opHidden = document.createElement('input');
+                    opHidden.type = 'hidden';
+                    opHidden.name = 'operationalDay';
+                    opHidden.value = 'false';
+                    filterForm.appendChild(opHidden);
+                   
+                }
+
+                // Enable all shift checkboxes before submission (disabled inputs are not submitted)
+                shiftBoxes.forEach(cb => {
+                    const originalDisabled = cb.disabled;
+                    cb.disabled = false;
+                   
+                });
+
+            });
+
+            toggleShifts();
+
+            // watch for changes (guard opCheckbox may be null)
+            if (opCheckbox) {
+                opCheckbox.addEventListener('change', function () {
+                    
+                    toggleShifts();
+                });
+            }
+
+            shiftBoxes.forEach(cb => {
+                
+            });
+
+            // Export button handlers (placeholder)
+            document.getElementById('btnDownloadPdf')?.addEventListener('click', function () {
+                alert('PDF export functionality to be implemented');
+            });
+
+            document.getElementById('btnDownloadExcel')?.addEventListener('click', function () {
+                alert('Excel export functionality to be implemented');
+            });
+        });
+    </script>
+}

@@ -34,7 +34,7 @@ namespace MIS.Web.Controllers
                 classification: string.IsNullOrWhiteSpace(times.ManualTollClass) ? null : new System.Collections.Generic.List<string> { times.ManualTollClass }
             );
 
-            return View(result);
+            return View("~/Views/Comprehensive/Index.cshtml",result);
         }
     }
 }

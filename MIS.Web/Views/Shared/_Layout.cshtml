@@ -121,9 +121,37 @@
                 </li>
                 <li class="nav-item mb-2">
                     <a class="nav-link text-dark" asp-controller="VarientPerfomance" asp-action="VarientPerfomances" asp-route-page="1" asp-route-pageSize="10">
-                        <i class="bi bi-graph-up me-2"></i> VarientPerfomance
+                        <i class="bi bi-graph-up me-2"></i> Stuff Variant and <br />Perfomance
                     </a>
                 </li>
+                <li class="nav-item mb-2">
+                    <a class="nav-link text-dark"
+                       asp-controller="Traffic"
+                       asp-action="HourlyReport"
+                       asp-route-page="1"
+                       asp-route-pageSize="10">
+                        <i class="bi bi-graph-up me-2"></i> Hourly Traffic Report
+                    </a>
+                </li>
+                <li class="nav-item mb-2">
+                    <a class="nav-link text-dark"
+                       asp-controller="DailyTraffic"
+                       asp-action="Index"
+                       asp-route-page="1"
+                       asp-route-pageSize="10">
+                        <i class="bi bi-graph-up me-2"></i> Daily Traffic Report
+                    </a>
+                </li>
+                <li class="nav-item mb-2">
+                    <a class="nav-link text-dark"
+                       asp-controller="MonthlyTraffic"
+                       asp-action="Index"
+                       asp-route-page="1"
+                       asp-route-pageSize="10">
+                        <i class="bi bi-graph-up me-2"></i> Monthly Traffic Report
+                    </a>
+                </li>
+                
             </ul>
         </nav>
 
@@ -165,6 +193,6 @@
             });
         });
     </script>
-   
+    @RenderSection("Scripts", required: false)
 </body>
 </html>

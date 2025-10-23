@@ -1,0 +1,347 @@
+﻿@model MIS.Web.Models.Traffic.Monthly.PageMonthlyTrafficModel
+@using System.Globalization
+
+@{
+    var input = ViewBag.InputModel as MIS.Web.Models.Traffic.Monthly.MonthlyTrafficInputModel
+                ?? new MIS.Web.Models.Traffic.Monthly.MonthlyTrafficInputModel();
+    var classifications = ViewBag.Classifications as List<string> ?? new List<string>();
+}
+
+<div class="card shadow-lg mb-4">
+    <div class="card-body">
+        <!-- Header -->
+        <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
+            <div></div>
+            <h2 class="mb-0 fw-bold text-primary">Monthly Traffic Report</h2>
+            <div></div>
+        </div>
+
+        <!-- Export Buttons -->
+        <div class="row mb-3">
+            <div class="col-md-2 d-flex align-items-end me-2">
+                <button id="btnDownloadPdf" type="button" class="btn btn-danger w-100 shadow-sm">
+                    <i class="bi bi-file-earmark-pdf"></i> Export PDF
+                </button>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button id="btnDownloadExcel" type="button" class="btn btn-success w-100 shadow-sm">
+                    <i class="bi bi-file-earmark-excel"></i> Export Excel
+                </button>
+            </div>
+        </div>
+
+        <!-- Filter Form -->
+        <form method="get" asp-controller="MonthlyTraffic" asp-action="Index" id="filterForm" class="mb-4">
+            <div class="row g-3 align-items-end">
+                <!-- Year -->
+                <div class="col-md-3">
+                    <label class="form-label">Year</label>
+                    <select name="year" id="yearSelect" class="form-select">
+                        <option value="">- All -</option>
+                    </select>
+                </div>
+                <!-- Month -->
+                <div class="col-md-3">
+                    <label class="form-label">Month</label>
+                    <select name="month" id="monthSelect" class="form-select" disabled>
+                        <option value="">- All -</option>
+                    </select>
+                </div>
+                <!-- Operational Month -->
+                <div class="col-md-3">
+                    <label class="form-label d-block">Operational Month</label>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="operationalMonth" id="opYes" value="true" @(input.OperationalMonth ? "checked" : "")>
+                        <label class="form-check-label" for="opYes">Yes</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="operationalMonth" id="opNo" value="false" @(!input.OperationalMonth ? "checked" : "")>
+                        <label class="form-check-label" for="opNo">No</label>
+                    </div>
+                </div>
+                <!-- Classification -->
+                <div class="col-md-3">
+                    <label class="form-label">Class</label>
+                    <select name="classification" class="form-select" id="classificationSelect">
+                        <option value="">- All -</option>
+                        <option value="Class 1">Class 1</option>
+                        <option value="Class 2">Class 2</option>
+                        <option value="Class 4">Class 4</option>
+                        <option value="Class M">Class M</option>
+                    </select>
+                </div>
+                <!-- Shifts -->
+                <div class="col-12 mt-2">
+                    <label class="form-label">Shifts (only valid when Operational Month = Yes)</label>
+                    <div id="shiftsContainer" class="mb-3">
+                        @for (int i = 1; i <= 3; i++)
+                        {
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input shift-checkbox" type="checkbox" name="shifts" value="@i" id="shift@i"
+                                       @(input.Shifts.Contains(i) ? "checked" : "") @(input.OperationalMonth ? "" : "disabled")>
+                                <label class="form-check-label" for="shift@i">
+                                    Shift @i
+                                    @(i == 1 ? "(05:30 - 13:30)" : i == 2 ? "(13:30 - 21:30)" : "(21:30 - 05:29)")
+                                </label>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-primary w-100">Filter</button>
+                </div>
+            </div>
+        </form>
+
+        <!-- Data Table -->
+        <div class="table-responsive mt-3">
+            <table class="table table-bordered table-striped text-center align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th style="min-width:140px">Month</th>
+                        <th style="min-width:120px">Traffic / %</th>
+                        @foreach (var cls in classifications)
+                        {
+                            <th>@cls</th>
+                        }
+                        <th>Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.Items.Any())
+                    {
+                        var monthGroups = Model.Items.GroupBy(x => new { x.Year, x.Month })
+                        .OrderBy(g => g.Key.Year)
+                        .ThenBy(g => g.Key.Month)
+                        .ToList();
+
+                        foreach (var monthGroup in monthGroups)
+                        {
+                            var monthlyTotals = classifications.ToDictionary(c => c, c => 0);
+                            var monthMax = classifications.ToDictionary(c => c, c => 0);
+                            int monthGrandTotal = monthGroup.Sum(x => x.Count);
+
+                            var monthName = CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(monthGroup.Key.Month) + " " + monthGroup.Key.Year;
+
+                            <!-- Monthly Data Row -->
+                            <tr>
+                                <td>@monthName</td>
+                                <td>Traffic</td>
+                                @foreach (var cls in classifications)
+                                {
+                                    int count = monthGroup.FirstOrDefault(x => x.Classification == cls)?.Count ?? 0;
+                                    <td>@count.ToString("N0")</td>
+                                    monthlyTotals[cls] += count;
+                                    monthMax[cls] = Math.Max(monthMax[cls], count);
+                                }
+                                <td>@monthGrandTotal.ToString("N0")</td>
+                            </tr>
+
+                            <!-- Percentage Row -->
+                            <tr>
+                                <td></td>
+                                <td>Percentage</td>
+                                @foreach (var cls in classifications)
+                                {
+                                    double percent = monthGrandTotal > 0 ? (double)monthlyTotals[cls] / monthGrandTotal * 100 : 0;
+                                    <td>@percent.ToString("0.00")%</td>
+                                }
+                                <td>100%</td>
+                            </tr>
+
+                            <!-- Average Row -->
+                            <tr>
+                                <td></td>
+                                <td>Average</td>
+                                @foreach (var cls in classifications)
+                                {
+                                    <td>@Math.Round((double)monthlyTotals[cls])</td>
+                                }
+                                <td>@monthlyTotals.Values.Sum()</td>
+                            </tr>
+
+                            <!-- Maximum Row -->
+                            <tr>
+                                <td></td>
+                                <td>Maximum</td>
+                                @foreach (var cls in classifications)
+                                {
+                                    <td>@monthMax[cls]</td>
+                                }
+                                <td>@monthMax.Values.Sum()</td>
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="@(classifications.Count + 3)" class="text-center text-muted py-4">
+                                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                                No data available for the selected filters.
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <!-- Include Excel & PDF libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const currentUser = '@(User.Identity?.Name ?? "Unknown User")';
+            const reportGeneratedAt = '@DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")';
+            const reportVersion = '1.0';
+            const leftLogoUrl = '/images/lCC Logo.jpg';
+            const rightLogoUrl = '/images/ICT-Works Logo.jpg';
+
+            // Load logos as Data URL
+            async function loadImageAsDataUrl(src) {
+                return new Promise(resolve => {
+                    const img = new Image();
+                    img.crossOrigin = 'Anonymous';
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = img.naturalWidth;
+                        canvas.height = img.naturalHeight;
+                        canvas.getContext('2d').drawImage(img, 0, 0);
+                        resolve(canvas.toDataURL(src.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg'));
+                    };
+                    img.onerror = () => resolve(null);
+                    img.src = src;
+                });
+            }
+
+            // === PDF Export ===
+            document.getElementById("btnDownloadPdf").addEventListener("click", async function () {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+                const pageWidth = doc.internal.pageSize.getWidth();
+                const margin = 40;
+
+                const [leftDataUrl, rightDataUrl] = await Promise.all([
+                    loadImageAsDataUrl(leftLogoUrl),
+                    loadImageAsDataUrl(rightLogoUrl)
+                ]);
+
+                if (leftDataUrl) doc.addImage(leftDataUrl, 'PNG', margin, 30, 80, 80);
+                if (rightDataUrl) doc.addImage(rightDataUrl, 'PNG', pageWidth - margin - 80, 30, 80, 80);
+
+                doc.setFont("helvetica", "bold").setFontSize(14)
+                   .text("LEKKI CONCESSION COMPANY LIMITED", pageWidth / 2, 50, { align: "center" });
+                doc.setFontSize(12).text("Monthly Traffic Report", pageWidth / 2, 72, { align: "center" });
+
+                doc.setFont("helvetica", "normal").setFontSize(10);
+                const metaY = 110;
+                doc.text(`Generated By: ${currentUser}`, margin, metaY);
+                doc.text(`Date: ${reportGeneratedAt}`, margin, metaY + 14);
+                doc.text(`Version: ${reportVersion}`, margin, metaY + 28);
+
+                const table = document.querySelector("table");
+                if (!table) return alert('No table found to export.');
+
+                const headers = Array.from(table.querySelectorAll("thead th")).map(th => th.innerText.trim());
+                const rawRows = Array.from(table.querySelectorAll("tbody tr"));
+                const bodyRows = [];
+
+                rawRows.forEach(tr => {
+                    const tds = Array.from(tr.querySelectorAll("td"));
+                    if (tds.length === 1 && tds[0].hasAttribute('colspan')) {
+                        const dateText = tds[0].innerText.trim();
+                        const emptyRow = Array(headers.length).fill('');
+                        emptyRow[0] = dateText;
+                        bodyRows.push(emptyRow);
+                    } else {
+                        const values = tds.map(td => td.innerText.trim());
+                        while (values.length < headers.length) values.push('');
+                        bodyRows.push(values);
+                    }
+                });
+
+                doc.autoTable({
+                    head: [headers],
+                    body: bodyRows,
+                    startY: metaY + 40,
+                    theme: "grid",
+                    styles: { fontSize: 9, cellPadding: 4, halign: "center", valign: "middle" },
+                    headStyles: { fillColor: [230,230,230], fontStyle: "bold" },
+                    alternateRowStyles: { fillColor: [250,250,250] },
+                    margin: { left: margin, right: margin },
+                    didParseCell: data => {
+                        if (data.section === 'body' && /^\w+ \d{4}$/.test(data.row.cells[0].raw)) {
+                            data.row.cells.forEach(c => { c.styles.fontStyle = 'bold'; c.styles.fillColor = [245,245,245]; c.styles.halign = 'left'; });
+                        }
+                    }
+                });
+
+                const pageCount = doc.internal.getNumberOfPages();
+                for (let i=1;i<=pageCount;i++) { doc.setPage(i); doc.setFontSize(9).text(`Page ${i} of ${pageCount}`, pageWidth - margin, doc.internal.pageSize.getHeight() - 10, { align:"right" }); }
+
+                const filename = `MonthlyTrafficReport_${new Date().toISOString().slice(0,19).replace(/[:T]/g,"-")}.pdf`;
+                doc.save(filename);
+            });
+
+            // === Excel Export ===
+            document.getElementById("btnDownloadExcel").addEventListener("click", function () {
+                const table = document.querySelector("table");
+                if (!table) return alert('No table found to export.');
+                const wb = XLSX.utils.book_new();
+                const ws = XLSX.utils.table_to_sheet(table, { raw: true });
+                XLSX.utils.book_append_sheet(wb, ws, "Monthly Traffic Report");
+                const filename = `MonthlyTrafficReport_${new Date().toISOString().slice(0,19).replace(/[:T]/g,"-")}.xlsx`;
+                XLSX.writeFile(wb, filename);
+            });
+        });
+    </script>
+
+    <!-- Existing filter logic (year/month API, shifts toggle) -->
+    <script>
+        (function () {
+            const yearSelect = document.getElementById('yearSelect');
+            const monthSelect = document.getElementById('monthSelect');
+            const opYes = document.getElementById('opYes');
+            const opNo = document.getElementById('opNo');
+            const shiftBoxes = document.querySelectorAll('.shift-checkbox');
+            const filterForm = document.getElementById('filterForm');
+            const initialYear = parseInt('@(input.Year?.ToString() ?? "0")', 10) || 0;
+            const initialMonth = parseInt('@(input.Month?.ToString() ?? "0")', 10) || 0;
+            const baseApi = 'http://localhost:5000/api/MonthlyTraffic';
+
+            async function loadYears() {
+                try {
+                    const res = await fetch(`${baseApi}/years`);
+                    if (!res.ok) return;
+                    const years = await res.json();
+                    yearSelect.innerHTML = '<option value="">- All -</option>';
+                    years.forEach(y => { const opt=document.createElement('option'); opt.value=y; opt.textContent=y; if(initialYear===y) opt.selected=true; yearSelect.appendChild(opt); });
+                    if(initialYear) await loadMonths(initialYear);
+                } catch(e){ console.error(e); }
+            }
+
+            async function loadMonths(year) {
+                monthSelect.disabled = true; monthSelect.innerHTML='<option value="">- All -</option>';
+                if(!year) return;
+                try {
+                    const res = await fetch(`${baseApi}/months/${year}`);
+                    if(!res.ok) return;
+                    const months = await res.json();
+                    months.forEach(m=>{const opt=document.createElement('option'); opt.value=m; opt.textContent=new Date(2000,m-1,1).toLocaleString(undefined,{month:'long'}) + ` (${m})`; if(initialMonth===m) opt.selected=true; monthSelect.appendChild(opt);});
+                    monthSelect.disabled=false;
+                } catch(e){ console.error(e); }
+            }
+
+            function toggleShifts() { const isOp = opYes.checked; shiftBoxes.forEach(cb => cb.disabled=!isOp); }
+            filterForm.addEventListener('submit', function(){ const existing=filterForm.querySelectorAll('input[type=hidden][name=shifts]'); existing.forEach(n=>n.remove()); const checked=Array.from(shiftBoxes).filter(cb=>cb.checked).map(cb=>cb.value); if(checked.length){ const hidden=document.createElement('input'); hidden.type='hidden'; hidden.name='shifts'; hidden.value=checked.join(','); filterForm.appendChild(hidden);} shiftBoxes.forEach(cb=>cb.disabled=false); });
+            yearSelect.addEventListener('change', ()=>loadMonths(parseInt(yearSelect.value)||0));
+            opYes.addEventListener('change', toggleShifts);
+            opNo.addEventListener('change', toggleShifts);
+            toggleShifts(); loadYears();
+        })();
+    </script>
+}

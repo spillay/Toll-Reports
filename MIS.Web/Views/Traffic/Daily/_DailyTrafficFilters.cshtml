@@ -1,0 +1,95 @@
+﻿@model MIS.Web.Models.Traffic.Daily.DailyTrafficInputModel
+@{
+    var classes = new List<string> { "Class 1", "Class 2", "Class 4", "Class M" };
+}
+
+<form method="get" asp-controller="DailyTraffic" asp-action="Index" class="mb-4">
+    <div class="row g-3 align-items-end">
+
+        <!-- Start Date -->
+        <div class="col-md-3">
+            <label class="form-label">Start Date</label>
+            <input type="date" name="startDate" class="form-control"
+                   value="@Model.StartDate:yyyy-MM-dd" />
+        </div>
+
+        <!-- End Date -->
+        <div class="col-md-3">
+            <label class="form-label">End Date</label>
+            <input type="date" name="endDate" class="form-control"
+                   value="@Model.EndDate:yyyy-MM-dd" />
+        </div>
+
+        <!-- Classification -->
+        <div class="col-md-3">
+            <label class="form-label">Classification</label>
+            <select name="classification" class="form-select">
+                <option value="">All</option>
+                @foreach (var cls in classes)
+                {
+                    <option value="@cls" selected="@(Model.Classification == cls ? "selected" : null)">
+                        @cls
+                    </option>
+                }
+            </select>
+        </div>
+
+        <!-- Shifts -->
+        <div class="col-md-3">
+            <label class="form-label d-block">Shifts</label>
+            <div>
+                @for (int i = 1; i <= 3; i++)
+                {
+                    var shiftName = i switch
+                    {
+                        1 => "Shift 1",
+                        2 => "Shift 2",
+                        3 => "Shift 3",
+                        _ => ""
+                    };
+
+                    bool isChecked = Model.Shifts?.Contains(i) == true;
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input shift-checkbox" type="checkbox"
+                               name="shifts" value="@i" @(isChecked ? "checked" : null) id="shift_@i" />
+                        <label class="form-check-label" for="shift_@i">@shiftName</label>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Operational Day -->
+        <div class="col-md-3">
+            <div class="form-check mt-2">
+                <input type="hidden" name="operationalDay" value="false" />
+                <input class="form-check-input" type="checkbox" name="operationalDay"
+                       value="true" @(Model.OperationalDay ? "checked" : null) id="operationalDay" />
+                <label class="form-check-label" for="operationalDay">Operational Day</label>
+            </div>
+        </div>
+
+        <!-- Filter Button -->
+        <div class="col-md-3">
+            <button type="submit" class="btn btn-primary w-100">Filter</button>
+        </div>
+    </div>
+</form>
+
+@section Scripts {
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const opCheckbox = document.getElementById('operationalDay');
+            const shiftBoxes = document.querySelectorAll('.shift-checkbox');
+
+            function toggleShifts() {
+                shiftBoxes.forEach(cb => {
+                    cb.disabled = !opCheckbox.checked;
+                    if (!opCheckbox.checked) cb.checked = false; // Clear shifts if unchecked
+                });
+            }
+
+            toggleShifts(); // Run on page load
+            opCheckbox.addEventListener('change', toggleShifts);
+        });
+    </script>
+}

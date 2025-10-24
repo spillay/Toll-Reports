@@ -5,21 +5,21 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 
 namespace MIS.Web.Services
 {
     public class MonthlyTrafficReportService : IMonthlyTrafficReportService
     {
         private readonly HttpClient _httpClient;
-        // Base API path - keep in sync with your API host/port
-        private const string BaseApi = "http://localhost:5000/api/MonthlyTraffic";
+        private readonly IConfiguration _configuration;
 
-        public MonthlyTrafficReportService(HttpClient httpClient)
+        public MonthlyTrafficReportService(HttpClient httpClient, IConfiguration configuration)
         {
-            _httpClient = httpClient;
+            _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+            _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         }
 
-        // Main report call
         public async Task<PageMonthlyTrafficModel> GetTrafficReportAsync(
             int? year = null,
             int? month = null,
@@ -27,17 +27,25 @@ namespace MIS.Web.Services
             List<string>? classifications = null,
             List<int>? shifts = null)
         {
-            var query = new List<string>();
+            // Read base API URL from configuration
+            var baseApi = _configuration["ApiSettings:MonthlyTrafficApiUrl"];
+            if (string.IsNullOrEmpty(baseApi))
+                throw new InvalidOperationException("MonthlyTrafficApiUrl is not configured in appsettings.json.");
 
-            if (year.HasValue) query.Add($"year={year.Value}");
-            if (month.HasValue) query.Add($"month={month.Value}");
-            if (operationalMonth.HasValue) query.Add($"operationalMonth={operationalMonth.Value.ToString().ToLower()}");
-            if (classifications != null && classifications.Any()) query.Add($"classification={Uri.EscapeDataString(string.Join(",", classifications))}");
-            if (shifts != null && shifts.Any()) query.Add($"shifts={string.Join(",", shifts)}");
+            // Build query parameters
+            var queryParams = new List<string>();
+            if (year.HasValue) queryParams.Add($"year={year.Value}");
+            if (month.HasValue) queryParams.Add($"month={month.Value}");
+            if (operationalMonth.HasValue) queryParams.Add($"operationalMonth={operationalMonth.Value.ToString().ToLower()}");
+            if (classifications?.Any() == true) queryParams.Add($"classification={Uri.EscapeDataString(string.Join(",", classifications))}");
+            if (shifts?.Any() == true) queryParams.Add($"shifts={Uri.EscapeDataString(string.Join(",", shifts))}");
 
-            var url = BaseApi;
-            if (query.Any()) url += "?" + string.Join("&", query);
+            // Combine base URL and query string safely
+            var url = baseApi;
+            if (queryParams.Any())
+                url += "?" + string.Join("&", queryParams);
 
+            // Make HTTP call
             var response = await _httpClient.GetAsync(url);
             response.EnsureSuccessStatusCode();
 
@@ -50,23 +58,29 @@ namespace MIS.Web.Services
         // Fetch years for dropdown
         public async Task<List<int>> GetAvailableYearsAsync()
         {
-            var response = await _httpClient.GetAsync($"{BaseApi}/years");
+            var baseApi = _configuration["ApiSettings:MonthlyTrafficApiUrl"];
+            if (string.IsNullOrEmpty(baseApi))
+                throw new InvalidOperationException("MonthlyTrafficApiUrl is not configured in appsettings.json.");
+
+            var response = await _httpClient.GetAsync($"{baseApi}/years");
             response.EnsureSuccessStatusCode();
 
             var json = await response.Content.ReadAsStringAsync();
-            var years = JsonConvert.DeserializeObject<List<int>>(json) ?? new List<int>();
-            return years;
+            return JsonConvert.DeserializeObject<List<int>>(json) ?? new List<int>();
         }
 
         // Fetch months for dropdown for a given year
         public async Task<List<int>> GetAvailableMonthsAsync(int year)
         {
-            var response = await _httpClient.GetAsync($"{BaseApi}/months/{year}");
+            var baseApi = _configuration["ApiSettings:MonthlyTrafficApiUrl"];
+            if (string.IsNullOrEmpty(baseApi))
+                throw new InvalidOperationException("MonthlyTrafficApiUrl is not configured in appsettings.json.");
+
+            var response = await _httpClient.GetAsync($"{baseApi}/months/{year}");
             response.EnsureSuccessStatusCode();
 
             var json = await response.Content.ReadAsStringAsync();
-            var months = JsonConvert.DeserializeObject<List<int>>(json) ?? new List<int>();
-            return months;
+            return JsonConvert.DeserializeObject<List<int>>(json) ?? new List<int>();
         }
     }
 }

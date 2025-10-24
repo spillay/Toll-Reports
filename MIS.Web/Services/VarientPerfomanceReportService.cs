@@ -5,16 +5,19 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 
 namespace MIS.Web.Services
 {
     public class VarientPerfomanceReportService : IVarientPerfomanceReportService
     {
         private readonly HttpClient _httpClient;
+        private readonly IConfiguration _configuration;
 
-        public VarientPerfomanceReportService(HttpClient httpClient)
+        public VarientPerfomanceReportService(HttpClient httpClient, IConfiguration configuration)
         {
-            _httpClient = httpClient;
+            _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+            _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         }
 
         public async Task<PageVarientPerfomanceModel> GetVarientPerfomanceDetailsAsync(
@@ -25,20 +28,32 @@ namespace MIS.Web.Services
             List<string>? operationalShift = null,
             List<string>? tollOperators = null)
         {
-            var url = $"http://localhost:5000/api/VarientPerformance/details?" +
-          $"startDate={Uri.EscapeDataString(startDate.ToString("s"))}" +
-          $"&endDate={Uri.EscapeDataString(endDate.ToString("s"))}" +
-          $"&page={pageNumber}&pageSize={pageSize}";
+            var baseUrl = _configuration["ApiSettings:VarientPerfomanceApiUrl"];
+            if (string.IsNullOrEmpty(baseUrl))
+                throw new InvalidOperationException("VarientPerfomanceApiUrl is not configured in appsettings.json.");
 
-            if (operationalShift != null && operationalShift.Any())
-                url += $"&operationalShift={Uri.EscapeDataString(string.Join(",", operationalShift))}";
+            var queryParts = new List<string>
+            {
+                $"startDate={Uri.EscapeDataString(startDate.ToString("s"))}",
+                $"endDate={Uri.EscapeDataString(endDate.ToString("s"))}",
+                $"page={pageNumber}",
+                $"pageSize={pageSize}"
+            };
 
-            if (tollOperators != null && tollOperators.Any())
-                url += $"&tollOperators={Uri.EscapeDataString(string.Join(",", tollOperators))}";
+            void AddIfAny(string key, List<string>? list)
+            {
+                if (list != null && list.Any())
+                    queryParts.Add($"{key}={Uri.EscapeDataString(string.Join(",", list))}");
+            }
+
+            AddIfAny("operationalShift", operationalShift);
+            AddIfAny("tollOperators", tollOperators);
+
+            var url = $"{baseUrl}?{string.Join("&", queryParts)}";
 
             var response = await _httpClient.GetAsync(url);
-
-            if (!response.IsSuccessStatusCode) return new PageVarientPerfomanceModel();
+            if (!response.IsSuccessStatusCode)
+                return new PageVarientPerfomanceModel();
 
             var json = await response.Content.ReadAsStringAsync();
             return JsonConvert.DeserializeObject<PageVarientPerfomanceModel>(json) ?? new PageVarientPerfomanceModel();

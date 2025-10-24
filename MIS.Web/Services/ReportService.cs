@@ -4,29 +4,51 @@ using Newtonsoft.Json;
 using System;
 using System.Net.Http;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 
 namespace MIS.Web.Services
 {
     public class ReportService : IReportService
     {
         private readonly HttpClient _httpClient;
+        private readonly IConfiguration _configuration;
 
-        public ReportService(HttpClient httpClient)
+        public ReportService(HttpClient httpClient, IConfiguration configuration)
         {
-            _httpClient = httpClient;
+            _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+            _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         }
 
         public async Task<TransactionInputModel> GetTransactionDetailsAsync(TransactionInputModel model)
         {
-            string start = model.StartDate.ToString("s");
-            string end = model.EndDate.ToString("s");
+            // Read API base URL from configuration
+            var baseUrl = _configuration["ApiSettings:TransactionApiUrl"];
+            if (string.IsNullOrEmpty(baseUrl))
+                throw new InvalidOperationException("TransactionApiUrl is not configured in appsettings.json.");
 
-            var url = $"http://localhost:5000/api/Transaction/details?startDate={Uri.EscapeDataString(start)}&endDate={Uri.EscapeDataString(end)}&page={model.page}&pageSize={model.pageSize}";
+            string start = Uri.EscapeDataString(model.StartDate.ToString("s"));
+            string end = Uri.EscapeDataString(model.EndDate.ToString("s"));
 
-            if (!string.IsNullOrEmpty(model.lane_Nr)) url += $"&lane_Nr={Uri.EscapeDataString(model.lane_Nr)}";
-            if (!string.IsNullOrEmpty(model.TollOperatorID)) url += $"&TollOperatorID={Uri.EscapeDataString(model.TollOperatorID)}";
-            if (!string.IsNullOrEmpty(model.Shift)) url += $"&Shift={Uri.EscapeDataString(model.Shift)}";
-            if (!string.IsNullOrEmpty(model.PaymentMethod)) url += $"&PaymentMethod={Uri.EscapeDataString(model.PaymentMethod)}";
+            var queryParts = new System.Collections.Generic.List<string>
+            {
+                $"startDate={start}",
+                $"endDate={end}",
+                $"page={model.page}",
+                $"pageSize={model.pageSize}"
+            };
+
+            void AddIfNotEmpty(string key, string? value)
+            {
+                if (!string.IsNullOrEmpty(value))
+                    queryParts.Add($"{key}={Uri.EscapeDataString(value)}");
+            }
+
+            AddIfNotEmpty("lane_Nr", model.lane_Nr);
+            AddIfNotEmpty("TollOperatorID", model.TollOperatorID);
+            AddIfNotEmpty("Shift", model.Shift);
+            AddIfNotEmpty("PaymentMethod", model.PaymentMethod);
+
+            var url = $"{baseUrl}?{string.Join("&", queryParts)}";
 
             var response = await _httpClient.GetAsync(url);
             if (!response.IsSuccessStatusCode) return new TransactionInputModel();

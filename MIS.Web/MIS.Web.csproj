@@ -20,8 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Toll.Reporting.Api\Toll.Reporting.Api.csproj" />
-    <ProjectReference Include="..\TollReportingSystem.Data\TollReportingSystem.Data.csproj" />
+    <ProjectReference Include="..\MIS.Models\MIS.Models.csproj" />
   </ItemGroup>
 
 </Project>

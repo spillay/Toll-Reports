@@ -1,22 +1,21 @@
 ﻿using MIS.Web.Models.Traffic.Hourly;
 using Newtonsoft.Json;
 using System.Net.Http;
-using Toll.Reporting.Api.DTOs;
+using Microsoft.Extensions.Configuration;
 
 namespace MIS.Web.Services
 {
     public class HourlyTrafficReportService : IHourlyTrafficReportService
     {
         private readonly HttpClient _httpClient;
+        private readonly IConfiguration _configuration;
 
-        public HourlyTrafficReportService(HttpClient httpClient)
+        public HourlyTrafficReportService(HttpClient httpClient, IConfiguration configuration)
         {
             _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+            _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         }
 
-        /// <summary>
-        /// Gets the hourly traffic report for the given date range, classifications, shifts, and operational day flag.
-        /// </summary>
         public async Task<PageHourlyTrafficModel> GetTrafficReportAsync(
             DateTime startDate,
             DateTime endDate,
@@ -24,47 +23,54 @@ namespace MIS.Web.Services
             List<int>? shifts = null,
             bool operationalDay = false)
         {
-            // Base URL
-            var url = $"http://localhost:5000/api/HourlyTraffic/GetHourlyTrafficByDate" +
-                      $"?startDate={startDate:MM/dd/yyyy}" +
-                      $"&endDate={endDate:MM/dd/yyyy}" +
-                      $"&operationalDay={operationalDay.ToString().ToLower()}";
+            // Read API URL from appsettings.json
+            string baseUrl = _configuration["ApiSettings:HourlyTrafficApiUrl"];
 
-            // Add classifications (API expects a single comma-separated string)
-            if (classifications != null && classifications.Any())
+            // Build query parameters
+            var queryParams = new List<string>
             {
-                url += $"&classification={Uri.EscapeDataString(string.Join(",", classifications))}";
-            }
-
-            // Add shifts (API expects multiple shift query parameters, e.g., &shifts=1&shifts=2)
-            
-            if (shifts != null && shifts.Any())
-            {
-                foreach (var shift in shifts)
-                {
-                    url += $"&shifts={shift}";
-                }
-            }
-
-
-            // Call API
-            var response = await _httpClient.GetAsync(url);
-            if (!response.IsSuccessStatusCode)
-                return new PageHourlyTrafficModel(); // empty model if API fails
-
-            var json = await response.Content.ReadAsStringAsync();
-            var apiResult = JsonConvert.DeserializeObject<List<HourlyTrafficDto>>(json);
-
-            // Map API DTOs to front-end models
-            return new PageHourlyTrafficModel
-            {
-                Items = apiResult?.Select(x => new HourlyTrafficModel
-                {
-                    Period = x.StartDate,
-                    Classification = x.Classification,
-                    Count = x.Count
-                }).ToList() ?? new List<HourlyTrafficModel>()
+                $"startDate={Uri.EscapeDataString(startDate.ToString("MM/dd/yyyy"))}",
+                $"endDate={Uri.EscapeDataString(endDate.ToString("MM/dd/yyyy"))}",
+                $"operationalDay={operationalDay.ToString().ToLower()}"
             };
+
+
+            if (classifications?.Any() == true)
+            {
+                queryParams.Add($"classification={Uri.EscapeDataString(string.Join(",", classifications))}");
+            }
+
+            if (shifts?.Any() == true)
+            {
+                // Pass shifts as comma-separated string instead of multiple &shifts=
+                queryParams.Add($"shifts={Uri.EscapeDataString(string.Join(",", shifts))}");
+            }
+
+            string url = $"{baseUrl}?{string.Join("&", queryParams)}";
+
+            try
+            {
+                var response = await _httpClient.GetAsync(url);
+                if (!response.IsSuccessStatusCode)
+                    return new PageHourlyTrafficModel(); // empty model if API fails
+
+                var json = await response.Content.ReadAsStringAsync();
+                var apiResult = JsonConvert.DeserializeObject<List<HourlyTrafficModel>>(json);
+
+                return new PageHourlyTrafficModel
+                {
+                    Items = apiResult?.Select(x => new HourlyTrafficModel
+                    {
+                        Period = x.Period,
+                        Classification = x.Classification,
+                        Count = x.Count
+                    }).ToList() ?? new List<HourlyTrafficModel>()
+                };
+            }
+            catch
+            {
+                return new PageHourlyTrafficModel(); // return empty model on exception
+            }
         }
     }
 }

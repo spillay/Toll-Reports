@@ -16,9 +16,8 @@ builder.Services.AddScoped<IDiscrepancyReportService, DiscrepancyReportService>(
 builder.Services.AddScoped<IComprehensiveReportService, ComprehensiveReportService>();
 builder.Services.AddScoped<IVarientPerfomanceReportService, VarientPerfomanceReportService>();
 builder.Services.AddScoped<IHourlyTrafficReportService, HourlyTrafficReportService>();
-builder.Services.AddHttpClient<IHourlyTrafficReportService, HourlyTrafficReportService>();
-builder.Services.AddHttpClient<IDailyTrafficReportService, DailyTrafficReportService>();
-builder.Services.AddHttpClient<IMonthlyTrafficReportService, MonthlyTrafficReportService>();
+builder.Services.AddScoped<IDailyTrafficReportService, DailyTrafficReportService>();
+builder.Services.AddScoped<IMonthlyTrafficReportService, MonthlyTrafficReportService>();
 
 
 
@@ -52,7 +51,6 @@ app.MapRazorPages();
 app.MapControllers();
 
 app.MapControllerRoute(
-    name: "Transaction",
-    pattern: "{controller=Transaction}/{action=Index}/");
-
+    name: "LandingPage",
+    pattern: "{controller=LandingPage}/{action=Index}/");
 app.Run();

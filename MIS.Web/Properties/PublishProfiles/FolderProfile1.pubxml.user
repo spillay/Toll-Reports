@@ -1,0 +1,9 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!-- https://go.microsoft.com/fwlink/?LinkID=208121. -->
+<Project>
+  <PropertyGroup>
+    <_PublishTargetUrl>C:\Deploy\Web</_PublishTargetUrl>
+    <History>True|2025-10-24T13:21:23.6600980Z||;False|2025-10-24T15:20:50.3427069+02:00||;True|2025-10-24T15:17:49.7745449+02:00||;False|2025-10-24T15:15:29.6130391+02:00||;False|2025-10-24T15:14:50.1233674+02:00||;False|2025-10-24T15:14:08.6946781+02:00||;False|2025-10-24T15:07:02.1655966+02:00||;</History>
+    <LastFailureDetails />
+  </PropertyGroup>
+</Project>

@@ -1,45 +1,63 @@
 ﻿using MIS.Web.Models.Discrepancy;
 using Newtonsoft.Json;
 using System.Globalization;
+using Microsoft.Extensions.Configuration;
+using System.Net.Http;
+using System.Threading.Tasks;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace MIS.Web.Services
 {
     public class DiscrepancyReportService : IDiscrepancyReportService
     {
         private readonly HttpClient _httpClient;
+        private readonly IConfiguration _configuration;
 
-        public DiscrepancyReportService(HttpClient httpClient)
+        public DiscrepancyReportService(HttpClient httpClient, IConfiguration configuration)
         {
-            _httpClient = httpClient;
+            _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+            _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         }
 
-
-       public async Task<List<DiscrepancyReportViewModel>> GetDiscrepancyDetailsAsync(
-            DateTime startDate, DateTime endDate, List<string>? operationalShift, List<string>? tollOperators, List<string>? laneNames, List<string>? paymentMethods)
-        
+        public async Task<List<DiscrepancyReportViewModel>> GetDiscrepancyDetailsAsync(
+            DateTime startDate,
+            DateTime endDate,
+            List<string>? operationalShift = null,
+            List<string>? tollOperators = null,
+            List<string>? laneNames = null,
+            List<string>? paymentMethods = null)
         {
-            // Format dates
-            string formattedStartDate = startDate.ToString("yyyy/MM/dd");
-            string formattedEndDate = endDate.ToString("yyyy/MM/dd");
+            // Read base URL from configuration
+            var baseUrl = _configuration["ApiSettings:DiscrepancyReportApiUrl"];
+            if (string.IsNullOrEmpty(baseUrl))
+                throw new InvalidOperationException("DiscrepancyReportApiUrl is not configured in appsettings.json.");
 
-            string encodedStartDate = Uri.EscapeDataString(formattedStartDate);
-            string encodedEndDate = Uri.EscapeDataString(formattedEndDate);
+            // Encode dates
+            string encodedStartDate = Uri.EscapeDataString(startDate.ToString("yyyy/MM/dd"));
+            string encodedEndDate = Uri.EscapeDataString(endDate.ToString("yyyy/MM/dd"));
 
+            var queryParts = new List<string>
+            {
+                $"startDate={encodedStartDate}",
+                $"endDate={encodedEndDate}"
+            };
 
-            var url = $"http://localhost:5000/discrepancy?startDate=08%2F08%2F2025&endDate=09%2F09%2F2025";
+            void AddIfAny(string key, List<string>? list)
+            {
+                if (list != null && list.Any())
+                    queryParts.Add($"{key}={Uri.EscapeDataString(string.Join(",", list))}");
+            }
 
-            if (operationalShift != null && operationalShift.Any())
-                url += $"&operationalShift={string.Join(",", operationalShift)}";
+            AddIfAny("operationalShift", operationalShift);
+            AddIfAny("tollOperators", tollOperators);
+            AddIfAny("laneNames", laneNames);
+            AddIfAny("paymentMethods", paymentMethods);
 
-            if (tollOperators != null && tollOperators.Any())
-                url += $"&tollOperators={string.Join(",", tollOperators)}";
+            var url = $"{baseUrl}?{string.Join("&", queryParts)}";
 
-            if (laneNames != null && laneNames.Any())
-                url += $"&laneNames={string.Join(",", laneNames)}";
-
-            if (paymentMethods != null && paymentMethods.Any())
-                url += $"&paymentMethods={string.Join(",", paymentMethods)}";
-
+            Console.WriteLine("Request URL: " + url); // Optional debug
 
             var response = await _httpClient.GetAsync(url);
             response.EnsureSuccessStatusCode();
@@ -52,9 +70,9 @@ namespace MIS.Web.Services
                 Culture = CultureInfo.InvariantCulture
             };
 
-            var discrepancys = JsonConvert.DeserializeObject<List<DiscrepancyReportViewModel>>(json, settings);
+            var result = JsonConvert.DeserializeObject<List<DiscrepancyReportViewModel>>(json, settings);
 
-            return discrepancys ?? new List<DiscrepancyReportViewModel>();
+            return result ?? new List<DiscrepancyReportViewModel>();
         }
-    } 
+    }
 }

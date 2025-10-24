@@ -1,9 +1,10 @@
 ﻿@model MIS.Web.Models.Traffic.Hourly.HourlyTrafficInputModel
+
 @{
     var classes = new List<string> { "Class 1", "Class 2", "Class 4", "Class M" };
 }
 
-<form method="get" asp-action="HourlyReport" asp-controller="Traffic">
+<form method="get" asp-controller="Traffic" asp-action="HourlyReport" id="filterForm" class="mb-4">
     <div class="row g-3 align-items-end">
 
         <!-- Start Date -->
@@ -34,34 +35,30 @@
 
         <!-- Operational Day -->
         <div class="col-md-3">
-            <div class="form-check mt-2">
-                <input asp-for="OperationalDay" class="form-check-input" type="checkbox" id="operationalDay" />
-                <label class="form-check-label" for="operationalDay">Operational Day</label>
+            <label class="form-label d-block">Operational Day</label>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="operationalDay"
+                       id="opYes" value="true" @(Model.OperationalDay ? "checked" : "")>
+                <label class="form-check-label" for="opYes">Yes</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="operationalDay"
+                       id="opNo" value="false" @(!Model.OperationalDay ? "checked" : "")>
+                <label class="form-check-label" for="opNo">No</label>
             </div>
         </div>
 
-
         <!-- Shifts -->
-        <div class="col-md-3">
-            <label class="form-label d-block">Shifts</label>
-            <div>
+        <div class="col-12 mt-2">
+            <label class="form-label">Shifts</label>
+            <div id="shiftsContainer" class="mb-3">
                 @for (int i = 1; i <= 3; i++)
                 {
-                    var shiftName = i switch
-                    {
-                        1 => "Shift 1",
-                        2 => "Shift 2",
-                        3 => "Shift 3",
-                        _ => ""
-                    };
-                    bool isChecked = Model.Shifts?.Contains(i) == true;
+                    var shiftChecked = Model.Shifts?.Contains(i) == true ? "checked" : "";
                     <div class="form-check form-check-inline">
-                        <input class="form-check-input" type="checkbox"
-                               name="shifts" value="@i"
-                               @(isChecked ? "checked" : null)
-                               @(Model.OperationalDay ? "" : "disabled")
-                               id="shift_@i" />
-                        <label class="form-check-label" for="shift_@i">@shiftName</label>
+                        <input class="form-check-input shift-checkbox"
+                               type="checkbox" name="shifts" value="@i" id="shift@i" @shiftChecked>
+                        <label class="form-check-label" for="shift@i">Shift @i</label>
                     </div>
                 }
             </div>
@@ -71,16 +68,28 @@
         <div class="col-md-3">
             <button type="submit" class="btn btn-primary w-100">Filter</button>
         </div>
-
     </div>
 </form>
 
-<!-- Optional: small script to enable/disable shifts dynamically -->
-@section Scripts {
-    <script>
-        document.getElementById("operationalDay").addEventListener("change", function () {
-            const shiftCheckboxes = document.querySelectorAll('input[name="shifts"]');
-            shiftCheckboxes.forEach(cb => cb.disabled = !this.checked);
-        });
-    </script>
-}
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const opYes = document.getElementById("opYes");
+        const opNo = document.getElementById("opNo");
+        const shiftCheckboxes = document.querySelectorAll(".shift-checkbox");
+
+        function toggleShifts() {
+            const enable = opYes?.checked;
+            shiftCheckboxes.forEach(cb => {
+                cb.disabled = !enable;
+                if (!enable) cb.checked = false;
+            });
+        }
+
+        if (opYes && opNo && shiftCheckboxes.length > 0) {
+            toggleShifts();
+            opYes.addEventListener("change", toggleShifts);
+            opNo.addEventListener("change", toggleShifts);
+        }
+    });
+</script>
+

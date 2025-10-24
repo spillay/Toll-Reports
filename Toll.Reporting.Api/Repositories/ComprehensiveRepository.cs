@@ -131,23 +131,15 @@ public class ComprehensiveRepository : IComprehensiveRepository
                     var dto = new ComprehensiveDto
                     {
                         LaneName = laneName,
-                        TransactionNumber = t.TransactionNumber,
                         TransactionType = transType,
                         DiscountType = discountType,
                         TransactionDateTime = t.TransactionDateTime,
                         Shift = shift,
-                        ShiftDate = t.ShiftDate,
-                        Username = username,
                         ManualTollClass = manualClass,
                         TariffPlanId = tp?.TariffPlanId ?? 0,
-                        EffectiveDate = tp?.EffectiveDate ?? default,
-                        CurrencyId = tp?.CurrencyId ?? 0,
                         AmountInclusive = d.AmountInclusive,
-                        LaneId = t.LaneId,
-                        TransactionTypeId = t.TransactionTypeId,
                         MethodOfPayment = methodOfPaymentValue,
                         DiscountTypeId = t.DiscountTypeId,
-                        ShiftId = t.ShiftId,
                         SystemUserId = t.SystemUserId,
                         ManualTollClassId = t.ManualTollClassId,
                         TariffPlanDetailId = d.TariffPlanId

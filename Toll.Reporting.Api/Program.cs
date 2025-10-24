@@ -20,7 +20,9 @@ builder.Services.AddSwaggerGen();
 var configBuilder = new ConfigurationBuilder().AddJsonFile("appsettings.json").Build();
 var configSection = configBuilder.GetSection("ConnectionStrings");
 var connectionString = configSection["SQLServerConnection"] ?? null;
-
+var configServer = configBuilder.GetSection("Server");
+var port = configServer["Port"];
+var host = configServer["Host"];
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(connectionString));
@@ -64,4 +66,4 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-app.Run();
+app.Run($"http://{host}:{port}");

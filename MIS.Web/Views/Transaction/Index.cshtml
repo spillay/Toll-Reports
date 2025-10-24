@@ -77,31 +77,71 @@
             </table>
 
             <!-- Pagination -->
-            <div class="mt-4 d-flex flex-column flex-md-row justify-content-between align-items-center border-top pt-3">
-                <div class="text-muted mb-2 mb-md-0">
-                    Showing page <strong>@Model.page</strong> of <strong>@Model.totalPages</strong> |
-                    Total records: <strong>@Model.totalCount</strong>
-                </div>
+            @{
+    // Cast Model to filters object to preserve selected values
+    var filters = Model as MIS.Web.Models.TransactionInputModel;
+    int startPage = Math.Max(1, Model.page - 1);
+    int endPage = Math.Min(Model.totalPages, Model.page + 1);
+}
 
-                <nav aria-label="Transaction pagination">
-                    <ul class="pagination justify-content-center">
-                        <li class="page-item @(Model.page <= 1 ? "disabled" : "")">
-                            <a class="page-link" href="@Url.Action("Transaction", "Transaction", new { page = Model.page - 1, pageSize = Model.pageSize })">&laquo; Previous</a>
-                        </li>
+<div class="mt-4 d-flex flex-column flex-md-row justify-content-between align-items-center border-top pt-3">
+    <div class="text-muted mb-2 mb-md-0">
+        Showing page <strong>@Model.page</strong> of <strong>@Model.totalPages</strong> |
+        Total records: <strong>@Model.totalCount</strong>
+    </div>
 
-                        @for (int i = Math.Max(1, Model.page - 1); i <= Math.Min(Model.totalPages, Model.page + 1); i++)
-                        {
-                            <li class="page-item @(i == Model.page ? "active" : "")">
-                                <a class="page-link" href="@Url.Action("Transaction", "Transaction", new { page = i, pageSize = Model.pageSize })">@i</a>
-                            </li>
-                        }
+    <nav aria-label="Transaction pagination">
+        <ul class="pagination justify-content-center">
 
-                        <li class="page-item @(Model.page >= Model.totalPages ? "disabled" : "")">
-                            <a class="page-link" href="@Url.Action("Transaction", "Transaction", new { page = Model.page + 1, pageSize = Model.pageSize })">Next &raquo;</a>
-                        </li>
-                    </ul>
-                </nav>
-            </div>
+            <!-- Previous page -->
+            <li class="page-item @(Model.page <= 1 ? "disabled" : "")">
+                <a class="page-link" href="@Url.Action("Transaction", "Transaction", new { 
+                    page = Model.page - 1,
+                    pageSize = Model.pageSize,
+                    lane_Nr = filters?.lane_Nr,
+                    TollOperatorID = filters?.TollOperatorID,
+                    Shift = filters?.Shift,
+                    PaymentMethod = filters?.PaymentMethod,
+                    StartDate = filters?.StartDate.ToString("yyyy-MM-ddTHH:mm"),
+                    EndDate = filters?.EndDate.ToString("yyyy-MM-ddTHH:mm")
+                })">&laquo; Previous</a>
+            </li>
+
+            <!-- Page numbers -->
+            @for (int i = startPage; i <= endPage; i++)
+            {
+                <li class="page-item @(i == Model.page ? "active" : "")">
+                    <a class="page-link" href="@Url.Action("Transaction", "Transaction", new { 
+                        page = i,
+                        pageSize = Model.pageSize,
+                        lane_Nr = filters?.lane_Nr,
+                        TollOperatorID = filters?.TollOperatorID,
+                        Shift = filters?.Shift,
+                        PaymentMethod = filters?.PaymentMethod,
+                        StartDate = filters?.StartDate.ToString("yyyy-MM-ddTHH:mm"),
+                        EndDate = filters?.EndDate.ToString("yyyy-MM-ddTHH:mm")
+                    })">@i</a>
+                </li>
+            }
+
+            <!-- Next page -->
+            <li class="page-item @(Model.page >= Model.totalPages ? "disabled" : "")">
+                <a class="page-link" href="@Url.Action("Transaction", "Transaction", new { 
+                    page = Model.page + 1,
+                    pageSize = Model.pageSize,
+                    lane_Nr = filters?.lane_Nr,
+                    TollOperatorID = filters?.TollOperatorID,
+                    Shift = filters?.Shift,
+                    PaymentMethod = filters?.PaymentMethod,
+                    StartDate = filters?.StartDate.ToString("yyyy-MM-ddTHH:mm"),
+                    EndDate = filters?.EndDate.ToString("yyyy-MM-ddTHH:mm")
+                })">Next &raquo;</a>
+            </li>
+
+        </ul>
+    </nav>
+</div>
+
         </div>
 
         <!-- Footer -->

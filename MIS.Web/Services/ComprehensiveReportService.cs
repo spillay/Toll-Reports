@@ -6,21 +6,21 @@ using System.Threading.Tasks;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.Extensions.Configuration;
 
 namespace MIS.Web.Services
 {
     public class ComprehensiveReportService : IComprehensiveReportService
     {
         private readonly HttpClient _httpClient;
+        private readonly IConfiguration _configuration;
 
-        public ComprehensiveReportService(HttpClient httpClient)
+        public ComprehensiveReportService(HttpClient httpClient, IConfiguration configuration)
         {
-            _httpClient = httpClient;
+            _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+            _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         }
 
-        /// <summary>
-        /// Calls the backend API (Toll.Reporting.Api) and passes optional filters as comma-separated query parameters.
-        /// </summary>
         public async Task<List<ComprehensiveReportViewModel>> GetComprehensiveDetailsAsync(
             DateTime startDate,
             DateTime endDate,
@@ -32,18 +32,22 @@ namespace MIS.Web.Services
             List<string>? classification = null,
             List<string>? transactionTypes = null)
         {
-            string formattedStartDate = startDate.ToString("yyyy/MM/dd");
-            string formattedEndDate = endDate.ToString("yyyy/MM/dd");
-            string encodedStartDate = Uri.EscapeDataString(formattedStartDate);
-            string encodedEndDate = Uri.EscapeDataString(formattedEndDate);
+            // Read API base URL from configuration
+            var baseUrl = _configuration["ApiSettings:ComprehensiveReportApiUrl"];
+            if (string.IsNullOrEmpty(baseUrl))
+                throw new InvalidOperationException("ComprehensiveReportApiUrl is not configured in appsettings.json.");
 
+            // Format dates
+            string encodedStartDate = Uri.EscapeDataString(startDate.ToString("yyyy/MM/dd"));
+            string encodedEndDate = Uri.EscapeDataString(endDate.ToString("yyyy/MM/dd"));
+
+            // Build query string
             var queryParts = new List<string>
             {
                 $"startDate={encodedStartDate}",
                 $"endDate={encodedEndDate}"
             };
 
-            // Helper to append list as comma separated values
             void AddIfAny(string key, List<string>? list)
             {
                 if (list != null && list.Any())
@@ -58,15 +62,14 @@ namespace MIS.Web.Services
             AddIfAny("classification", classification);
             AddIfAny("transactionTypes", transactionTypes);
 
-            var url = $"http://localhost:5000/report?{string.Join("&", queryParts)}";
+            var url = $"{baseUrl}?{string.Join("&", queryParts)}";
+
+            Console.WriteLine("Request URL: " + url); // Optional debug
 
             var response = await _httpClient.GetAsync(url);
-            var content = await response.Content.ReadAsStringAsync();
-
-            // debug log
-            Console.WriteLine("API Response length: " + (content?.Length ?? 0));
-
             response.EnsureSuccessStatusCode();
+
+            var content = await response.Content.ReadAsStringAsync();
 
             var settings = new JsonSerializerSettings
             {
@@ -74,9 +77,9 @@ namespace MIS.Web.Services
                 Culture = CultureInfo.InvariantCulture
             };
 
-            var comprehensives = JsonConvert.DeserializeObject<List<ComprehensiveReportViewModel>>(content, settings);
+            var result = JsonConvert.DeserializeObject<List<ComprehensiveReportViewModel>>(content, settings);
 
-            return comprehensives ?? new List<ComprehensiveReportViewModel>();
+            return result ?? new List<ComprehensiveReportViewModel>();
         }
     }
 }

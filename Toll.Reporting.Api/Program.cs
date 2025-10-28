@@ -57,6 +57,7 @@ app.UseCors("AllowFrontend");
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
+    Console.WriteLine("In Development environment");
     app.UseSwagger();
     app.UseSwaggerUI();
 }

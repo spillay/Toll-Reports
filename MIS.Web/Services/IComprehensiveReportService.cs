@@ -7,7 +7,7 @@ namespace MIS.Web.Services
 {
     public interface IComprehensiveReportService
     {
-        Task<List<ComprehensiveReportViewModel>> GetComprehensiveDetailsAsync(
+        Task<List<ComprehensiveModel>> GetComprehensiveDetailsAsync(
             DateTime startDate,
             DateTime endDate,
             List<string>? operationalShift = null,

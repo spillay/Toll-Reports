@@ -1,6 +1,8 @@
-﻿namespace MIS.Web.Models.Discrepancy
+﻿using System;
+
+namespace MIS.Web.Models.Discrepancy
 {
-    public class DiscrepancyReportViewModel
+    public class DiscrepancyModel
     {
         public string? lane_Nr { get; set; }
         public int trx_Sequence_Nr { get; set; }
@@ -17,21 +19,20 @@
         public decimal updated_tariff { get; set; }
         public string? takenAction { get; set; }
 
-        // ADD THESE PROPERTIES
-        public DateTime StartDate { get; set; } = DateTime.Now.AddDays(-90);
-        public DateTime EndDate { get; set; } = DateTime.Now;
+        public decimal TariffDifference => updated_tariff - tariff;
 
-        // Computed property → combine date + time into one DateTime
         public DateTime TransactionDateTime
         {
             get
             {
                 if (DateTime.TryParseExact(trx_Date, "dd/MM/yyyy", null, System.Globalization.DateTimeStyles.None, out var datePart)
-                 && DateTime.TryParseExact(trx_Time, "HH:mm:ss", null, System.Globalization.DateTimeStyles.None, out var timePart))
+                    && DateTime.TryParseExact(trx_Time, "HH:mm:ss", null, System.Globalization.DateTimeStyles.None, out var timePart))
                 {
-                    return datePart.Date.Add(timePart.TimeOfDay);
+                    return datePart.Add(timePart.TimeOfDay);
                 }
-                return DateTime.MinValue; // fallback
+                if (DateTime.TryParse($"{trx_Date} {trx_Time}", out var dt))
+                    return dt;
+                return DateTime.MinValue;
             }
         }
     }

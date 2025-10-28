@@ -22,9 +22,9 @@ namespace MIS.Web.Services
         public async Task<TransactionInputModel> GetTransactionDetailsAsync(TransactionInputModel model)
         {
             // Read API base URL from configuration
-            var baseUrl = _configuration["ApiSettings:TransactionApiUrl"];
-            if (string.IsNullOrEmpty(baseUrl))
-                throw new InvalidOperationException("TransactionApiUrl is not configured in appsettings.json.");
+            //var baseUrl = _configuration["ApiSettings:TransactionApiUrl"];
+            //if (string.IsNullOrEmpty(baseUrl))
+            //    throw new InvalidOperationException("TransactionApiUrl is not configured in appsettings.json.");
 
             string start = Uri.EscapeDataString(model.StartDate.ToString("s"));
             string end = Uri.EscapeDataString(model.EndDate.ToString("s"));
@@ -48,7 +48,9 @@ namespace MIS.Web.Services
             AddIfNotEmpty("Shift", model.Shift);
             AddIfNotEmpty("PaymentMethod", model.PaymentMethod);
 
-            var url = $"{baseUrl}?{string.Join("&", queryParts)}";
+           string baseUrl = _configuration["BaseApiUrl:Link"];
+           string endpoint = _configuration["ApiSettings:TransactionEndpoint"];
+           string url = $"{baseUrl}{endpoint}?{string.Join("&", queryParts)}";
 
             var response = await _httpClient.GetAsync(url);
             if (!response.IsSuccessStatusCode) return new TransactionInputModel();

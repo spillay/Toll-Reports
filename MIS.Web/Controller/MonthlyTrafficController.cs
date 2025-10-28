@@ -3,6 +3,7 @@ using MIS.Web.Models.Traffic.Monthly;
 using MIS.Web.Services;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace MIS.Web.Controllers
@@ -36,14 +37,21 @@ namespace MIS.Web.Controllers
                             : new List<int>()
             };
 
-            // Map service call parameters (note: service expects year/month/operationalMonth/classifications/shifts)
+            // Map service call parameters
             List<string>? classifications = string.IsNullOrEmpty(classification) ? null : new List<string> { classification };
 
+            // Fetch traffic report
             var model = await _trafficService.GetTrafficReportAsync(year, month, operationalMonth, classifications, input.Shifts);
 
-            // Pass input and any static classifications (you can replace with dynamic source later)
+            // Fetch dropdown data
+            var years = await _trafficService.GetAvailableYearsAsync();
+            var months = year.HasValue ? await _trafficService.GetAvailableMonthsAsync(year.Value) : new List<int>();
+
+            // Pass data to the view
             ViewBag.InputModel = input;
-            ViewBag.Classifications = new List<string> { "Class 1", "Class 2", "Class 3","Class 4", "Class M" };
+            ViewBag.Classifications = new List<string> { "Class 1", "Class 2", "Class 3", "Class 4", "Class M" };
+            ViewBag.Years = years;
+            ViewBag.Months = months;
 
             return View("~/Views/Traffic/Monthly/Index.cshtml", model);
         }

@@ -1,5 +1,4 @@
-﻿@page
-@model MIS.Web.Pages.ComprehensiveReportModel
+﻿@model MIS.Web.Models.Comprehensive.PageComprehensiveModel
 @using System.Text.Json
 
 @{
@@ -12,87 +11,86 @@
     <div class="card-body">
         <!-- Header -->
         <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
-            <div>
-            </div>
+            <div></div>
             <h2 class="mb-0 fw-bold text-primary">Comprehensive Report</h2>
             <div></div>
         </div>
+
         <!-- Filters -->
-        <form method="get" class="row g-3 mb-3">
+        <form method="get" asp-controller="Comprehensive" asp-action="Index" class="row g-3 mb-3">
             <div class="col-md-2">
                 <label class="form-label fw-semibold">Start Date & Time</label>
-                <input type="datetime-local" class="form-control" asp-for="StartDate" />
+                <input type="datetime-local" class="form-control" name="StartDate" value="@Model.Input.StartDate.ToString("yyyy-MM-ddTHH:mm")" />
             </div>
 
             <div class="col-md-2">
                 <label class="form-label fw-semibold">End Date & Time</label>
-                <input type="datetime-local" class="form-control" asp-for="EndDate" />
+                <input type="datetime-local" class="form-control" name="EndDate" value="@Model.Input.EndDate.ToString("yyyy-MM-ddTHH:mm")" />
             </div>
 
             <div class="col-md-2">
                 <label class="form-label fw-semibold">Shift</label>
-                <select class="form-select" asp-for="Shift">
+                <select class="form-select" name="Shift">
                     <option value="">All</option>
-                    <option value="Shift One">Shift 1</option>
-                    <option value="Shift Two">Shift 2</option>
-                    <option value="Shift Three">Shift 3</option>
+                    @foreach (var s in Model.Shifts)
+                    {
+                        <option value="@s" selected=@(s == Model.Input.Shift ? "selected" : "")>@s</option>
+                    }
                 </select>
             </div>
 
             <div class="col-md-3">
                 <label class="form-label fw-semibold">Lane</label>
-                <select class="form-select" asp-for="LaneName">
+                <select class="form-select" name="LaneName">
                     <option value="">All</option>
                     @foreach (var l in Model.Lanes)
                     {
-                        <option value="@l">@l</option>
+                        <option value="@l" selected=@(l == Model.Input.LaneName ? "selected" : "")>@l</option>
                     }
                 </select>
             </div>
 
             <div class="col-md-3">
                 <label class="form-label fw-semibold">Method of Payment</label>
-                <select class="form-select" asp-for="MethodOfPayment">
+                <select class="form-select" name="MethodOfPayment">
                     <option value="">All</option>
-                    <option>Cash Transaction</option>
-                    <option>Exempt Transaction</option>
-                    <option>Violation</option>
-                    <option>Prepaid Transaction - RFID Tag</option>
-                    <option>Prepaid Transaction - Card</option>
-                    <option>Bank Card (NFC - Post Paid)</option>
-                    <option>QR Code / Barcode</option>
+                    @foreach (var p in Model.PaymentMethods)
+                    {
+                        <option value="@p" selected="@(p == Model.Input.MethodOfPayment ? "selected" : null)">@p</option>
+
+
+                    }
                 </select>
             </div>
 
             <div class="col-md-3">
                 <label class="form-label fw-semibold">Discount Type</label>
-                <select class="form-select" asp-for="DiscountType">
+                <select class="form-select" name="DiscountType">
                     <option value="">All</option>
-                    <option value="Nominal">Nominal</option>
-                    <option value="Anonymous">Anonymous</option>
-                    <option value="Frequent User">Frequent User</option>
-                    <option value="Exempt Passage">Exempt Passage</option>
+                    @foreach (var d in Model.DiscountTypes)
+                    {
+                        <option value="@d" selected=@(d == Model.Input.DiscountType ? "selected" : "")>@d</option>
+                    }
                 </select>
             </div>
 
             <div class="col-md-3">
                 <label class="form-label fw-semibold">Classification</label>
-                <select class="form-select" asp-for="Classification">
+                <select class="form-select" name="Classification">
                     <option value="">All</option>
                     @foreach (var c in Model.Classifications)
                     {
-                        <option value="@c">@c</option>
+                        <option value="@c" selected=@(c == Model.Input.Classification ? "selected" : "")>@c</option>
                     }
                 </select>
             </div>
 
-            @* <div class="col-md-2 d-flex align-items-end">
-                <a asp-page-handler="Export" class="btn btn-success w-100 shadow-sm">
+            <div class="col-md-2 d-flex align-items-end">
+                <a asp-controller="Comprehensive" asp-action="ExportExcel" asp-route-StartDate="@Model.Input.StartDate.ToString("o")" asp-route-EndDate="@Model.Input.EndDate.ToString("o")" class="btn btn-success w-100 shadow-sm">
                     <i class="bi bi-file-earmark-excel"></i> Export Excel
                 </a>
-            </div> *@
+            </div>
 
-            <!-- PDF export: handled client-side in JS below -->
             <div class="col-md-2 d-flex align-items-end">
                 <button id="btnDownloadPdf" type="button" class="btn btn-danger w-100 shadow-sm">
                     <i class="bi bi-file-earmark-pdf"></i> Export PDF
@@ -111,7 +109,7 @@
             <table class="table table-bordered table-striped text-center align-middle">
                 <thead class="table-primary">
                     <tr>
-                        <th>@(Model.GroupBy == "TransactionType" ? "TRANSACTION TYPE" : "METHOD OF PAYMENT")</th>
+                        <th>@(Model.Input.GroupBy == "TransactionType" ? "TRANSACTION TYPE" : "METHOD OF PAYMENT")</th>
                         <th></th>
                         @foreach (var cls in Model.TollClasses)
                         {
@@ -136,7 +134,7 @@
 
                                 @foreach (var cls in Model.TollClasses)
                                 {
-                                    var data = row.Classes.ContainsKey(cls) ? row.Classes[cls] : new MIS.Web.Pages.ComprehensiveReportModel.ClassMetrics();
+                                    var data = row.Classes.ContainsKey(cls) ? row.Classes[cls] : new MIS.Web.Models.Comprehensive.PageComprehensiveModel.ClassMetrics();
                                     <td>
                                         @data.Count<br />
                                         @data.CountPercent.ToString("0.##")<br />
@@ -165,8 +163,8 @@
                             </td>
                             @foreach (var cls in Model.TollClasses)
                             {
-                                var totalCount = Model.comprehensives.Count(x => x.ManualTollClass == cls);
-                                var totalRevenue = Model.comprehensives.Where(x => x.ManualTollClass == cls).Sum(x => x.AmountInclusive);
+                                var totalCount = Model.Items.Count(x => x.ManualTollClass == cls);
+                                var totalRevenue = Model.Items.Where(x => x.ManualTollClass == cls).Sum(x => x.AmountInclusive);
                                 <td>
                                     @totalCount<br />
                                     100<br />
@@ -175,9 +173,9 @@
                                 </td>
                             }
                             <td>
-                                @Model.comprehensives.Count()<br />
+                                @Model.Items.Count()<br />
                                 100<br />
-                                @Model.comprehensives.Sum(x => x.AmountInclusive).ToString("N2") <br />
+                                @Model.Items.Sum(x => x.AmountInclusive).ToString("N2") <br />
                                 100
                             </td>
                         </tr>
@@ -208,24 +206,19 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 
-<!--
-    Client-side PDF generation.
-    We serialize the typed grouped data (Model.GroupedDataTyped) and toll classes, then build a table
-    where each cell contains 4 lines (Count / Count% / Revenue / Revenue%).
--->
 <script>
+    // Same client-side PDF generation as you had, but using the MVC model
     const groupedData = @Html.Raw(JsonSerializer.Serialize(Model.GroupedDataTyped));
     const tollClasses = @Html.Raw(JsonSerializer.Serialize(Model.TollClasses));
-    const groupByLabel = '@(Model.GroupBy == "TransactionType" ? "TRANSACTION TYPE" : "METHOD OF PAYMENT")';
+    const groupByLabel = '@(Model.Input.GroupBy == "TransactionType" ? "TRANSACTION TYPE" : "METHOD OF PAYMENT")';
 
-    // Filters snapshot
     const appliedFilters = {
-        StartDate: '@Model.StartDate.ToString("dd/MM/yyyy HH:mm")',
-        EndDate: '@Model.EndDate.ToString("dd/MM/yyyy HH:mm")',
-        Shift: '@(string.IsNullOrEmpty(Model.Shift) ? "All" : Model.Shift)',
-        Lane: '@(string.IsNullOrEmpty(Model.LaneName) ? "All" : Model.LaneName)',
-        PaymentMethod: '@(string.IsNullOrEmpty(Model.MethodOfPayment) ? "All" : Model.MethodOfPayment)',
-        Classification: '@(string.IsNullOrEmpty(Model.Classification) ? "All" : Model.Classification)'
+        StartDate: '@Model.Input.StartDate.ToString("dd/MM/yyyy HH:mm")',
+        EndDate: '@Model.Input.EndDate.ToString("dd/MM/yyyy HH:mm")',
+        Shift: '@(string.IsNullOrEmpty(Model.Input.Shift) ? "All" : Model.Input.Shift)',
+        Lane: '@(string.IsNullOrEmpty(Model.Input.LaneName) ? "All" : Model.Input.LaneName)',
+        PaymentMethod: '@(string.IsNullOrEmpty(Model.Input.MethodOfPayment) ? "All" : Model.Input.MethodOfPayment)',
+        Classification: '@(string.IsNullOrEmpty(Model.Input.Classification) ? "All" : Model.Input.Classification)'
     };
 
     const reportGeneratedAt = '@DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")';
@@ -240,7 +233,6 @@
         const pageHeight = doc.internal.pageSize.getHeight();
         const margin = 40;
 
-        // Load both logos
         Promise.all([
             new Promise(resolve => {
                 const img = new Image();
@@ -255,17 +247,13 @@
                 img.onerror = () => resolve(null);
             })
         ]).then(([logoLeft, logoRight]) => {
-            // Left logo
             if (logoLeft) doc.addImage(logoLeft, 'JPEG', margin, 30, 80, 80);
-            // Right logo
             if (logoRight) doc.addImage(logoRight, 'JPEG', pageWidth - margin - 80, 30, 80, 80);
 
-            //  header below title
             doc.setFontSize(12);
             doc.setFont("helvetica", "bold");
             doc.text("COMPREHENSIVE REPORT", pageWidth / 2, 100, { align: "center" });
 
-            // Title
             doc.setFontSize(16);
             doc.setFont("helvetica", "bold");
             doc.text(
@@ -275,7 +263,6 @@
                 { align: "center" }
             );
 
-            // Filters block
             doc.setFontSize(10);
             doc.setFont("helvetica", "normal");
             const filtersX = margin;
@@ -285,10 +272,8 @@
                 filtersY += 14;
             });
 
-            // Table header
             const headers = [groupByLabel, ""].concat(tollClasses).concat(["TOTAL"]);
 
-            // Table rows
             const rows = groupedData.map(g => {
                 const secondCol = "Count\nCount %\nRevenue\nRevenue %";
                 const classCells = tollClasses.map(cls => {
@@ -300,7 +285,6 @@
                 return [g.Method || "", secondCol, ...classCells, totalCell];
             });
 
-            // AutoTable
             doc.autoTable({
                 head: [headers],
                 body: rows,
@@ -319,7 +303,6 @@
                 }
             });
 
-            // Footer
             const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 20 : (filtersY + 200);
             doc.setFont("helvetica", "bold");
             doc.text("Summary", margin, finalY);
@@ -334,7 +317,6 @@
             doc.text(`Groups: ${totalGroups}`, margin, finalY + 15);
             doc.text(`Total Revenue: ${grandTotals.totalRevenue.toFixed(2)}`, margin + 200, finalY + 15);
 
-            // Report info
             doc.setFont("helvetica", "bold");
             doc.text(`Report Name: Comprehensive Report`, margin, finalY + 40);
             doc.setFont("helvetica", "normal");
@@ -342,10 +324,7 @@
             doc.text(`User ID: ${currentUserId}`, margin + 250, finalY + 55);
             doc.text(`Version: ${reportVersion}`, pageWidth - margin - 100, finalY + 55);
 
-            // Save PDF
             doc.save(`ComprehensiveReport_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
         });
     });
 </script>
-
-

@@ -16,6 +16,4 @@ public interface IComprehensiveRepository
         List<string>? paymentMethods = null,
         List<string>? transactionTypes = null);
 
-    // legacy signature left for compatibility if required
-   // Task<IEnumerable<ComprehensiveDto>> GetComprehensiveRepositoryAsync1(DateTime startDate, DateTime endDate, List<string>? operationalShift = null, List<string>? tollOperators = null, List<string>? laneNames = null, List<string>? laneDiscountType = null, List<string>? Classification = null, List<string>? paymentMethods = null);
-}
+  }

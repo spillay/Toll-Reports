@@ -1,4 +1,6 @@
-﻿namespace MIS.Web.Models.Comprehensive
+﻿using System;
+
+namespace MIS.Web.Models.Comprehensive
 {
     public class ComprehensiveModel
     {
@@ -13,5 +15,6 @@
         public string? DiscountType { get; set; }
         public string? ManualTollClass { get; set; }
         public string? Shift { get; set; }
+        public DateTime? TransactionDate { get; set; } // optional: if API returns dates
     }
 }

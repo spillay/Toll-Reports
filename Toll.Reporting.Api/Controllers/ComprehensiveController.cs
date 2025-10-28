@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 namespace Toll.Reporting.Api.Controllers
 {
     [ApiController]
+    [Route("api/comprehensive")]
     public class ComprehensiveController : ControllerBase
     {
         private readonly IComprehensiveRepository _repo;
@@ -18,8 +19,7 @@ namespace Toll.Reporting.Api.Controllers
             _repo = repo;
         }
 
-        // Example GET:
-        // GET /report?startDate=2025/08/19&endDate=2025/08/22&tollOperators=op1,op2&laneNames=LaneA&paymentMethods=Cash
+      
         [HttpGet("report")]
         public async Task<ActionResult<IEnumerable<ComprehensiveDto>>> GetComprehensiveReport(
             [FromQuery] DateTime startDate,

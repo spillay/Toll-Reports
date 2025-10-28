@@ -19,6 +19,14 @@ namespace MIS.Web.Services
             _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
             _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         }
+        private string BuildBaseUrl()
+        {
+            var baseUrl = _configuration["BaseApiUrl:Link"];
+            var endpoint = _configuration["ApiSettings:MonthlyTrafficEndpoint"];
+            if (string.IsNullOrWhiteSpace(baseUrl) || string.IsNullOrWhiteSpace(endpoint))
+                throw new InvalidOperationException("BaseApiUrl or MonthlyTrafficEndpoint is not configured.");
+            return $"{baseUrl}{endpoint}";
+        }
 
         public async Task<PageMonthlyTrafficModel> GetTrafficReportAsync(
             int? year = null,
@@ -27,11 +35,7 @@ namespace MIS.Web.Services
             List<string>? classifications = null,
             List<int>? shifts = null)
         {
-            // Read base API URL from configuration
-            var baseApi = _configuration["ApiSettings:MonthlyTrafficApiUrl"];
-            if (string.IsNullOrEmpty(baseApi))
-                throw new InvalidOperationException("MonthlyTrafficApiUrl is not configured in appsettings.json.");
-
+       
             // Build query parameters
             var queryParams = new List<string>();
             if (year.HasValue) queryParams.Add($"year={year.Value}");
@@ -40,10 +44,8 @@ namespace MIS.Web.Services
             if (classifications?.Any() == true) queryParams.Add($"classification={Uri.EscapeDataString(string.Join(",", classifications))}");
             if (shifts?.Any() == true) queryParams.Add($"shifts={Uri.EscapeDataString(string.Join(",", shifts))}");
 
-            // Combine base URL and query string safely
-            var url = baseApi;
-            if (queryParams.Any())
-                url += "?" + string.Join("&", queryParams);
+            var url = BuildBaseUrl();
+
 
             // Make HTTP call
             var response = await _httpClient.GetAsync(url);
@@ -58,11 +60,12 @@ namespace MIS.Web.Services
         // Fetch years for dropdown
         public async Task<List<int>> GetAvailableYearsAsync()
         {
-            var baseApi = _configuration["ApiSettings:MonthlyTrafficApiUrl"];
-            if (string.IsNullOrEmpty(baseApi))
+            var url = BuildBaseUrl();
+
+            if (string.IsNullOrEmpty(url))
                 throw new InvalidOperationException("MonthlyTrafficApiUrl is not configured in appsettings.json.");
 
-            var response = await _httpClient.GetAsync($"{baseApi}/years");
+            var response = await _httpClient.GetAsync($"{url}/years");
             response.EnsureSuccessStatusCode();
 
             var json = await response.Content.ReadAsStringAsync();
@@ -72,11 +75,11 @@ namespace MIS.Web.Services
         // Fetch months for dropdown for a given year
         public async Task<List<int>> GetAvailableMonthsAsync(int year)
         {
-            var baseApi = _configuration["ApiSettings:MonthlyTrafficApiUrl"];
-            if (string.IsNullOrEmpty(baseApi))
+            var url = BuildBaseUrl();
+            if (string.IsNullOrEmpty(url))
                 throw new InvalidOperationException("MonthlyTrafficApiUrl is not configured in appsettings.json.");
 
-            var response = await _httpClient.GetAsync($"{baseApi}/months/{year}");
+            var response = await _httpClient.GetAsync($"{url}/months/{year}");
             response.EnsureSuccessStatusCode();
 
             var json = await response.Content.ReadAsStringAsync();

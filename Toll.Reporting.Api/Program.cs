@@ -1,4 +1,4 @@
-using Toll.Reporting.Api.Controllers;
+using Microsoft.Extensions.Hosting.WindowsServices;
 using Microsoft.EntityFrameworkCore;
 using TollReportingSystem.Data; // <-- Your EF DbContext (Database First)
 using Toll.Reporting.Api.Repositories; // <-- Your repositories interfaces & implementations
@@ -6,6 +6,8 @@ using Toll.Reporting.Api.Repositories; // <-- Your repositories interfaces & imp
 
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddWindowsService();
 
 // Add services to the container.
 
@@ -30,13 +32,11 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 // Add CORS policy
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowFrontend", policy =>
-    {
-        policy.WithOrigins("https://localhost:7154") // your frontend origin
-              .AllowAnyHeader()
-              .AllowAnyMethod();
-    });
-}); 
+    options.AddPolicy("AllowAll", policy =>
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader());
+});
 // Register repositories with Dependency Injection
 // Scoped = one instance per request (recommended for DbContext)
 builder.Services.AddScoped<ITransactionRepository, TransactionRepository>();
@@ -46,7 +46,6 @@ builder.Services.AddScoped<IVarientPerformanceRepository, VarientPerformanceRepo
 builder.Services.AddScoped<IHourlyTrafficRepository, HourlyTrafficRepository>();
 builder.Services.AddScoped<IDailyTrafficRepository, DailyTrafficRepository>();
 builder.Services.AddScoped<IMonthlyTrafficRepository, MonthlyTrafficRepository>();
-
 
 
 // Program.cs - inside builder.Services section

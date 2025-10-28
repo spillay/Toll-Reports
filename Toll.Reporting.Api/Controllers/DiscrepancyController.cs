@@ -1,69 +1,52 @@
-﻿using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Toll.Reporting.Api.Repositories;
-using MIS.Models;
-using Toll.Reporting.Api.DTOs;
 
 namespace Toll.Reporting.Api.Controllers
 {
+    [ApiController]
+    [Route("api/[controller]")]
     public class DiscrepancyController : ControllerBase
     {
-        private readonly IDiscrepancyRepository _discipencyRepository;
+        private readonly IDiscrepancyRepository _repository;
         private readonly ILogger<DiscrepancyController> _logger;
 
-        // Constructor with Dependency Injection
-        public DiscrepancyController(IDiscrepancyRepository discrepancyRepository, ILogger<DiscrepancyController> logger)
+        public DiscrepancyController(IDiscrepancyRepository repository, ILogger<DiscrepancyController> logger)
         {
-            _discipencyRepository = discrepancyRepository;
+            _repository = repository;
             _logger = logger;
         }
 
-        /// <summary>
-        /// Get Transaction Details Report with optional filters.
-        /// </summary>
-        /// <param name="startDate">Start date (yyyy-MM-dd)</param>
-        /// <param name="endDate">End date (yyyy-MM-dd)</param>
-        /// <param name="operationalShift">Optional list of shift names</param>
-        /// <param name="tollOperators">Optional list of toll operators</param>
-        /// <param name="laneNames">Optional list of lane names</param>
-        /// <param name="tanenaction">Optional list of payment methods</param>
-        /// <returns>Filtered TransactionDetailsDto records</returns>
-        [HttpGet("discrepancy")]
+        // GET /api/discrepancy
+        [HttpGet]
         public async Task<IActionResult> GetDiscrepancy(
             [FromQuery] DateTime startDate,
             [FromQuery] DateTime endDate,
             [FromQuery] List<string>? operationalShift = null,
             [FromQuery] List<string>? tollOperators = null,
             [FromQuery] List<string>? laneNames = null,
-            [FromQuery] List<string>? takenaction = null)
+            [FromQuery] List<string>? paymentMethods = null,
+            [FromQuery] List<string>? takenAction = null,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 50)
         {
             try
             {
                 if (startDate == default || endDate == default)
-                {
-                    return BadRequest("StartDate and EndDate are required.");
-                }
+                    return BadRequest("startDate and endDate are required");
 
-                var result = await _discipencyRepository.GetDiscrepancyAsync(
-                    startDate,
-                    endDate,
-                    operationalShift,
-                    tollOperators,
-                    laneNames,
-                    takenaction
+                var result = await _repository.GetDiscrepancyAsync(
+                    startDate, endDate,
+                    operationalShift, tollOperators,
+                    laneNames, paymentMethods, takenAction,
+                    page, pageSize
                 );
-
-                if (result == null || !result.Any())
-                {
-                    return NotFound("No discripancies found for the given filters.");
-                }
 
                 return Ok(result);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error occurred while fetching discepancies details.");
-                return StatusCode(500, "An error occurred while processing your request.");
+                _logger.LogError(ex, "Error while getting discrepancy");
+                return StatusCode(500, "Internal server error");
             }
         }
     }

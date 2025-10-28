@@ -27,7 +27,7 @@ namespace MIS.Web.Services
         bool operationalDay = false)
             {
                 // Read from appsettings.json instead of hardcoding
-                string baseUrl = _configuration["ApiSettings:DailyTrafficApiUrl"];
+                //string baseUrl = _configuration["ApiSettings:DailyTrafficApiUrl"];
 
                 var queryParams = new List<string>
         {
@@ -35,8 +35,9 @@ namespace MIS.Web.Services
             $"endDate={Uri.EscapeDataString(endDate.ToString("yyyy-MM-dd"))}",
             $"operationalDay={operationalDay.ToString().ToLower()}"
         };
+            
 
-                if (classifications?.Count > 0)
+            if (classifications?.Count > 0)
                 {
                     queryParams.Add($"classification={Uri.EscapeDataString(classifications.First())}");
                 }
@@ -47,15 +48,17 @@ namespace MIS.Web.Services
                     queryParams.Add($"shifts={Uri.EscapeDataString(joined)}");
                 }
 
-                string url = $"{baseUrl}?{string.Join("&", queryParams)}";
+            // string url = $"{baseUrl}?{string.Join("&", queryParams)}";
+            string baseUrl = _configuration["BaseApiUrl:Link"];
+            string endpoint = _configuration["ApiSettings:DailyTrafficEndpoint"];
+            string url = $"{baseUrl}{endpoint}?{string.Join("&", queryParams)}";
 
 
-
-                try
-                {
+            try
+            {
                     var response = await _httpClient.GetAsync(url);
 
-                    if (!response.IsSuccessStatusCode)
+                if (!response.IsSuccessStatusCode)
                     {
                         return CreateEmptyModel(startDate, endDate, classifications, shifts, operationalDay);
                     }

@@ -1,13 +1,20 @@
-﻿using Toll.Reporting.Api.DTOs;
+﻿
+using Toll.Reporting.Api.DTOs;
 
-public interface IDiscrepancyRepository
+namespace Toll.Reporting.Api.Repositories
 {
-    Task<IEnumerable<DiscrepancyDto>> GetDiscrepancyAsync(
-       DateTime startDate,
-       DateTime endDate,
-       List<string>? operationalShift = null,
-       List<string>? tollOperators = null,
-       List<string>? laneNames = null,
-       List<string>? paymentMethods = null,
-       List<string>? takenAction = null);
+    public interface IDiscrepancyRepository
+    {
+        Task<PagedResult<DiscrepancyDto>> GetDiscrepancyAsync(
+           DateTime startDate,
+           DateTime endDate,
+           List<string>? operationalShift = null,
+           List<string>? tollOperators = null,
+           List<string>? laneNames = null,
+           List<string>? paymentMethods = null,
+           List<string>? takenAction = null,
+           int page = 1,
+           int pageSize = 50
+        );
+    }
 }

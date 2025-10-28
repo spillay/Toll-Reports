@@ -1,11 +1,11 @@
 ﻿using MIS.Web.Models.Comprehensive;
 using Newtonsoft.Json;
-using System.Globalization;
-using System.Net.Http;
-using System.Threading.Tasks;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
+using System.Net.Http;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 
 namespace MIS.Web.Services
@@ -21,7 +21,7 @@ namespace MIS.Web.Services
             _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         }
 
-        public async Task<List<ComprehensiveReportViewModel>> GetComprehensiveDetailsAsync(
+        public async Task<List<ComprehensiveModel>> GetComprehensiveDetailsAsync(
             DateTime startDate,
             DateTime endDate,
             List<string>? operationalShift = null,
@@ -32,16 +32,12 @@ namespace MIS.Web.Services
             List<string>? classification = null,
             List<string>? transactionTypes = null)
         {
-            // Read API base URL from configuration
-            var baseUrl = _configuration["ApiSettings:ComprehensiveReportApiUrl"];
-            if (string.IsNullOrEmpty(baseUrl))
-                throw new InvalidOperationException("ComprehensiveReportApiUrl is not configured in appsettings.json.");
+           // var baseUrl = _configuration["ApiSettings:ComprehensiveReportApiUrl"];
+           
 
-            // Format dates
             string encodedStartDate = Uri.EscapeDataString(startDate.ToString("yyyy/MM/dd"));
             string encodedEndDate = Uri.EscapeDataString(endDate.ToString("yyyy/MM/dd"));
 
-            // Build query string
             var queryParts = new List<string>
             {
                 $"startDate={encodedStartDate}",
@@ -62,13 +58,13 @@ namespace MIS.Web.Services
             AddIfAny("classification", classification);
             AddIfAny("transactionTypes", transactionTypes);
 
-            var url = $"{baseUrl}?{string.Join("&", queryParts)}";
-
-            Console.WriteLine("Request URL: " + url); // Optional debug
+            string baseUrl = _configuration["BaseApiUrl:Link"];
+            string endpoint = _configuration["ApiSettings:ComprehensiveReportEndpoint"];
+           // string url = $"{baseUrl}{endpoint}?{string.Join("&", queryParams)}";
+            string url = $"{baseUrl}{endpoint}";
 
             var response = await _httpClient.GetAsync(url);
             response.EnsureSuccessStatusCode();
-
             var content = await response.Content.ReadAsStringAsync();
 
             var settings = new JsonSerializerSettings
@@ -77,9 +73,8 @@ namespace MIS.Web.Services
                 Culture = CultureInfo.InvariantCulture
             };
 
-            var result = JsonConvert.DeserializeObject<List<ComprehensiveReportViewModel>>(content, settings);
-
-            return result ?? new List<ComprehensiveReportViewModel>();
+            var result = JsonConvert.DeserializeObject<List<ComprehensiveModel>>(content, settings);
+            return result ?? new List<ComprehensiveModel>();
         }
     }
 }

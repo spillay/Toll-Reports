@@ -28,9 +28,9 @@ namespace MIS.Web.Services
             List<string>? operationalShift = null,
             List<string>? tollOperators = null)
         {
-            var baseUrl = _configuration["ApiSettings:VarientPerfomanceApiUrl"];
-            if (string.IsNullOrEmpty(baseUrl))
-                throw new InvalidOperationException("VarientPerfomanceApiUrl is not configured in appsettings.json.");
+            //var baseUrl = _configuration["ApiSettings:VarientPerfomanceApiUrl"];
+            //if (string.IsNullOrEmpty(baseUrl))
+            //    throw new InvalidOperationException("VarientPerfomanceApiUrl is not configured in appsettings.json.");
 
             var queryParts = new List<string>
             {
@@ -49,7 +49,9 @@ namespace MIS.Web.Services
             AddIfAny("operationalShift", operationalShift);
             AddIfAny("tollOperators", tollOperators);
 
-            var url = $"{baseUrl}?{string.Join("&", queryParts)}";
+            string baseUrl = _configuration["BaseApiUrl:Link"];
+            string endpoint = _configuration["ApiSettings:VarientPerformanceEndpoint"];
+            string url = $"{baseUrl}{endpoint}?{string.Join("&", queryParts)}";
 
             var response = await _httpClient.GetAsync(url);
             if (!response.IsSuccessStatusCode)

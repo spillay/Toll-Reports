@@ -24,7 +24,7 @@ namespace MIS.Web.Services
             bool operationalDay = false)
         {
             // Read API URL from appsettings.json
-            string baseUrl = _configuration["ApiSettings:HourlyTrafficApiUrl"];
+           // string baseUrl = _configuration["ApiSettings:HourlyTrafficApiUrl"];
 
             // Build query parameters
             var queryParams = new List<string>
@@ -46,7 +46,9 @@ namespace MIS.Web.Services
                 queryParams.Add($"shifts={Uri.EscapeDataString(string.Join(",", shifts))}");
             }
 
-            string url = $"{baseUrl}?{string.Join("&", queryParams)}";
+            string baseUrl = _configuration["BaseApiUrl:Link"];
+            string endpoint = _configuration["ApiSettings:HourlyTrafficEndpoint"];
+            string url = $"{baseUrl}{endpoint}?{string.Join("&", queryParams)}";
 
             try
             {

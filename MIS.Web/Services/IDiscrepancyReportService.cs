@@ -7,12 +7,15 @@ namespace MIS.Web.Services
 {
     public interface IDiscrepancyReportService
     {
-            Task<List<DiscrepancyReportViewModel>> GetDiscrepancyDetailsAsync(
+        Task<PageDiscrepancyModel> GetDiscrepancyReportAsync(
             DateTime startDate,
             DateTime endDate,
             List<string>? operationalShift = null,
             List<string>? tollOperators = null,
             List<string>? laneNames = null,
-            List<string>? paymentMethods = null);
+            List<string>? paymentMethods = null,
+            List<string>? takenAction = null,
+            int page = 1,
+            int pageSize = 50);
     }
 }

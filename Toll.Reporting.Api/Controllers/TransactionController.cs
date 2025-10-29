@@ -22,8 +22,8 @@ namespace Toll.Reporting.Api.Controllers
 
         [HttpGet("details")]
         public async Task<IActionResult> GetTransactionDetails(
-            DateTime startDate,
-            DateTime endDate,
+            [FromQuery] DateTime startDate,
+            [FromQuery] DateTime endDate,
             [FromQuery] List<string>? operationalShift,
             [FromQuery] List<string>? tollOperators,
             [FromQuery] List<string>? laneNames,
@@ -52,5 +52,22 @@ namespace Toll.Reporting.Api.Controllers
             _logger.LogInformation("Total transactions found: {Count}", result.TotalCount);
             return Ok(result);
         }
+        [HttpGet("filter-options")]
+        public async Task<IActionResult> GetTransactionFilterOptions(
+            DateTime startDate,
+            DateTime endDate,
+            [FromQuery] List<string>? operationalShift,
+            [FromQuery] List<string>? tollOperators,
+            [FromQuery] List<string>? laneNames,
+            [FromQuery] List<string>? paymentMethods)
+                {
+                    var options = await _repo.GetTransactionFilterOptionsAsync(
+                        startDate, endDate, operationalShift, tollOperators, laneNames, paymentMethods);
+
+                    return Ok(options);
+                }
+
     }
+
+
 }

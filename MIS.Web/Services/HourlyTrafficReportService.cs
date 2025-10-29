@@ -63,7 +63,8 @@ namespace MIS.Web.Services
                 {
                     Items = apiResult?.Select(x => new HourlyTrafficModel
                     {
-                        Period = x.Period,
+                        StartDate = x.StartDate,
+                        EndDate = x.EndDate,
                         Classification = x.Classification,
                         Count = x.Count
                     }).ToList() ?? new List<HourlyTrafficModel>()

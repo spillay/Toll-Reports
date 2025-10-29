@@ -126,14 +126,69 @@ namespace Toll.Reporting.Api.Repositories
                 .ToListAsync();
 
             //  Return paged result
+            var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
+
             return new PagedResult<TransactionDetailsDto>
             {
                 Items = pagedItems,
                 TotalCount = totalCount,
                 Page = page,
-                PageSize = pageSize
+                PageSize = pageSize,
+                TotalPages = totalPages
             };
 
+        }
+
+        public async Task<TransactionFilterOptionsDto> GetTransactionFilterOptionsAsync(
+            DateTime startDate,
+            DateTime endDate,
+            List<string>? operationalShift = null,
+            List<string>? tollOperators = null,
+            List<string>? laneNames = null,
+            List<string>? paymentMethods = null)
+        {
+            var query = from t in _context.Transactions
+                        join s in _context.Shifts on t.ShiftId equals s.ShiftId into shiftGroup
+                        from s in shiftGroup.DefaultIfEmpty()
+                        join su in _context.SystemUsers on t.SystemUserId equals su.SystemUserId into userGroup
+                        from su in userGroup.DefaultIfEmpty()
+                        join l in _context.Lanes on t.LaneId equals l.LaneId into laneGroup
+                        from l in laneGroup.DefaultIfEmpty()
+                        join tt in _context.TransactionTypes on t.TransactionTypeId equals tt.TransactionTypeId into typeGroup
+                        from tt in typeGroup.DefaultIfEmpty()
+                        where t.TransactionDateTime >= startDate && t.TransactionDateTime <= endDate
+                        select new
+                        {
+                            Shift = s.Description,
+                            Operator = su.Username,
+                            Lane = l.LaneName,
+                            Payment = tt.Description
+                        };
+
+            if (operationalShift?.Any() == true && !operationalShift.Contains("-- All --"))
+                query = query.Where(x => operationalShift.Contains(x.Shift));
+
+            if (tollOperators?.Any() == true && !tollOperators.Contains("-- All --"))
+                query = query.Where(x => tollOperators.Contains(x.Operator));
+
+            if (laneNames?.Any() == true && !laneNames.Contains("-- All --"))
+                query = query.Where(x => laneNames.Contains(x.Lane));
+
+            if (paymentMethods?.Any() == true && !paymentMethods.Contains("-- All --"))
+                query = query.Where(x => paymentMethods.Contains(x.Payment));
+
+            var shifts = await query.Select(x => x.Shift).Where(x => x != null && x != "").Distinct().OrderBy(x => x).ToListAsync();
+            var ops = await query.Select(x => x.Operator).Where(x => x != null && x != "").Distinct().OrderBy(x => x).ToListAsync();
+            var lanes = await query.Select(x => x.Lane).Where(x => x != null && x != "").Distinct().OrderBy(x => x).ToListAsync();
+            var pays = await query.Select(x => x.Payment).Where(x => x != null && x != "").Distinct().OrderBy(x => x).ToListAsync();
+
+            return new TransactionFilterOptionsDto
+            {
+                Shifts = shifts,
+                TollOperators = ops,
+                Lanes = lanes,
+                PaymentMethods = pays
+            };
         }
 
         // ==================== LOOKUP QUERIES ====================

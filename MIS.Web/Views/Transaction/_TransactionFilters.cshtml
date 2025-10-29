@@ -1,90 +1,85 @@
 ﻿@model MIS.Web.Models.TransactionInputModel
+@removeTagHelper "Microsoft.AspNetCore.Mvc.TagHelpers.OptionTagHelper, Microsoft.AspNetCore.Mvc.TagHelpers"
 
-<form method="get" asp-action="Transaction" asp-controller="Transaction">
-    <div class="row mb-3">
+<form method="get"
+      asp-controller="Transaction"
+      asp-action="Transaction"
+      id="filterForm"
+      class="mb-4">
 
-        <!-- Start Date & Time -->
+    <div class="row g-3 align-items-end">
+
+        <!-- Start Date -->
         <div class="col-md-3">
             <label for="StartDate" class="form-label">Start Date & Time</label>
-            <input type="datetime-local" id="StartDate" name="StartDate" class="form-control"
+            <input type="datetime-local"
+                   id="StartDate"
+                   name="StartDate"
+                   class="form-control"
                    value="@(Model?.StartDate.ToString("yyyy-MM-ddTHH:mm") ?? "")" />
         </div>
 
-        <!-- End Date & Time -->
+        <!-- End Date -->
         <div class="col-md-3">
             <label for="EndDate" class="form-label">End Date & Time</label>
-            <input type="datetime-local" id="EndDate" name="EndDate" class="form-control"
+            <input type="datetime-local"
+                   id="EndDate"
+                   name="EndDate"
+                   class="form-control"
                    value="@(Model?.EndDate.ToString("yyyy-MM-ddTHH:mm") ?? "")" />
         </div>
 
-        <!-- Payment Method -->
+        <!-- Shift -->
         <div class="col-md-3">
-            <label for="PaymentMethod" class="form-label">Payment Method</label>
-            <select id="PaymentMethod" name="PaymentMethod" class="form-select">
-                <option value="">All</option>
-                @if (ViewBag.PaymentMethods != null)
+            <label for="Shift" class="form-label">Shift</label>
+            <select name="Shift" id="Shift" class="form-select">
+                <option value="">-- All --</option>
+                @foreach (var shift in (ViewBag.Shifts as List<string> ?? new List<string>()))
                 {
-                    foreach (var method in ViewBag.PaymentMethods)
-                    {
-                        var selected = (Model?.PaymentMethod == method) ? "selected" : "";
-                        @Html.Raw($"<option value='{method}' {selected}>{method}</option>")
-                    }
+                    <option value="@shift" @(Model?.Shift == shift ? "selected" : "")>@shift</option>
                 }
             </select>
         </div>
 
-        <!-- Operational Shift -->
+        <!-- Toll Operator -->
         <div class="col-md-3">
-            <label for="Shift" class="form-label">Operational Shift</label>
-            <select id="Shift" name="Shift" class="form-select">
-                <option value="">All</option>
-                @if (ViewBag.Shifts != null)
+            <label for="TollOperatorID" class="form-label">Toll Operator</label>
+            <select name="TollOperatorID" id="TollOperatorID" class="form-select">
+                <option value="">-- All --</option>
+                @foreach (var op in (ViewBag.TollOperators as List<string> ?? new List<string>()))
                 {
-                    foreach (var shift in ViewBag.Shifts)
-                    {
-                        var selected = (Model?.Shift == shift) ? "selected" : "";
-                        @Html.Raw($"<option value='{shift}' {selected}>{shift}</option>")
-                    }
-                }
-            </select>
-        </div>
-
-        <!-- Toll Operator ID -->
-        <div class="col-md-3 mt-3">
-            <label for="TollOperatorID" class="form-label">Toll Operator ID</label>
-            <select id="TollOperatorID" name="TollOperatorID" class="form-select">
-                <option value="">All</option>
-                @if (ViewBag.TollOperators != null)
-                {
-                    foreach (var op in ViewBag.TollOperators)
-                    {
-                        var selected = (Model?.TollOperatorID == op) ? "selected" : "";
-                        @Html.Raw($"<option value='{op}' {selected}>{op}</option>")
-                    }
+                    <option value="@op" @(Model?.TollOperatorID == op ? "selected" : "")>@op</option>
                 }
             </select>
         </div>
 
         <!-- Lane -->
-        <div class="col-md-3 mt-3">
+        <div class="col-md-3">
             <label for="lane_Nr" class="form-label">Lane</label>
-            <select id="lane_Nr" name="lane_Nr" class="form-select">
-                <option value="">All</option>
-                @if (ViewBag.Lanes != null)
+            <select name="lane_Nr" id="lane_Nr" class="form-select">
+                <option value="">-- All --</option>
+                @foreach (var lane in (ViewBag.Lanes as List<string> ?? new List<string>()))
                 {
-                    foreach (var lane in ViewBag.Lanes)
-                    {
-                        var selected = (Model?.lane_Nr == lane) ? "selected" : "";
-                        @Html.Raw($"<option value='{lane}' {selected}>{lane}</option>")
-                    }
+                    <option value="@lane" @(Model?.lane_Nr == lane ? "selected" : "")>@lane</option>
                 }
             </select>
         </div>
 
-        <!-- Filter Button -->
-        <div class="col-md-3 mt-3 d-flex align-items-end">
-            <button type="submit" class="btn btn-primary w-100">Filter</button>
+        <!-- Payment -->
+        <div class="col-md-3">
+            <label for="PaymentMethod" class="form-label">Payment Method</label>
+            <select name="PaymentMethod" id="PaymentMethod" class="form-select">
+                <option value="">-- All --</option>
+                @foreach (var pm in (ViewBag.PaymentMethods as List<string> ?? new List<string>()))
+                {
+                    <option value="@pm" @(Model?.PaymentMethod == pm ? "selected" : "")>@pm</option>
+                }
+            </select>
         </div>
 
+        <!-- Buttons -->
+        <div class="col-md-3 d-flex">
+            <button type="submit" class="btn btn-primary me-2 w-100">Apply Filters</button>
+        </div>
     </div>
 </form>

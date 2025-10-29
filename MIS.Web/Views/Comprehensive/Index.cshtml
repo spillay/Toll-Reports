@@ -1,4 +1,5 @@
-﻿@model MIS.Web.Models.Comprehensive.PageComprehensiveModel
+﻿@removeTagHelper "Microsoft.AspNetCore.Mvc.TagHelpers.OptionTagHelper, Microsoft.AspNetCore.Mvc.TagHelpers"
+@model MIS.Web.Models.Comprehensive.PageComprehensiveModel
 @using System.Text.Json
 
 @{
@@ -11,82 +12,96 @@
     <div class="card-body">
         <!-- Header -->
         <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
-            <div></div>
             <h2 class="mb-0 fw-bold text-primary">Comprehensive Report</h2>
-            <div></div>
         </div>
 
         <!-- Filters -->
         <form method="get" asp-controller="Comprehensive" asp-action="Index" class="row g-3 mb-3">
+
+            <!-- Start Date -->
             <div class="col-md-2">
                 <label class="form-label fw-semibold">Start Date & Time</label>
-                <input type="datetime-local" class="form-control" name="StartDate" value="@Model.Input.StartDate.ToString("yyyy-MM-ddTHH:mm")" />
+                <input type="datetime-local" class="form-control" name="StartDate"
+                       value="@Model.Input.StartDate.ToString("yyyy-MM-ddTHH:mm")" />
             </div>
 
+            <!-- End Date -->
             <div class="col-md-2">
                 <label class="form-label fw-semibold">End Date & Time</label>
-                <input type="datetime-local" class="form-control" name="EndDate" value="@Model.Input.EndDate.ToString("yyyy-MM-ddTHH:mm")" />
+                <input type="datetime-local" class="form-control" name="EndDate"
+                       value="@Model.Input.EndDate.ToString("yyyy-MM-ddTHH:mm")" />
             </div>
 
+            <!-- Shift -->
             <div class="col-md-2">
                 <label class="form-label fw-semibold">Shift</label>
                 <select class="form-select" name="Shift">
-                    <option value="">All</option>
+                    <option value="" selected="@(string.IsNullOrEmpty(Model.Input.Shift) ? "selected" : null)">All</option>
                     @foreach (var s in Model.Shifts)
                     {
-                        <option value="@s" selected=@(s == Model.Input.Shift ? "selected" : "")>@s</option>
+                        <option value="@s" @(Model.Input.Shift == s ? "selected" : null)>@s</option>
                     }
                 </select>
             </div>
 
+            <!-- Lane -->
             <div class="col-md-3">
                 <label class="form-label fw-semibold">Lane</label>
                 <select class="form-select" name="LaneName">
-                    <option value="">All</option>
+                    <option value="" selected="@(string.IsNullOrEmpty(Model.Input.LaneName) ? "selected" : null)">All</option>
                     @foreach (var l in Model.Lanes)
                     {
-                        <option value="@l" selected=@(l == Model.Input.LaneName ? "selected" : "")>@l</option>
+                        <option value="@l" @(Model.Input.LaneName == l ? "selected" : null)>@l</option>
                     }
                 </select>
             </div>
 
+            <!-- Payment Method -->
             <div class="col-md-3">
                 <label class="form-label fw-semibold">Method of Payment</label>
                 <select class="form-select" name="MethodOfPayment">
-                    <option value="">All</option>
+                    <option value="" selected="@(string.IsNullOrEmpty(Model.Input.MethodOfPayment) ? "selected" : null)">All</option>
                     @foreach (var p in Model.PaymentMethods)
                     {
-                        <option value="@p" selected="@(p == Model.Input.MethodOfPayment ? "selected" : null)">@p</option>
-
-
+                        <option value="@p" @(Model.Input.MethodOfPayment == p ? "selected" : null)>@p</option>
                     }
                 </select>
             </div>
 
+            <!-- Discount Type -->
             <div class="col-md-3">
                 <label class="form-label fw-semibold">Discount Type</label>
                 <select class="form-select" name="DiscountType">
-                    <option value="">All</option>
+                    <option value="" selected="@(string.IsNullOrEmpty(Model.Input.DiscountType) ? "selected" : null)">All</option>
                     @foreach (var d in Model.DiscountTypes)
                     {
-                        <option value="@d" selected=@(d == Model.Input.DiscountType ? "selected" : "")>@d</option>
+                        <option value="@d" @(Model.Input.DiscountType == d ? "selected" : null)>@d</option>
                     }
                 </select>
             </div>
 
+            <!-- Classification -->
             <div class="col-md-3">
                 <label class="form-label fw-semibold">Classification</label>
                 <select class="form-select" name="Classification">
-                    <option value="">All</option>
+                    <option value="" selected="@(string.IsNullOrEmpty(Model.Input.Classification) ? "selected" : null)">All</option>
                     @foreach (var c in Model.Classifications)
                     {
-                        <option value="@c" selected=@(c == Model.Input.Classification ? "selected" : "")>@c</option>
+                        var displayLabel = c == "Motor Cycle" ? "Class M" : c;
+                        var value = c == "Motor Cycle" ? "Class M" : c;
+                        <option value="@value" @(Model.Input.Classification == c || Model.Input.Classification == "Class M" ? "selected" : null)>
+                            @displayLabel
+                        </option>
                     }
                 </select>
             </div>
 
+            <!-- Buttons -->
             <div class="col-md-2 d-flex align-items-end">
-                <a asp-controller="Comprehensive" asp-action="ExportExcel" asp-route-StartDate="@Model.Input.StartDate.ToString("o")" asp-route-EndDate="@Model.Input.EndDate.ToString("o")" class="btn btn-success w-100 shadow-sm">
+                <a asp-controller="Comprehensive" asp-action="ExportExcel"
+                   asp-route-StartDate="@Model.Input.StartDate.ToString("o")"
+                   asp-route-EndDate="@Model.Input.EndDate.ToString("o")"
+                   class="btn btn-success w-100 shadow-sm">
                     <i class="bi bi-file-earmark-excel"></i> Export Excel
                 </a>
             </div>
@@ -113,7 +128,7 @@
                         <th></th>
                         @foreach (var cls in Model.TollClasses)
                         {
-                            <th>@cls</th>
+                            <th>@(cls == "Motor Cycle" ? "Class M" : cls)</th>
                         }
                         <th>TOTAL</th>
                     </tr>
@@ -134,7 +149,10 @@
 
                                 @foreach (var cls in Model.TollClasses)
                                 {
-                                    var data = row.Classes.ContainsKey(cls) ? row.Classes[cls] : new MIS.Web.Models.Comprehensive.PageComprehensiveModel.ClassMetrics();
+                                    var data = row.Classes.ContainsKey(cls)
+                                        ? row.Classes[cls]
+                                        : new MIS.Web.Models.Comprehensive.PageComprehensiveModel.ClassMetrics();
+
                                     <td>
                                         @data.Count<br />
                                         @data.CountPercent.ToString("0.##")<br />
@@ -201,6 +219,7 @@
         </div>
     </div>
 </div>
+
 
 <!-- PDF libraries (CDN) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>

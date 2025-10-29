@@ -45,8 +45,14 @@ namespace Toll.Reporting.Api.Controllers
             }
             catch (Exception ex)
             {
+                //  Log to console + return the full message for debugging
                 _logger.LogError(ex, "Error while getting discrepancy");
-                return StatusCode(500, "Internal server error");
+
+                return StatusCode(500, new
+                {
+                    message = ex.Message,
+                    stackTrace = ex.StackTrace
+                });
             }
         }
     }

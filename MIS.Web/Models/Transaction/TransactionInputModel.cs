@@ -1,19 +1,16 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using MIS.Models;
-using MIS.Web.Models.Transaction;
+﻿using MIS.Web.Models.Transaction;
 
 namespace MIS.Web.Models
 {
     public class TransactionInputModel : PageTransactionModel
     {
         public DateTime StartDate { get; set; }
-
         public DateTime EndDate { get; set; }
+        public string? lane_Nr { get; set; }
+        public string? TollOperatorID { get; set; }
+        public string? Shift { get; set; }
+        public string? PaymentMethod { get; set; }
 
-        [BindProperty(SupportsGet = true)] public string? lane_Nr { get; set; }
-        [BindProperty(SupportsGet = true)] public string? TollOperatorID { get; set; }
-        [BindProperty(SupportsGet = true)] public string? Shift { get; set; }
-        [BindProperty(SupportsGet = true)] public string? PaymentMethod { get; set; }
-
+        public FilterOptionsModel FilterOptions { get; set; } = new();
     }
 }

@@ -60,8 +60,9 @@ namespace MIS.Web.Services
 
             string baseUrl = _configuration["BaseApiUrl:Link"];
             string endpoint = _configuration["ApiSettings:ComprehensiveReportEndpoint"];
-           // string url = $"{baseUrl}{endpoint}?{string.Join("&", queryParams)}";
-            string url = $"{baseUrl}{endpoint}";
+            string url = $"{baseUrl}{endpoint}?{string.Join("&", queryParts)}";
+            Console.WriteLine($"Comprehensive API URL: {url}");
+
 
             var response = await _httpClient.GetAsync(url);
             response.EnsureSuccessStatusCode();

@@ -4,7 +4,6 @@ using TollReportingSystem.Data;
 
 namespace Toll.Reporting.Api.Repositories
 {
-
     public class DiscrepancyRepository : IDiscrepancyRepository
     {
         private readonly ApplicationDbContext _context;
@@ -15,17 +14,17 @@ namespace Toll.Reporting.Api.Repositories
         }
 
         public async Task<PagedResult<DiscrepancyDto>> GetDiscrepancyAsync(
-            DateTime startDate,
-            DateTime endDate,
-            List<string>? operationalShift = null,
-            List<string>? tollOperators = null,
-            List<string>? laneNames = null,
-            List<string>? paymentMethods = null,
-            List<string>? takenAction = null,
-            int page = 1,
-            int pageSize = 50)
+             DateTime startDate,
+             DateTime endDate,
+             List<string>? operationalShift = null,
+             List<string>? tollOperators = null,
+             List<string>? laneNames = null,
+             List<string>? paymentMethods = null,
+             List<string>? takenAction = null,
+             int page = 1,
+             int pageSize = 50)
         {
-            
+            // Step 1. Build base query from database
             var query =
                 from t in _context.Transactions
                 join s in _context.Shifts on t.ShiftId equals s.ShiftId into shiftGroup
@@ -49,85 +48,90 @@ namespace Toll.Reporting.Api.Repositories
                 where t.TransactionDateTime >= startDate && t.TransactionDateTime <= endDate
                 select new
                 {
-                    t,
-                    s,
-                    su,
-                    l,
-                    tt,
-                    tc1,
-                    tc2,
-                    tc3,
-                    tpd
+                    t.TransactionDateTime,
+                    Lane_Nr = t.LaneId,
+                    Trx_Sequence_Nr = t.TransactionNumber,
+                    ShiftDescription = s.Description,
+                    OperatorUsername = su.Username,
+                    LaneName = l.LaneName,
+                    PaymentDescription = tt.Description,
+                    ManualClass = tc1.ClassDescription,
+                    AutomaticClass = tc2.ClassDescription,
+                    ActualClass = tc3.ClassDescription,
+                    AmountInclusive = (decimal?)tpd.AmountInclusive,
+                    AmountExclusive = (decimal?)tpd.AmountExclusive
                 };
 
-           
+            // Step 2. Apply pre-projection filters
             if (operationalShift?.Any() == true)
-            {
-                query = query.Where(x => operationalShift.Contains(x.s != null ? x.s.Description : string.Empty));
-            }
+                query = query.Where(x => operationalShift.Contains(x.ShiftDescription));
 
             if (tollOperators?.Any() == true)
-            {
-                query = query.Where(x => tollOperators.Contains(x.su != null ? x.su.Username : string.Empty));
-            }
+                query = query.Where(x => tollOperators.Contains(x.OperatorUsername));
 
             if (laneNames?.Any() == true)
-            {
-                query = query.Where(x => laneNames.Contains(x.l != null ? x.l.LaneName : string.Empty));
-            }
+                query = query.Where(x => laneNames.Contains(x.LaneName));
 
             if (paymentMethods?.Any() == true)
+                query = query.Where(x => paymentMethods.Contains(x.PaymentDescription));
+
+            // Step 3. Fetch data (so we can use .ToString formatting safely)
+            var rawData = await query.ToListAsync();
+
+            // Step 4. Project to DTOs (in memory)
+            var projected = rawData.Select(x => new DiscrepancyDto
             {
-                query = query.Where(x => paymentMethods.Contains(x.tt != null ? x.tt.Description : string.Empty));
-            }
+                Lane_Nr = x.Lane_Nr,
+                Trx_Sequence_Nr = x.Trx_Sequence_Nr.ToString(),
+                Trx_Date = x.TransactionDateTime.ToString("dd/MM/yyyy"),
+                Trx_Time = x.TransactionDateTime.ToString("HH:mm:ss"),
+                Operational_Shift = x.ShiftDescription ?? "",
+                Toll_Operator_ID = x.OperatorUsername ?? "",
+                Lane_Name = x.LaneName ?? "",
+                Method_of_Payment = x.PaymentDescription ?? "",
+                Toll_Collector_Class = x.ManualClass ?? "",
+                AVC_Class = x.AutomaticClass ?? "",
+                Final_Class = x.ActualClass ?? "",
+                Tariff = x.AmountInclusive ?? 0,
+                Updated_Tariff = x.AmountExclusive ?? 0,
+                TakenAction =
+                    (x.ManualClass == x.ActualClass && x.AutomaticClass == x.ActualClass)
+                        ? "Both Correct"
+                        : (x.ManualClass == x.ActualClass)
+                            ? "Operator Correct"
+                            : (x.AutomaticClass == x.ActualClass)
+                                ? "AVC Correct"
+                                : "Both Incorrect"
+            }).ToList();
 
-            var projected = query.Select(x => new DiscrepancyDto
-            {
-                Lane_Nr = x.t.LaneId,
-                Trx_Sequence_Nr = x.t.TransactionNumber.ToString(),
-                Trx_Date = x.t.TransactionDateTime.ToString("dd/MM/yyyy"),
-                Trx_Time = x.t.TransactionDateTime.ToString("HH:mm:ss"),
-                Operational_Shift = x.s != null ? x.s.Description : string.Empty,
-                Toll_Operator_ID = x.su != null ? x.su.Username : string.Empty,
-                Lane_Name = x.l != null ? x.l.LaneName : string.Empty,
-                Method_of_Payment = x.tt != null ? x.tt.Description : string.Empty,
-                Toll_Collector_Class = x.tc1 != null ? x.tc1.ClassDescription : string.Empty,
-                AVC_Class = x.tc2 != null ? x.tc2.ClassDescription : string.Empty,
-                Final_Class = x.tc3 != null ? x.tc3.ClassDescription : string.Empty,
-                Tariff = x.tpd != null ? (decimal?)x.tpd.AmountInclusive : null,
-                Updated_Tariff = x.tpd != null ? (decimal?)x.tpd.AmountExclusive : null,
-
-                TakenAction = (x.tc1 != null ? x.tc1.ClassDescription : string.Empty) == (x.tc3 != null ? x.tc3.ClassDescription : string.Empty)
-                    && (x.tc2 != null ? x.tc2.ClassDescription : string.Empty) == (x.tc3 != null ? x.tc3.ClassDescription : string.Empty)
-                    ? "Both Correct"
-                    : (x.tc1 != null ? x.tc1.ClassDescription : string.Empty) == (x.tc3 != null ? x.tc3.ClassDescription : string.Empty)
-                        ? "Operator Correct"
-                        : (x.tc2 != null ? x.tc2.ClassDescription : string.Empty) == (x.tc3 != null ? x.tc3.ClassDescription : string.Empty)
-                            ? "AVC Correct"
-                            : "Both Incorrect"
-            });
-
+            // ✅ Step 5. Apply TakenAction filter (case-insensitive)
             if (takenAction?.Any() == true)
             {
-                projected = projected.Where(d => takenAction.Contains(d.TakenAction));
+                var normalizedActions = takenAction
+                    .Where(a => !string.IsNullOrWhiteSpace(a))
+                    .Select(a => a.Trim().ToLower())
+                    .ToList();
+
+                projected = projected
+                    .Where(d => normalizedActions.Contains(d.TakenAction.Trim().ToLower()))
+                    .ToList();
             }
 
-            // Count and page
-            var totalCount = await projected.CountAsync();
-
-            var items = await projected
-                .OrderBy(d => d.Trx_Date)
-                .ThenBy(d => d.Trx_Time)
+            // Step 6. Pagination
+            var totalCount = projected.Count;
+            var pagedItems = projected
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
-                .ToListAsync();
+                .ToList();
 
+            // Step 7. Return paged result
             return new PagedResult<DiscrepancyDto>
             {
-                Items = items,
+                Items = pagedItems,
                 TotalCount = totalCount,
                 Page = page,
-                PageSize = pageSize
+                PageSize = pageSize,
+                TotalPages = (int)Math.Ceiling((double)totalCount / pageSize)
             };
         }
     }

@@ -1,5 +1,7 @@
 ﻿@using MIS.Web.Models.Traffic.Hourly
 @model PageHourlyTrafficModel
+@using System.Text.Json
+
 
 @{
     var classifications = ViewBag.Classifications as List<string> ?? new List<string>();
@@ -49,21 +51,24 @@
                 <tbody>
                     @if (Model.Items.Any())
                     {
-                        var dayGroups = Model.Items.GroupBy(x => x.Period.Date).OrderBy(g => g.Key);
+                        // Use the classifications declared at the top of the page
+                        var dayGroups = Model.Items.GroupBy(x => x.StartDate.Date).OrderBy(g => g.Key);
+
+                        // Global accumulators
+                        var globalTotals = classifications.ToDictionary(c => c, c => 0);
+                        int totalHours = 0;
 
                         foreach (var dayGroup in dayGroups)
                         {
                             var dailyTotals = classifications.ToDictionary(c => c, c => 0);
 
-                            <!-- Day Header Row -->
                             <tr class="table-light fw-bold">
                                 <td colspan="@(classifications.Count + 3)" class="text-start">
                                     @dayGroup.Key.ToString("dd/MM/yyyy")
                                 </td>
                             </tr>
 
-                            <!-- Hourly Breakdown -->
-                            var hourlyGroups = dayGroup.GroupBy(x => x.Period.Hour).OrderBy(h => h.Key);
+                            var hourlyGroups = dayGroup.GroupBy(x => x.StartDate.Hour).OrderBy(h => h.Key);
 
                             foreach (var hourGroup in hourlyGroups)
                             {
@@ -78,20 +83,16 @@
                                         <td>@count</td>
                                         rowTotal += count;
                                         dailyTotals[cls] += count;
+                                        globalTotals[cls] += count; // accumulate global totals
                                     }
                                     <td>@rowTotal</td>
                                 </tr>
+                                totalHours++;
                             }
 
                             var dailyGrandTotal = dailyTotals.Values.Sum();
                             var dailyPercentages = dailyTotals.ToDictionary(kv => kv.Key, kv => dailyGrandTotal > 0 ? (double)kv.Value / dailyGrandTotal * 100 : 0);
-                            var dailyAverage = hourlyGroups.Count() > 0
-                            ? dailyTotals.ToDictionary(kv => kv.Key, kv => (double)kv.Value / hourlyGroups.Count())
-                            : dailyTotals.ToDictionary(kv => kv.Key, kv => 0.0);
-                            var dailyMaximum = classifications.ToDictionary(cls => cls,
-                            cls => dayGroup.Where(x => x.Classification == cls).Select(x => x.Count).DefaultIfEmpty(0).Max());
 
-                            <!-- Daily Summary Rows -->
                             <tr class="fw-bold bg-light">
                                 <td colspan="2">Total for the Day</td>
                                 @foreach (var cls in classifications)
@@ -105,39 +106,72 @@
                                 <td colspan="2">Percentage</td>
                                 @foreach (var cls in classifications)
                                 {
-                                    <td>@dailyPercentages[cls].ToString("0.00") %</td>
+                                    <td>@dailyPercentages[cls].ToString("0.00")%</td>
                                 }
                                 <td>100%</td>
                             </tr>
-
-                            <tr class="fw-bold bg-light">
-                                <td colspan="2">Average</td>
-                                @foreach (var cls in classifications)
-                                {
-                                    <td>@Math.Round(dailyAverage[cls])</td>
-                                }
-                                <td>@Math.Round(dailyAverage.Values.Sum())</td>
-                            </tr>
-
-                            <tr class="fw-bold bg-light">
-                                <td colspan="2">Maximum</td>
-                                @foreach (var cls in classifications)
-                                {
-                                    <td>@dailyMaximum[cls]</td>
-                                }
-                                <td>@dailyMaximum.Values.Sum()</td>
-                            </tr>
                         }
+
+                        // === GLOBAL SUMMARY ===
+                        var globalGrandTotal = globalTotals.Values.Sum();
+                        var globalPercentages = globalTotals.ToDictionary(kv => kv.Key, kv => globalGrandTotal > 0 ? (double)kv.Value / globalGrandTotal * 100 : 0);
+                        var globalAverage = globalTotals.ToDictionary(kv => kv.Key, kv => totalHours > 0 ? (int)Math.Round((double)kv.Value / totalHours) : 0);
+                        var globalMaximum = classifications.ToDictionary(cls => cls,
+                        cls => Model.Items
+                        .Where(x => x.Classification == cls)
+                        .GroupBy(x => x.StartDate.Date)
+                        .Select(g => g.Sum(x => x.Count))
+                        .DefaultIfEmpty(0)
+                        .Max());
+
+                        <!-- Global summary rows BELOW entire table -->
+                        <tr class="table-secondary fw-bold">
+                            <td colspan="2">Total for the Day</td>
+                            @foreach (var cls in classifications)
+                            {
+                                <td>@globalTotals[cls].ToString("N0")</td>
+                            }
+                            <td>@globalGrandTotal.ToString("N0")</td>
+                        </tr>
+
+                        <tr class="table-secondary fw-bold">
+                            <td colspan="2">Percentage</td>
+                            @foreach (var cls in classifications)
+                            {
+                                <td>@globalPercentages[cls].ToString("0.00")%</td>
+                            }
+                            <td>100%</td>
+                        </tr>
+
+                        <tr class="table-secondary fw-bold">
+                            <td colspan="2">Average</td>
+                            @foreach (var cls in classifications)
+                            {
+                                <td>@globalAverage[cls]</td>
+                            }
+                            <td>@globalAverage.Values.Sum()</td>
+                        </tr>
+
+                        <tr class="table-secondary fw-bold">
+                            <td colspan="2">Maximum</td>
+                            @foreach (var cls in classifications)
+                            {
+                                <td>@globalMaximum[cls]</td>
+                            }
+                            <td>@globalMaximum.Values.Sum()</td>
+                        </tr>
                     }
                     else
                     {
                         <tr>
-                            <td colspan="@(classifications.Count + 3)" class="text-center">
+                            <td colspan="@(classifications.Count + 3)" class="text-center text-muted py-4">
+                                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
                                 No data available for the selected range.
                             </td>
                         </tr>
                     }
                 </tbody>
+
             </table>
         </div>
     </div>
@@ -150,194 +184,212 @@
 
     <script>
         document.addEventListener("DOMContentLoaded", function () {
-            // Inject server-side values safely
             const currentUser = '@(User.Identity?.Name ?? "Unknown User")';
             const reportGeneratedAt = '@DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")';
-            const reportVersion = '1.0';
+            const reportVersion = "1.0";
+            const leftLogoPath = "/images/lCC Logo.jpg";
+            const rightLogoPath = "/images/ICT-Works Logo.jpg";
 
-            // Logo file paths (update if your logos are in a different folder or have different filenames)
-            const leftLogoUrl = '/images/lCC Logo.jpg';         // left logo (LCC)
-            const rightLogoUrl = '/images/ICT-Works Logo.jpg'; // right logo (ICT-Works)
+            const filters = {
+                "Start Date": '@Model.Input.StartDate.ToString("dd/MM/yyyy")',
+                "End Date": '@Model.Input.EndDate.ToString("dd/MM/yyyy")',
+                "Classification": '@(Model.Input.Classification ?? "All")',
+                "Operational Day": '@(Model.Input.OperationalDay ? "Yes" : "No")',
+                "Shifts": '@(Model.Input.Shifts != null && Model.Input.Shifts.Any() ? string.Join(", ", Model.Input.Shifts) : "All")'
+            };
 
-            // Helper: load image and convert to data URL using a canvas (supports JPEG/PNG)
-            function loadImageAsDataUrl(src) {
-                return new Promise((resolve) => {
-                    const img = new Image();
-                    img.crossOrigin = 'Anonymous'; // attempt to avoid tainting canvas
-                    img.onload = function () {
-                        try {
-                            const canvas = document.createElement('canvas');
-                            canvas.width = img.naturalWidth;
-                            canvas.height = img.naturalHeight;
-                            const ctx = canvas.getContext('2d');
-                            ctx.drawImage(img, 0, 0);
-                            // Prefer PNG if source contains transparency; otherwise use JPEG
-                            const mime = src.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
-                            const dataUrl = canvas.toDataURL(mime);
-                            resolve(dataUrl);
-                        } catch (err) {
-                            // If canvas is tainted or something fails, resolve null
-                            console.warn('Could not convert image to data URL', src, err);
-                            resolve(null);
-                        }
-                    };
-                    img.onerror = function () {
-                        // Image not found or failed to load
-                        console.warn('Logo failed to load:', src);
-                        resolve(null);
-                    };
-                    img.src = src;
-                });
-            }
+            const trafficData = @Html.Raw(JsonSerializer.Serialize(Model.Items ?? new List<MIS.Web.Models.Traffic.Hourly.HourlyTrafficModel>()));
+            const classifications = @Html.Raw(JsonSerializer.Serialize(ViewBag.Classifications ?? new List<string>()));
 
-            // === PDF Export ===
+            // 🖼️ Helper to load images safely
+            const loadImage = src => new Promise(resolve => {
+                const img = new Image();
+                img.crossOrigin = 'Anonymous';
+                img.onload = () => resolve(img);
+                img.onerror = () => resolve(null);
+                img.src = src;
+            });
+
+           
             document.getElementById("btnDownloadPdf").addEventListener("click", async function () {
                 const { jsPDF } = window.jspdf;
                 const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
-
                 const pageWidth = doc.internal.pageSize.getWidth();
                 const pageHeight = doc.internal.pageSize.getHeight();
                 const margin = 40;
 
-                // Load logos in parallel; may return null if unavailable
-                const [leftDataUrl, rightDataUrl] = await Promise.all([
-                    loadImageAsDataUrl(leftLogoUrl),
-                    loadImageAsDataUrl(rightLogoUrl)
-                ]);
+                // Load logos
+                const [leftLogo, rightLogo] = await Promise.all([loadImage(leftLogoPath), loadImage(rightLogoPath)]);
+                const logoSize = 90;
+                if (leftLogo) doc.addImage(leftLogo, "JPEG", margin, 25, logoSize, logoSize);
+                if (rightLogo) doc.addImage(rightLogo, "JPEG", pageWidth - margin - logoSize, 25, logoSize, logoSize);
 
-                // Add logos if available (scale to fit)
-                const logoSize = { width: 80, height: 80 }; // visual size in PDF points
-                if (leftDataUrl) {
-                    try { doc.addImage(leftDataUrl, leftDataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG', margin, 30, logoSize.width, logoSize.height); }
-                    catch (e) { console.warn('Failed to add left logo to PDF', e); }
-                }
-                if (rightDataUrl) {
-                    try { doc.addImage(rightDataUrl, rightDataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG', pageWidth - margin - logoSize.width, 30, logoSize.width, logoSize.height); }
-                    catch (e) { console.warn('Failed to add right logo to PDF', e); }
-                }
-
-                // Title (centered) and subtitle (centered)
+                // Title
                 doc.setFont("helvetica", "bold");
-                doc.setFontSize(14);
-                doc.text("LEKKI CONCESSION COMPANY LIMITED", pageWidth / 2, 50, { align: "center" });
+                doc.setFontSize(16);
+                doc.text("Hourly Traffic Report", pageWidth / 2, 60, { align: "center" });
 
-                doc.setFontSize(12);
-                doc.text("Hourly Traffic Report", pageWidth / 2, 72, { align: "center" });
-
-                // Metadata lines - LEFT aligned (you asked date should not be in the center)
+                // Filters section
                 doc.setFont("helvetica", "normal");
                 doc.setFontSize(10);
-                const metaStartY = 110;
-                doc.text(`Generated By: ${currentUser}`, margin, metaStartY);
-                doc.text(`Date: ${reportGeneratedAt}`, margin, metaStartY + 14);
-                doc.text(`Version: ${reportVersion}`, margin, metaStartY + 28);
-
-                // Grab table headers & rows from DOM
-                const table = document.querySelector("table");
-                // If no table, bail out gracefully
-                if (!table) {
-                    alert('No table found to export.');
-                    return;
+                let y = 110;
+                doc.text("Filters Used:", margin, y);
+                y += 14;
+                for (const [key, value] of Object.entries(filters)) {
+                    doc.text(`${key}: ${value}`, margin, y);
+                    y += 12;
                 }
 
-                const headers = Array.from(table.querySelectorAll("thead th"))
-                                     .map(th => th.innerText.trim());
-
-                // Collect rows: skip rows with colspan header (day headers) so the exported table is rectangular.
-                // We'll export the full tbody, but convert day-header rows (the ones with colspan) into a single row with date in first column.
-                const rawRows = Array.from(table.querySelectorAll("tbody tr"));
-                const bodyRows = [];
-
-                rawRows.forEach(tr => {
-                    const tds = Array.from(tr.querySelectorAll("td"));
-                    // If this is a day header row (colspan present), produce a single-row entry with date in first column and blanks afterwards.
-                    if (tds.length === 1 && tds[0].hasAttribute('colspan')) {
-                        const dateText = tds[0].innerText.trim();
-                        // push a row where the first column is the date and the rest are empty to keep shape
-                        const emptyRow = new Array(headers.length).fill('');
-                        emptyRow[0] = dateText;
-                        bodyRows.push(emptyRow);
-                    } else {
-                        // normal row: map all td text values (trimmed)
-                        const values = tds.map(td => td.innerText.trim());
-                        // If the row has fewer columns than headers (unlikely), pad
-                        while (values.length < headers.length) values.push('');
-                        bodyRows.push(values);
-                    }
+                // Group data by date/hour
+                const grouped = {};
+                trafficData.forEach(item => {
+                    const date = item.StartDate?.split("T")[0];
+                    const hour = new Date(item.StartDate).getHours();
+                    if (!grouped[date]) grouped[date] = {};
+                    if (!grouped[date][hour]) grouped[date][hour] = [];
+                    grouped[date][hour].push(item);
                 });
 
-                // autoTable - use light neutral head background and alternating very light rows
+                const headers = ["Date", "Hour", ...classifications, "Total"];
+                const rows = [];
+
+                // Build rows
+                for (const [date, hourGroups] of Object.entries(grouped)) {
+                    rows.push([date, "", ...Array(classifications.length).fill(""), ""]);
+
+                    for (const [hour, list] of Object.entries(hourGroups)) {
+                        const hourLabel = `${String(hour).padStart(2, "0")}:00`;
+                        let total = 0;
+                        const row = ["", hourLabel];
+                        classifications.forEach(c => {
+                            const found = list.find(x => x.Classification === c);
+                            const val = found ? found.Count : 0;
+                            total += val;
+                            row.push(val);
+                        });
+                        row.push(total);
+                        rows.push(row);
+                    }
+
+                    const totalsPerClass = classifications.map(c =>
+                        Object.values(hourGroups).flat().filter(r => r.Classification === c)
+                            .reduce((a, b) => a + (b.Count || 0), 0)
+                    );
+                    const dailyTotal = totalsPerClass.reduce((a, b) => a + b, 0);
+                    const percentPerClass = totalsPerClass.map(v =>
+                        dailyTotal > 0 ? `${((v / dailyTotal) * 100).toFixed(2)}%` : "0.00%"
+                    );
+
+                    rows.push(["", "Total for the Day", ...totalsPerClass, dailyTotal]);
+                    rows.push(["", "Percentage", ...percentPerClass, "100%"]);
+                }
+
+                // Global summary
+                const totals = classifications.map(c =>
+                    trafficData.filter(x => x.Classification === c).reduce((a, b) => a + (b.Count || 0), 0)
+                );
+                const grandTotal = totals.reduce((a, b) => a + b, 0);
+                const hoursCount = Object.values(grouped).reduce((acc, g) => acc + Object.keys(g).length, 0);
+                const averages = totals.map(t => hoursCount > 0 ? Math.round(t / hoursCount) : 0);
+                const maxPerClass = classifications.map(c => {
+                    const perDay = {};
+                    trafficData.filter(x => x.Classification === c).forEach(x => {
+                        const d = x.StartDate?.split("T")[0];
+                        perDay[d] = (perDay[d] || 0) + (x.Count || 0);
+                    });
+                    return Math.max(...Object.values(perDay), 0);
+                });
+
+                rows.push(["", "Total (Overall)", ...totals, grandTotal]);
+                rows.push(["", "Average", ...averages, averages.reduce((a, b) => a + b, 0)]);
+                rows.push(["", "Maximum", ...maxPerClass, maxPerClass.reduce((a, b) => a + b, 0)]);
+
+                // Render PDF table
                 doc.autoTable({
                     head: [headers],
-                    body: bodyRows,
-                    startY: metaStartY + 40,
-                    theme: "grid",
-                    styles: {
-                        fontSize: 9,
-                        cellPadding: 4,
-                        halign: "center",
-                        valign: "middle",
-                        textColor: 20
-                    },
-                    headStyles: {
-                        fillColor: [230, 230, 230], // neutral light gray
-                        textColor: 20,
-                        fontStyle: "bold"
-                    },
-                    alternateRowStyles: { fillColor: [250, 250, 250] },
-                    margin: { left: margin, right: margin },
-                    // Ensure day header rows (where first cell contains a date) are left-aligned and span visually
-                    didParseCell: function (data) {
-                        // If the cell is from a "day header" row we created (value looks like dd/MM/yyyy)
-                        if (data.section === 'body' && data.row && data.row.cells && data.row.cells[0]) {
-                            const firstCellText = String(data.row.cells[0].raw || '').trim();
-                            // crude check for dd/MM/yyyy pattern — if match, left-align full row
-                            if (/^\d{2}\/\d{2}\/\d{4}$/.test(firstCellText)) {
-                                // left-align the first cell
-                                data.row.cells[0].styles.halign = 'left';
-                                // also set bold and slightly darker background for that whole row
-                                for (let ci in data.row.cells) {
-                                    data.row.cells[ci].styles.fontStyle = 'bold';
-                                    data.row.cells[ci].styles.fillColor = [245, 245, 245];
-                                }
-                            }
-                        }
+                    body: rows,
+                    startY: y + 10,
+                    theme: 'grid',
+                    headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+                    styles: { fontSize: 9, cellPadding: 4, overflow: 'linebreak' },
+                    didDrawPage: function (data) {
+                        const pageCount = doc.internal.getNumberOfPages();
+                        const currentPage = doc.internal.getCurrentPageInfo().pageNumber;
+                        const footerY = pageHeight - 40;
+                        doc.setFontSize(9);
+                        doc.text("Hourly Traffic Report", margin, footerY);
+                        doc.text(`Generated: ${reportGeneratedAt}`, pageWidth / 2.5, footerY);
+                        doc.text(`User: ${currentUser}`, pageWidth / 1.5, footerY);
+                        doc.text(`Page ${currentPage} of ${pageCount}`, pageWidth - margin, footerY, { align: "right" });
+                        doc.text(`Version: ${reportVersion}`, margin, footerY + 12);
                     }
                 });
 
-                // Footer pagination
-                const pageCount = doc.internal.getNumberOfPages();
-                for (let i = 1; i <= pageCount; i++) {
-                    doc.setPage(i);
-                    doc.setFontSize(9);
-                    doc.setFont("helvetica", "normal");
-                    doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 10, { align: "right" });
-                }
-
-                // Save PDF
-                const filename = `HourlyTrafficReport_${new Date().toISOString().slice(0,19).replace(/[:T]/g, "-")}.pdf`;
+                // Save
+                const filename = `Hourly_Traffic_Report_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`;
                 doc.save(filename);
             });
 
-            // === Excel Export ===
             document.getElementById("btnDownloadExcel").addEventListener("click", function () {
-                const table = document.querySelector("table");
-                if (!table) {
-                    alert('No table found to export.');
+                if (!trafficData.length) {
+                    alert("No data available to export.");
                     return;
                 }
+
+                // === SHEET 1: Report Info ===
+                const infoSheetData = [
+                    ["Hourly Traffic Report"],
+                    [],
+                    ["Generated By", currentUser],
+                    ["Generated On", reportGeneratedAt],
+                    ["Version", reportVersion],
+                    [],
+                    ["Filters Used:"],
+                    ...Object.entries(filters)
+                ];
+                const infoSheet = XLSX.utils.aoa_to_sheet(infoSheetData);
+
+                // === SHEET 2: Report Data ===
+                const groupedByDate = {};
+                trafficData.forEach(item => {
+                    const date = item.StartDate?.split("T")[0];
+                    const hour = new Date(item.StartDate).getHours();
+                    if (!groupedByDate[date]) groupedByDate[date] = {};
+                    if (!groupedByDate[date][hour]) groupedByDate[date][hour] = [];
+                    groupedByDate[date][hour].push(item);
+                });
+
+                const headers = ["Date", "Hour", ...classifications, "Total"];
+                const rows = [];
+
+                for (const [date, hours] of Object.entries(groupedByDate)) {
+                    rows.push([`${date}`, "", ...Array(classifications.length).fill(""), ""]);
+
+                    Object.entries(hours).forEach(([hour, list]) => {
+                        const hourLabel = `${String(hour).padStart(2, "0")}:00`;
+                        let total = 0;
+                        const row = ["", hourLabel];
+                        classifications.forEach(c => {
+                            const found = list.find(x => x.Classification === c);
+                            const val = found ? found.Count : 0;
+                            total += val;
+                            row.push(val);
+                        });
+                        row.push(total);
+                        rows.push(row);
+                    });
+                }
+
+                const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+
                 const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, infoSheet, "Report Info");
+                XLSX.utils.book_append_sheet(wb, ws, "Hourly Traffic Data");
 
-                // Convert HTML table to sheet; this will include visible day header rows as rows with a single cell.
-                const ws = XLSX.utils.table_to_sheet(table, { raw: true });
-
-                // Optionally tweak header styles or column widths here (SheetJS has limited styling in browser)
-                XLSX.utils.book_append_sheet(wb, ws, "Hourly Traffic Report");
-
-                const filename = `HourlyTrafficReport_${new Date().toISOString().slice(0,19).replace(/[:T]/g, "-")}.xlsx`;
-                XLSX.writeFile(wb, filename);
+                XLSX.writeFile(wb, `Hourly_Traffic_Report_${new Date().toISOString().replace(/[:.]/g, '-')}.xlsx`);
             });
         });
     </script>
 }
+
 

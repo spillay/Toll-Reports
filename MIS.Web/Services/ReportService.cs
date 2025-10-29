@@ -1,10 +1,11 @@
-﻿using MIS.Web.Models;
+﻿using Microsoft.Extensions.Configuration;
+using MIS.Web.Models;
 using MIS.Web.Models.Transaction;
 using Newtonsoft.Json;
 using System;
+using System.Collections.Generic;
 using System.Net.Http;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Configuration;
 
 namespace MIS.Web.Services
 {
@@ -15,65 +16,64 @@ namespace MIS.Web.Services
 
         public ReportService(HttpClient httpClient, IConfiguration configuration)
         {
-            _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-            _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+            _httpClient = httpClient;
+            _configuration = configuration;
         }
 
-        public async Task<TransactionInputModel> GetTransactionDetailsAsync(TransactionInputModel model)
+        // Fetch transaction data with correct parameter names
+        public async Task<PageTransactionModel> GetTransactionDetailsAsync(TransactionInputModel model)
         {
-            // Read API base URL from configuration
-            //var baseUrl = _configuration["ApiSettings:TransactionApiUrl"];
-            //if (string.IsNullOrEmpty(baseUrl))
-            //    throw new InvalidOperationException("TransactionApiUrl is not configured in appsettings.json.");
+            string baseUrl = _configuration["BaseApiUrl:Link"];
+            string endpoint = _configuration["ApiSettings:TransactionEndpoint"];
 
-            string start = Uri.EscapeDataString(model.StartDate.ToString("s"));
-            string end = Uri.EscapeDataString(model.EndDate.ToString("s"));
+            // Build query
+            string url = $"{baseUrl}{endpoint}?startDate={model.StartDate:yyyy-MM-ddTHH:mm:ss}&endDate={model.EndDate:yyyy-MM-ddTHH:mm:ss}&page={model.page}&pageSize={model.pageSize}";
 
-            var queryParts = new System.Collections.Generic.List<string>
-            {
-                $"startDate={start}",
-                $"endDate={end}",
-                $"page={model.page}",
-                $"pageSize={model.pageSize}"
-            };
+            // Match backend parameter names
+            if (!string.IsNullOrEmpty(model.Shift))
+                url += $"&operationalShift={Uri.EscapeDataString(model.Shift)}";
+            if (!string.IsNullOrEmpty(model.TollOperatorID))
+                url += $"&tollOperators={Uri.EscapeDataString(model.TollOperatorID)}";
+            if (!string.IsNullOrEmpty(model.lane_Nr))
+                url += $"&laneNames={Uri.EscapeDataString(model.lane_Nr)}";
+            if (!string.IsNullOrEmpty(model.PaymentMethod))
+                url += $"&paymentMethods={Uri.EscapeDataString(model.PaymentMethod)}";
 
-            void AddIfNotEmpty(string key, string? value)
-            {
-                if (!string.IsNullOrEmpty(value))
-                    queryParts.Add($"{key}={Uri.EscapeDataString(value)}");
-            }
-
-            AddIfNotEmpty("lane_Nr", model.lane_Nr);
-            AddIfNotEmpty("TollOperatorID", model.TollOperatorID);
-            AddIfNotEmpty("Shift", model.Shift);
-            AddIfNotEmpty("PaymentMethod", model.PaymentMethod);
-
-           string baseUrl = _configuration["BaseApiUrl:Link"];
-           string endpoint = _configuration["ApiSettings:TransactionEndpoint"];
-           string url = $"{baseUrl}{endpoint}?{string.Join("&", queryParts)}";
+            Console.WriteLine($"[DEBUG] Transaction API URL => {url}");
 
             var response = await _httpClient.GetAsync(url);
-            if (!response.IsSuccessStatusCode) return new TransactionInputModel();
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"[WARN] Transaction API returned {response.StatusCode}");
+                return new PageTransactionModel { items = new List<TransactionModel>() };
+            }
 
             var json = await response.Content.ReadAsStringAsync();
-            var pageTransactions = JsonConvert.DeserializeObject<PageTransactionModel>(json);
+            var data = JsonConvert.DeserializeObject<PageTransactionModel>(json);
+            return data ?? new PageTransactionModel { items = new List<TransactionModel>() };
+        }
 
-            if (pageTransactions == null) return new TransactionInputModel();
+        //  Fetch dropdown filter options
+        public async Task<FilterOptionsModel> GetTransactionFilterOptionsAsync(TransactionInputModel model)
+        {
+            string baseUrl = _configuration["BaseApiUrl:Link"];
+            string endpoint = _configuration["ApiSettings:TransactionFilterOptionsEndpoint"];
+            string url = $"{baseUrl}{endpoint}?startDate={model.StartDate:yyyy-MM-ddTHH:mm:ss}&endDate={model.EndDate:yyyy-MM-ddTHH:mm:ss}";
 
-            return new TransactionInputModel
+            Console.WriteLine($"[DEBUG] Fetching filter options from: {url}");
+
+            var response = await _httpClient.GetAsync(url);
+            if (!response.IsSuccessStatusCode)
             {
-                page = pageTransactions.page,
-                pageSize = pageTransactions.pageSize,
-                totalCount = pageTransactions.totalCount,
-                totalPages = pageTransactions.totalPages,
-                items = pageTransactions.items,
-                StartDate = model.StartDate,
-                EndDate = model.EndDate,
-                lane_Nr = model.lane_Nr,
-                TollOperatorID = model.TollOperatorID,
-                Shift = model.Shift,
-                PaymentMethod = model.PaymentMethod
-            };
+                Console.WriteLine($"[WARN] Filter options API returned {response.StatusCode}");
+                return new FilterOptionsModel();
+            }
+
+            var json = await response.Content.ReadAsStringAsync();
+            Console.WriteLine($"[DEBUG] Filter Options JSON => {json}");
+
+            var filters = JsonConvert.DeserializeObject<FilterOptionsModel>(json);
+            return filters ?? new FilterOptionsModel();
         }
     }
 }

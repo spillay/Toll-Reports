@@ -1,4 +1,4 @@
-﻿@model MIS.Web.Models.Transaction.PageTransactionModel
+﻿@model MIS.Web.Models.TransactionInputModel
 
 @{
     var reportVersion = "1";
@@ -180,117 +180,117 @@
 @using System.Text.Json
 
 <script>
-    const txData = @Html.Raw(JsonSerializer.Serialize((object)Model.items ?? new object[0]));
+document.getElementById("btnDownloadPdf").addEventListener("click", async function () {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 40;
+
     const reportGeneratedAt = '@DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")';
     const currentUserId = '@(User.Identity?.Name ?? "Lucky")';
     const reportVersion = "1.0.0";
 
-    const toNumber = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+    // --- Load Data from Model ---
+    const txData = @Html.Raw(System.Text.Json.JsonSerializer.Serialize((object)Model.items ?? new object[0]));
 
-    const loadImage = (src) => new Promise(resolve => {
+    // --- Logos ---
+    const logoWidth = 90, logoHeight = 90, logoY = 25;
+    const leftLogoPath = '/images/lCC Logo.jpg';
+    const rightLogoPath = '/images/ICT-Works Logo.jpg';
+
+    const loadImage = src => new Promise(resolve => {
         if (!src) return resolve(null);
         const img = new Image();
-        img.crossOrigin = 'anonymous';
+        img.crossOrigin = 'Anonymous';
         img.onload = () => resolve(img);
         img.onerror = () => resolve(null);
         img.src = src;
     });
 
-    const imgFormatFromSrc = (src) => {
-        if (!src) return 'JPEG';
-        const s = src.toLowerCase();
-        if (s.endsWith('.png')) return 'PNG';
-        if (s.endsWith('.jpg') || s.endsWith('.jpeg')) return 'JPEG';
-        return 'JPEG';
+    const [leftLogo, rightLogo] = await Promise.all([loadImage(leftLogoPath), loadImage(rightLogoPath)]);
+
+    if (leftLogo) doc.addImage(leftLogo, 'JPEG', margin, logoY, logoWidth, logoHeight);
+    if (rightLogo) doc.addImage(rightLogo, 'JPEG', pageWidth - margin - logoWidth, logoY, logoWidth, logoHeight);
+
+    // --- Title ---
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.text("Transaction Report", pageWidth / 2, logoY + 50, { align: "center" });
+
+    // --- Filters Used Section ---
+    const filters = {
+        "Start Date": '@(Model.StartDate.ToString("dd/MM/yyyy HH:mm"))',
+        "End Date": '@(Model.EndDate.ToString("dd/MM/yyyy HH:mm"))',
+        "Lane No": '@(Model.lane_Nr ?? "All")',
+        "Operator": '@(Model.TollOperatorID ?? "All")',
+        "Shift": '@(Model.Shift ?? "All")',
+        "Payment Method": '@(Model.PaymentMethod ?? "All")'
     };
 
-    document.getElementById("btnDownloadPdf").addEventListener("click", async function () {
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+    let y = logoY + logoHeight + 15;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text("Filters Used:", margin, y);
+    y += 14;
 
-        const pageWidth = doc.internal.pageSize.getWidth();
-        const pageHeight = doc.internal.pageSize.getHeight();
-        const margin = 40;
+    for (const [key, value] of Object.entries(filters)) {
+        doc.text(`${key}: ${value}`, margin, y);
+        y += 14;
+    }
 
-        const logoWidth = 90;
-        const logoHeight = 90;
-        const logoY = 20;
-        const leftLogoPath = '/images/lCC Logo.jpg';
-        const rightLogoPath = '/images/ICT-Works Logo.jpg';
+    // --- Table ---
+    const headers = ["Lane", "Trx #", "Date", "Time", "Shift", "Operator", "Payment", "Tariff"];
+    const rows = (txData || []).map(t => [
+        t?.lane_Nr ?? '',
+        t?.trx_Sequence_Nr ?? '',
+        t?.trx_Date ?? '',
+        t?.trx_Time ?? '',
+        t?.operational_Shift ?? '',
+        t?.toll_Operator_ID ?? '',
+        t?.method_of_Payment ?? '',
+        (Number(t?.tariff ?? 0)).toFixed(2)
+    ]);
 
-        const [leftLogo, rightLogo] = await Promise.all([
-            loadImage(leftLogoPath),
-            loadImage(rightLogoPath)
-        ]);
+    const tableStartY = y + 10;
 
-        try {
-            if (leftLogo) doc.addImage(leftLogo, imgFormatFromSrc(leftLogo.src), margin, logoY, logoWidth, logoHeight);
-            if (rightLogo) doc.addImage(rightLogo, imgFormatFromSrc(rightLogo.src), pageWidth - margin - logoWidth, logoY, logoWidth, logoHeight);
-        } catch (err) {
-            console.warn("Failed to add logos to PDF:", err);
+    doc.autoTable({
+        head: [headers],
+        body: rows,
+        startY: tableStartY,
+        theme: 'grid',
+        headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+        styles: { fontSize: 9, cellPadding: 4 },
+        columnStyles: {
+            0: { cellWidth: 60 }, 1: { cellWidth: 60 }, 2: { cellWidth: 65 },
+            3: { cellWidth: 45 }, 4: { cellWidth: 60 },
+            5: { cellWidth: 80 }, 6: { cellWidth: 80 }, 7: { cellWidth: 60, halign: 'right' }
+        },
+        margin: { left: margin, right: margin },
+        didDrawPage: function (data) {
+            const pageCount = doc.internal.getNumberOfPages();
+            const currentPage = doc.internal.getCurrentPageInfo().pageNumber;
+            const footerY = pageHeight - 50;
+
+            // --- Footer ---
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(10);
+            doc.text("Transaction Report", margin, footerY);
+            doc.text(`Date and Time: ${reportGeneratedAt}`, pageWidth / 2.5, footerY);
+            doc.text(`User ID: ${currentUserId}`, pageWidth / 1.5, footerY);
+            doc.text(`Page ${currentPage} of ${pageCount}`, pageWidth - margin, footerY, { align: 'right' });
+
+            doc.setFontSize(9);
+            doc.text(`Reports Module Version Number: ${reportVersion}`, margin, footerY + 14);
         }
-
-        const titleY = logoY + logoHeight + 25;
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(16);
-        doc.text("Transaction Report", pageWidth / 2, titleY, { align: 'center' });
-
-        const headers = ["Lane", "Trx #", "Date", "Time", "Shift", "Operator", "Lane Name", "Payment", "Collector Class", "AVC Class", "Final Class", "Amount", "Card #"];
-        const items = Array.isArray(txData) ? txData : (txData ? Object.values(txData) : []);
-        const rows = (items || []).map(t => [
-            t?.lane_Nr ?? '',
-            t?.trx_Sequence_Nr ?? '',
-            t?.trx_Date ?? '',
-            t?.trx_Time ?? '',
-            t?.operational_Shift ?? '',
-            t?.toll_Operator_ID ?? '',
-            t?.lane_Name ?? '',
-            t?.method_of_Payment ?? '',
-            t?.toll_Collector_Class ?? '',
-            t?.avC_Class ?? '',
-            t?.final_Class ?? '',
-            (toNumber(t?.tariff)).toFixed(2),
-            t?.tac_Card_Number ?? ''
-        ]);
-
-        const tableStartY = titleY + 20;
-
-        doc.autoTable({
-            head: [headers],
-            body: rows,
-            startY: tableStartY,
-            theme: 'grid',
-            headStyles: { fillColor: [41, 128, 185], textColor: 255 },
-            styles: { fontSize: 9, cellPadding: 4, overflow: 'linebreak' },
-            columnStyles: {
-                0: { cellWidth: 50 }, 1: { cellWidth: 60 }, 2: { cellWidth: 60 }, 3: { cellWidth: 40 }, 4: { cellWidth: 50 },
-                5: { cellWidth: 90 }, 6: { cellWidth: 110 }, 7: { cellWidth: 70 }, 8: { cellWidth: 90 }, 9: { cellWidth: 70 },
-                10: { cellWidth: 70 }, 11: { cellWidth: 70, halign: 'right' }, 12: { cellWidth: 90 }
-            },
-            didDrawPage: function (data) {
-                const pageCount = doc.internal.getNumberOfPages();
-                let currentPage = 1;
-                try { currentPage = doc.internal.getCurrentPageInfo().pageNumber; } catch (e) { currentPage = pageCount; }
-
-                const footerY = pageHeight - 50;
-                const smallLineY = footerY + 14;
-
-                doc.setFont("helvetica", "normal");
-                doc.setFontSize(10);
-                doc.text("Transaction Report", margin, footerY);
-                doc.text(`Date and Time: ${reportGeneratedAt}`, pageWidth / 2.3, footerY);
-                doc.text(`User ID: ${currentUserId}`, pageWidth / 1.6, footerY);
-                doc.text(`Page ${currentPage} of ${pageCount}`, pageWidth - margin, footerY, { align: 'right' });
-
-                doc.setFontSize(9);
-                doc.text(`Reports Module Version Number: ${reportVersion}`, margin, smallLineY);
-            }
-        });
-
-        const safeFilename = `Transaction_Report_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`;
-        doc.save(safeFilename);
     });
+
+    const filename = `Transaction_Report_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`;
+    doc.save(filename);
+});
 </script>
+
 <!-- SheetJS (xlsx) - CDN -->
 <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 

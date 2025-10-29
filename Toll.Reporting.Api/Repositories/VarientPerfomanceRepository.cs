@@ -21,19 +21,21 @@ namespace Toll.Reporting.Api.Repositories
         /// Fetch paginated variant performance records with optional filters.
         /// </summary>
         public async Task<PagedResult<VarientPerformanceDto>> GetVarientPerformanceAsync(
-            DateTime startDate,
-            DateTime endDate,
-            List<string>? operationalShift = null,
-            List<string>? tollOperators = null,
-            int page = 1,
-            int pageSize = 10)
+    DateTime startDate,
+    DateTime endDate,
+    List<string>? operationalShift = null,
+    List<string>? tollOperators = null,
+    int page = 1,
+    int pageSize = 10)
         {
-            // Base query joining only what's needed
             var query = from t in _context.Transactions
                         join s in _context.Shifts on t.ShiftId equals s.ShiftId into shiftGroup
                         from s in shiftGroup.DefaultIfEmpty()
                         join su in _context.SystemUsers on t.SystemUserId equals su.SystemUserId into userGroup
                         from su in userGroup.DefaultIfEmpty()
+                        join cc in _context.CollectorCashups
+                             on t.AllocatedToCollectorCashupId equals cc.CollectorCashupId into cashupGroup
+                        from cc in cashupGroup.DefaultIfEmpty()
                         where t.TransactionDateTime >= startDate &&
                               t.TransactionDateTime < endDate.AddDays(1)
                         orderby t.TransactionDateTime descending
@@ -43,24 +45,17 @@ namespace Toll.Reporting.Api.Repositories
                             Shift = s,
                             User = su,
                             t.ActualAmount,
-                            t.NominalTariff
+                            TotalDeclared = cc.TotalDeclared
                         };
 
-            // ✅ Optional filters
             if (operationalShift != null && operationalShift.Any() && !operationalShift.Contains("-- All --"))
-            {
                 query = query.Where(x => operationalShift.Contains(x.Shift.Description));
-            }
 
             if (tollOperators != null && tollOperators.Any() && !tollOperators.Contains("-- All --"))
-            {
                 query = query.Where(x => tollOperators.Contains(x.User.Username));
-            }
 
-            // ✅ Count before pagination
             var totalCount = await query.CountAsync();
 
-            // ✅ Apply pagination and map to DTO
             var pagedItems = await query
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
@@ -69,8 +64,8 @@ namespace Toll.Reporting.Api.Repositories
                     ShiftDate = x.ShiftDate,
                     ShiftDescription = x.Shift.Description ?? "-- None --",
                     TollOperator = x.User.Username ?? "-- None --",
-                    ActualAmount = x.ActualAmount ,
-                    NominalTariff = x.NominalTariff ,
+                    ActualAmount = x.ActualAmount,
+                    NominalTariff = x.TotalDeclared, 
                     StartDate = startDate,
                     EndDate = endDate
                 })

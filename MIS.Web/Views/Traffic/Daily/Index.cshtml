@@ -1,17 +1,22 @@
 ﻿@model MIS.Web.Models.Traffic.Daily.PageDailyTrafficModel
+@using System.Text.Json
 
 @{
+    ViewData["Title"] = "Daily Traffic Report";
+
+    var reportGeneratedAt = DateTime.Now;
+    var currentUser = User.Identity?.Name ?? "Lucky";
+    var reportVersion = "1.0.0";
+
     var input = Model.Filters ?? new MIS.Web.Models.Traffic.Daily.DailyTrafficInputModel();
     var classifications = Model.Classifications ?? new List<string>();
 }
-
 <div class="card shadow-lg mb-4">
     <div class="card-body">
+
         <!-- Header -->
         <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
-            <div></div>
             <h2 class="mb-0 fw-bold text-primary">Daily Traffic Report</h2>
-            <div></div>
         </div>
 
         <!-- Export Buttons -->
@@ -29,7 +34,7 @@
         </div>
 
         <!-- Filter Form -->
-        @Html.Partial("_DailyTrafficFilters.cshtml",Model.Filters)
+        @Html.Partial("_DailyTrafficFilters.cshtml", Model.Filters)
 
         <!-- Data Table -->
         <div class="table-responsive mt-3">
@@ -82,24 +87,19 @@
                             </tr>
                         }
 
-                        <!-- Calculate statistics -->
+                        <!-- Statistics -->
                         var grandTotal = totalsPerClass.Values.Sum();
                         var daysCount = grouped.Count();
                         var averages = totalsPerClass.ToDictionary(kv => kv.Key, kv => daysCount > 0 ? (int)Math.Round((double)kv.Value / daysCount) : 0);
 
-                        var maximums = new Dictionary<string, int>();
-                        foreach (var cls in classifications)
-                        {
-                            var max = Model.Items
-                            .Where(x => x.Classification == cls)
-                            .GroupBy(x => x.Date.Date)
-                            .Select(g => g.Sum(x => x.Count))
-                            .DefaultIfEmpty(0)
-                            .Max();
-                            maximums[cls] = max;
-                        }
+                        var maximums = classifications.ToDictionary(cls => cls,
+                        cls => Model.Items.Where(x => x.Classification == cls)
+                        .GroupBy(x => x.Date.Date)
+                        .Select(g => g.Sum(x => x.Count))
+                        .DefaultIfEmpty(0)
+                        .Max());
 
-                        <!-- Statistics Rows -->
+                        <!-- Totals -->
                         <tr class="table-secondary fw-bold">
                             <td>Total for the Month</td>
                             <td></td>
@@ -142,89 +142,258 @@
                 </tbody>
             </table>
         </div>
+
+        <!-- Footer -->
+        <div class="mt-4 p-3 border-top bg-light">
+            <table class="table table-borderless w-100 mb-0">
+                <tr>
+                    <td style="width: 35%;">
+                        <strong>Daily Traffic Report</strong>
+                    </td>
+                    <td style="width: 25%;">
+                        <strong>Date and Time:</strong><br />
+                        <em>@reportGeneratedAt.ToString("dd/MM/yyyy HH:mm:ss")</em>
+                    </td>
+                    <td style="width: 25%;">
+                        <strong>User ID:</strong><br />
+                        <em>@currentUser</em>
+                    </td>
+                    <td class="text-end" style="width: 15%;">
+                        Version: <strong>@reportVersion</strong>
+                    </td>
+                </tr>
+            </table>
+        </div>
+
     </div>
 </div>
 
-@* @section Scripts {
-    <script>
-        document.addEventListener("DOMContentLoaded", function () {
-            const opCheckbox = document.getElementById('operationalDay');
-            const shiftBoxes = document.querySelectorAll('.shift-checkbox');
-            const filterForm = document.getElementById('filterForm');
+<!-- Scripts -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 
-            if (!filterForm) {
-                return;
-            }
+<script>
+    document.getElementById("btnDownloadPdf").addEventListener("click", async function () {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
 
-            // safe toggle function — guard if opCheckbox missing
-            function toggleShifts() {
-                const isOperationalDay = opCheckbox ? opCheckbox.checked : false;
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const margin = 40;
 
-                shiftBoxes.forEach(cb => {
-                    cb.disabled = !isOperationalDay;         
-                });
-            }
+        // === LOGOS ===
+        const logoWidth = 90, logoHeight = 90, logoY = 25;
+        const leftLogoPath = '/images/lCC Logo.jpg';
+        const rightLogoPath = '/images/ICT-Works Logo.jpg';
 
-            // On submit: ensure we send exactly one operationalDay value and enable shift checkboxes
-            filterForm.addEventListener('submit', function (e) {
-               
+        const loadImage = src => new Promise(resolve => {
+            const img = new Image();
+            img.crossOrigin = 'Anonymous';
+            img.onload = () => resolve(img);
+            img.onerror = () => resolve(null);
+            img.src = src;
+        });
 
-                // Remove any existing operationalDay inputs to avoid duplicate values
-                const existingOpFields = filterForm.querySelectorAll('input[name="operationalDay"]');
-                existingOpFields.forEach(el => {
-                    // keep the actual checkbox element; remove hidden duplicates only
-                    if (el !== opCheckbox) el.remove();
-                });
+        const [leftLogo, rightLogo] = await Promise.all([
+            loadImage(leftLogoPath),
+            loadImage(rightLogoPath)
+        ]);
 
-                if (opCheckbox) {
-                   
-                    const opHidden = document.createElement('input');
-                    opHidden.type = 'hidden';
-                    opHidden.name = 'operationalDay';
-                    opHidden.value = opCheckbox.checked ? 'true' : 'false';
-                    filterForm.appendChild(opHidden);
-                   
-                } else {
-                    // If checkbox missing, still ensure a value is sent (false)
-                    const opHidden = document.createElement('input');
-                    opHidden.type = 'hidden';
-                    opHidden.name = 'operationalDay';
-                    opHidden.value = 'false';
-                    filterForm.appendChild(opHidden);
-                   
-                }
+        if (leftLogo) doc.addImage(leftLogo, 'JPEG', margin, logoY, logoWidth, logoHeight);
+        if (rightLogo) doc.addImage(rightLogo, 'JPEG', pageWidth - margin - logoWidth, logoY, logoWidth, logoHeight);
 
-                // Enable all shift checkboxes before submission (disabled inputs are not submitted)
-                shiftBoxes.forEach(cb => {
-                    const originalDisabled = cb.disabled;
-                    cb.disabled = false;
-                   
-                });
+        // === TITLE ===
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(16);
+        doc.text("Daily Traffic Report", pageWidth / 2, logoY + 50, { align: "center" });
 
-            });
+        // === FILTERS SECTION ===
+        const startY = logoY + logoHeight + 20;
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        const filters = {
+            "Start Date": '@Model.Filters.StartDate.ToString("dd/MM/yyyy")',
+            "End Date": '@Model.Filters.EndDate.ToString("dd/MM/yyyy")',
+            "Classification": '@(Model.Filters.Classification ?? "All")',
+            "Operational Day": '@(Model.Filters.OperationalDay ? "Yes" : "No")'
+        };
+        let y = startY;
+        doc.text("Filters Used:", margin, y);
+        y += 14;
+        for (const [key, value] of Object.entries(filters)) {
+            doc.text(`${key}: ${value}`, margin, y);
+            y += 12;
+        }
 
-            toggleShifts();
+        // === TABLE DATA ===
+        const trafficData = @Html.Raw(JsonSerializer.Serialize(Model.Items ?? new List<MIS.Web.Models.Traffic.Daily.DailyTrafficModel>()));
+        const classifications = @Html.Raw(JsonSerializer.Serialize(Model.Classifications ?? new List<string>()));
 
-            // watch for changes (guard opCheckbox may be null)
-            if (opCheckbox) {
-                opCheckbox.addEventListener('change', function () {
-                    
-                    toggleShifts();
-                });
-            }
+        const headers = ["Date", "Traffic / %", ...classifications, "Total"];
+        const rows = [];
 
-            shiftBoxes.forEach(cb => {
-                
-            });
-
-            // Export button handlers (placeholder)
-            document.getElementById('btnDownloadPdf')?.addEventListener('click', function () {
-                alert('PDF export functionality to be implemented');
-            });
-
-            document.getElementById('btnDownloadExcel')?.addEventListener('click', function () {
-                alert('Excel export functionality to be implemented');
+        // Normalize PascalCase names to JS
+        const grouped = {};
+        trafficData.forEach(item => {
+            const date = item.Date?.split("T")[0];
+            if (!grouped[date]) grouped[date] = [];
+            grouped[date].push({
+                classification: item.Classification,
+                count: item.Count
             });
         });
-    </script>
-} *@
+
+        // Build rows per date
+        for (const [date, list] of Object.entries(grouped)) {
+            const total = list.reduce((sum, i) => sum + (i.count || 0), 0);
+
+            // Traffic Row
+            const trafficRow = [date, "Traffic"];
+            classifications.forEach(c => {
+                const found = list.find(x => x.classification === c);
+                trafficRow.push(found ? found.count : 0);
+            });
+            trafficRow.push(total);
+            rows.push(trafficRow);
+
+            // Percentage Row
+            const percentRow = ["", "Percentage"];
+            classifications.forEach(c => {
+                const found = list.find(x => x.classification === c);
+                const val = found ? (found.count / total * 100) : 0;
+                percentRow.push(total > 0 ? `${val.toFixed(2)}%` : "0.00%");
+            });
+            percentRow.push("100%");
+            rows.push(percentRow);
+        }
+
+        // === TOTALS, AVERAGES, MAX ===
+        const totals = classifications.map(c =>
+            trafficData.filter(x => x.Classification === c).reduce((a, b) => a + (b.Count || 0), 0)
+        );
+        const grandTotal = totals.reduce((a, b) => a + b, 0);
+
+        rows.push(["", "Total for the Month", ...totals, grandTotal]);
+        rows.push(["", "Average", ...totals.map(t => Math.round(t / Object.keys(grouped).length)), Math.round(grandTotal / Object.keys(grouped).length)]);
+        rows.push(["", "Maximum", ...classifications.map(c => {
+            const byDay = {};
+            trafficData.filter(x => x.Classification === c).forEach(x => {
+                const d = x.Date?.split("T")[0];
+                byDay[d] = (byDay[d] || 0) + (x.Count || 0);
+            });
+            return Math.max(...Object.values(byDay), 0);
+        }), ""]);
+
+        // === TABLE RENDER ===
+        doc.autoTable({
+            head: [headers],
+            body: rows,
+            startY: y + 10,
+            theme: 'grid',
+            headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+            styles: { fontSize: 9, cellPadding: 4, overflow: 'linebreak' },
+            columnStyles: { 0: { cellWidth: 70 }, 1: { cellWidth: 80 } },
+            didDrawPage: function (data) {
+                const pageCount = doc.internal.getNumberOfPages();
+                const currentPage = doc.internal.getCurrentPageInfo().pageNumber;
+                const footerY = pageHeight - 50;
+
+                doc.setFontSize(10);
+                doc.text("Daily Traffic Report", margin, footerY);
+                doc.text(`Date & Time: ${new Date().toLocaleString()}`, pageWidth / 2.3, footerY);
+                doc.text(`User ID: Lucky`, pageWidth / 1.6, footerY);
+                doc.text(`Page ${currentPage} of ${pageCount}`, pageWidth - margin, footerY, { align: 'right' });
+                doc.setFontSize(9);
+                doc.text("Reports Module Version Number: 1.0.0", margin, footerY + 14);
+            }
+        });
+
+        // === SAVE ===
+        doc.save(`Daily_Traffic_Report_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
+    });
+</script>
+
+<script>
+    document.getElementById("btnDownloadExcel").addEventListener("click", function () {
+        const trafficData = @Html.Raw(JsonSerializer.Serialize(Model.Items ?? new List<MIS.Web.Models.Traffic.Daily.DailyTrafficModel>()));
+        const classifications = @Html.Raw(JsonSerializer.Serialize(Model.Classifications ?? new List<string>()));
+
+        if (!trafficData.length) {
+            alert("No data available to export.");
+            return;
+        }
+
+        // === Normalize PascalCase C# properties ===
+        const grouped = {};
+        trafficData.forEach(item => {
+            const date = item.Date?.split("T")[0];
+            if (!grouped[date]) grouped[date] = [];
+            grouped[date].push({
+                classification: item.Classification,
+                count: item.Count
+            });
+        });
+
+        // === Prepare headers ===
+        const headers = ["Date", "Traffic / %", ...classifications, "Total"];
+        const excelRows = [];
+
+        // === Build per-date rows ===
+        for (const [date, list] of Object.entries(grouped)) {
+            const total = list.reduce((sum, i) => sum + (i.count || 0), 0);
+
+            // Traffic row
+            const trafficRow = [date, "Traffic"];
+            classifications.forEach(c => {
+                const found = list.find(x => x.classification === c);
+                trafficRow.push(found ? found.count : 0);
+            });
+            trafficRow.push(total);
+            excelRows.push(trafficRow);
+
+            // Percentage row
+            const percentRow = ["", "Percentage"];
+            classifications.forEach(c => {
+                const found = list.find(x => x.classification === c);
+                const val = found ? (found.count / total * 100) : 0;
+                percentRow.push(total > 0 ? `${val.toFixed(2)}%` : "0.00%");
+            });
+            percentRow.push("100%");
+            excelRows.push(percentRow);
+        }
+
+        // === Totals / Averages / Maximums ===
+        const totals = classifications.map(c =>
+            trafficData.filter(x => x.Classification === c).reduce((a, b) => a + (b.Count || 0), 0)
+        );
+        const grandTotal = totals.reduce((a, b) => a + b, 0);
+        const daysCount = Object.keys(grouped).length || 1;
+
+        excelRows.push(["", "Total for the Month", ...totals, grandTotal]);
+        excelRows.push(["", "Average", ...totals.map(t => Math.round(t / daysCount)), Math.round(grandTotal / daysCount)]);
+        excelRows.push(["", "Maximum", ...classifications.map(c => {
+            const byDay = {};
+            trafficData.filter(x => x.Classification === c).forEach(x => {
+                const d = x.Date?.split("T")[0];
+                byDay[d] = (byDay[d] || 0) + (x.Count || 0);
+            });
+            return Math.max(...Object.values(byDay), 0);
+        }), ""]);
+
+        // === Create Workbook and Export ===
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...excelRows]);
+
+        // Style width for better readability
+        const colWidths = headers.map(() => ({ wch: 15 }));
+        ws['!cols'] = colWidths;
+
+        XLSX.utils.book_append_sheet(wb, ws, "Daily Traffic Report");
+
+        const filename = `Daily_Traffic_Report_${new Date().toISOString().replace(/[:.]/g, '-')}.xlsx`;
+        XLSX.writeFile(wb, filename);
+    });
+</script>
+
+

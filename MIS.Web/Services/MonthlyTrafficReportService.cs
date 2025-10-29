@@ -34,28 +34,29 @@ namespace MIS.Web.Services
             bool? operationalMonth = null,
             List<string>? classifications = null,
             List<int>? shifts = null)
-        {
-       
-            // Build query parameters
-            var queryParams = new List<string>();
-            if (year.HasValue) queryParams.Add($"year={year.Value}");
-            if (month.HasValue) queryParams.Add($"month={month.Value}");
-            if (operationalMonth.HasValue) queryParams.Add($"operationalMonth={operationalMonth.Value.ToString().ToLower()}");
-            if (classifications?.Any() == true) queryParams.Add($"classification={Uri.EscapeDataString(string.Join(",", classifications))}");
-            if (shifts?.Any() == true) queryParams.Add($"shifts={Uri.EscapeDataString(string.Join(",", shifts))}");
+                {
+                    var queryParams = new List<string>();
+                    if (year.HasValue) queryParams.Add($"year={year.Value}");
+                    if (month.HasValue) queryParams.Add($"month={month.Value}");
+                    if (operationalMonth.HasValue) queryParams.Add($"operationalMonth={operationalMonth.Value.ToString().ToLower()}");
+                    if (classifications?.Any() == true) queryParams.Add($"classification={Uri.EscapeDataString(string.Join(",", classifications))}");
+                    if (shifts?.Any() == true) queryParams.Add($"shifts={Uri.EscapeDataString(string.Join(",", shifts))}");
 
-            var url = BuildBaseUrl();
+                    // Combine the base URL and query string
+                    var url = BuildBaseUrl();
+                    if (queryParams.Any())
+                        url += "?" + string.Join("&", queryParams);
 
+                    // Make HTTP call
+                    var response = await _httpClient.GetAsync(url);
+                    response.EnsureSuccessStatusCode();
 
-            // Make HTTP call
-            var response = await _httpClient.GetAsync(url);
-            response.EnsureSuccessStatusCode();
+                    var json = await response.Content.ReadAsStringAsync();
+                    var items = JsonConvert.DeserializeObject<List<MonthlyTrafficModel>>(json) ?? new List<MonthlyTrafficModel>();
 
-            var json = await response.Content.ReadAsStringAsync();
-            var items = JsonConvert.DeserializeObject<List<MonthlyTrafficModel>>(json) ?? new List<MonthlyTrafficModel>();
+                    return new PageMonthlyTrafficModel { Items = items };
+                }
 
-            return new PageMonthlyTrafficModel { Items = items };
-        }
 
         // Fetch years for dropdown
         public async Task<List<int>> GetAvailableYearsAsync()

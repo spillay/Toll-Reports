@@ -3,6 +3,7 @@ using MIS.Web.Models;
 using MIS.Web.Models.Transaction;
 using MIS.Web.Services;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace MIS.Web.Controllers
@@ -16,58 +17,43 @@ namespace MIS.Web.Controllers
             _reportService = reportService;
         }
 
-        public IActionResult Index()
+        public async Task<IActionResult> Transaction(TransactionInputModel model)
         {
-            return View("Views/Transaction/Index.cshtml", new TransactionInputModel());
-        }
-
-        public async Task<IActionResult> Transaction(
-            int page = 1,
-            int pageSize = 10,
-            string? lane_Nr = null,
-            string? TollOperatorID = null,
-            string? Shift = null,
-            string? PaymentMethod = null,
-            DateTime? StartDate = null,
-            DateTime? EndDate = null)
-        {
-            var model = new TransactionInputModel
+            try
             {
-                page = page,
-                pageSize = pageSize,
-                lane_Nr = lane_Nr,
-                TollOperatorID = TollOperatorID,
-                Shift = Shift,
-                PaymentMethod = PaymentMethod,
-                StartDate = StartDate ?? DateTime.Today.AddDays(-30),
-                EndDate = EndDate ?? DateTime.Today
-            };
+                // Default filters
+                model.StartDate = model.StartDate == default ? DateTime.Today.AddDays(-30) : model.StartDate;
+                model.EndDate = model.EndDate == default ? DateTime.Today : model.EndDate;
+                model.page = model.page <= 0 ? 1 : model.page;
+                model.pageSize = model.pageSize <= 0 ? 50 : model.pageSize;
 
-            var data = await _reportService.GetTransactionDetailsAsync(model);
+                // Fetch transaction data from API
+                var data = await _reportService.GetTransactionDetailsAsync(model);
 
-            // Extract distinct values for dropdowns from the fetched data
-            ViewBag.PaymentMethods = data.items?.Select(t => t.method_of_Payment)
-                                               .Where(p => !string.IsNullOrEmpty(p))
-                                               .Distinct()
-                                               .ToList() ?? new List<string>();
+                // Fetch dropdown filters
+                var filters = await _reportService.GetTransactionFilterOptionsAsync(model);
 
-            ViewBag.Shifts = data.items?.Select(t => t.operational_Shift)
-                                        .Where(s => !string.IsNullOrEmpty(s))
-                                        .Distinct()
-                                        .ToList() ?? new List<string>();
+                // Set dropdown values in ViewBag
+                ViewBag.Shifts = filters?.Shifts ?? new List<string>();
+                ViewBag.TollOperators = filters?.TollOperators ?? new List<string>();
+                ViewBag.Lanes = filters?.Lanes ?? new List<string>();
+                ViewBag.PaymentMethods = filters?.PaymentMethods ?? new List<string>();
 
-            ViewBag.TollOperators = data.items?.Select(t => t.toll_Operator_ID)
-                                              .Where(o => !string.IsNullOrEmpty(o))
-                                              .Distinct()
-                                              .ToList() ?? new List<string>();
+                // Merge pagination and filters into model
+                model.items = data.items;
+                model.totalCount = data.totalCount;
+                model.totalPages = data.totalPages;
 
-            ViewBag.Lanes = data.items?.Select(t => t.lane_Nr)
-                                       .Where(l => !string.IsNullOrEmpty(l))
-                                       .Distinct()
-                                       .ToList() ?? new List<string>();
-
-
-            return View("Views/Transaction/Index.cshtml", data);
+                return View("Views/Transaction/Index.cshtml", model);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("❌ ERROR: " + ex.Message);
+                return View("Views/Transaction/Index.cshtml", new TransactionInputModel
+                {
+                    items = new List<TransactionModel>()
+                });
+            }
         }
     }
 }

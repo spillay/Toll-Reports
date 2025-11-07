@@ -94,14 +94,20 @@
                                 <td>@item.ShiftDate?.ToString("yyyy-MM-dd")</td>
                                 <td>@item.ShiftDescription</td>
                                 <td>@item.TollOperator</td>
-                                <td>@item.NominalTariff</td>
-                                <td>@item.NettAmount</td>
-                               <td>
+                                <td>@((item.NominalTariff ?? 0).ToString("N2"))</td>
+                                <td>@((item.NettAmount ?? 0).ToString("N2"))</td>
+
+                                <td>
                                     @{
-                                        var difference = item.NettAmount - item.NominalTariff;
+                                        double expected = item.NominalTariff ?? 0;
+                                        double declared = item.NettAmount ?? 0;
+                                        double difference = expected - declared;
                                     }
                                     @difference.ToString("N2")
                                 </td>
+
+
+
 
                             </tr>
                         }

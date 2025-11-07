@@ -1,8 +1,4 @@
-﻿using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Hosting.WindowsServices;
-using Microsoft.Extensions.Logging.EventLog;
+﻿
 using MIS.Web.Services;
 using OfficeOpenXml;
 
@@ -29,6 +25,10 @@ builder.Services.AddScoped<IHourlyTrafficReportService, HourlyTrafficReportServi
 builder.Services.AddScoped<IDailyTrafficReportService, DailyTrafficReportService>();
 builder.Services.AddScoped<IMonthlyTrafficReportService, MonthlyTrafficReportService>();
 builder.Services.AddHttpClient<MonthlyTrafficReportService>();
+builder.Services.AddHttpClient<IDailyCashupReportService, DailyCashupReportService>();
+builder.Services.AddHttpClient<ITopUpReportService, TopUpReportService>();
+builder.Services.AddHttpClient<IAccountHistoryService, AccountHistoryService>();
+
 
 builder.Services.AddWindowsService();
 

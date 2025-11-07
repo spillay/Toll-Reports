@@ -82,14 +82,13 @@
         <nav class="navbar navbar-expand-lg navbar-light shadow-sm mb-4">
             <div class="container">
 
-                <a class="navbar-brand" href="#">
+                <a class="navbar-brand" href="/">
                     <img src="~/images/lCC Logo.jpg" alt="LCC Logo" style="height: 100px; width 100px;" />
                 </a>
                 
                 <div class="mx-auto text-center">
                     <h2 class="fw-bold text-secondary mb-0">
-                        LEKKI CONCESSION COMPANY LIMITED <br />
-                        CONSERVATION TOLL PLAZA
+                        LEKKI-IKOYI LINK BRIDGE
                     </h2>
                 </div>
                 <div>
@@ -122,34 +121,79 @@
                 </li>
                 <li class="nav-item mb-2">
                     <a class="nav-link text-dark" asp-controller="VarientPerfomance" asp-action="VarientPerfomances" asp-route-page="1" asp-route-pageSize="10">
-                        <i class="bi bi-graph-up me-2"></i> Staff Variant and Perfomance
+                        <i class="bi bi-graph-up me-2"></i> Staff Variance and Perfomance
                     </a>
                 </li>
+                <!-- Traffic Reports Dropdown -->
                 <li class="nav-item mb-2">
-                    <a class="nav-link text-dark"
-                       asp-controller="Traffic"
-                       asp-action="HourlyReport"
-                       asp-route-page="1"
-                       asp-route-pageSize="10">
-                        <i class="bi bi-graph-up me-2"></i> Hourly Traffic Report
+                    <a class="nav-link text-dark d-flex justify-content-between align-items-center"
+                       data-bs-toggle="collapse"
+                       href="#trafficReportsMenu"
+                       role="button"
+                       aria-expanded="false"
+                       aria-controls="trafficReportsMenu">
+                        <span><i class="bi bi-graph-up me-2"></i> Traffic Reports</span>
+                        <i class="bi bi-caret-down-fill"></i>
                     </a>
+
+                    <div class="collapse ms-3" id="trafficReportsMenu">
+                        <ul class="nav flex-column">
+                            <li class="nav-item">
+                                <a class="nav-link text-dark"
+                                   asp-controller="Traffic"
+                                   asp-action="HourlyReport"
+                                   asp-route-page="1"
+                                   asp-route-pageSize="10">
+                                    <i class="bi bi-clock me-2"></i> Hourly Traffic Report
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link text-dark"
+                                   asp-controller="DailyTraffic"
+                                   asp-action="Index"
+                                   asp-route-page="1"
+                                   asp-route-pageSize="10">
+                                    <i class="bi bi-calendar-day me-2"></i> Daily Traffic Report
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link text-dark"
+                                   asp-controller="MonthlyTraffic"
+                                   asp-action="Index"
+                                   asp-route-page="1"
+                                   asp-route-pageSize="10">
+                                    <i class="bi bi-calendar3 me-2"></i> Monthly Traffic Report
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
                 </li>
+
                 <li class="nav-item mb-2">
                     <a class="nav-link text-dark"
-                       asp-controller="DailyTraffic"
+                       asp-controller="DailyCashup"
                        asp-action="Index"
                        asp-route-page="1"
                        asp-route-pageSize="10">
-                        <i class="bi bi-graph-up me-2"></i> Daily Traffic Report
+                        <i class="bi bi-graph-up me-2"></i> Daily Cashup Report
                     </a>
                 </li>
                 <li class="nav-item mb-2">
                     <a class="nav-link text-dark"
-                       asp-controller="MonthlyTraffic"
+                       asp-controller="TopUp"
                        asp-action="Index"
                        asp-route-page="1"
                        asp-route-pageSize="10">
-                        <i class="bi bi-graph-up me-2"></i> Monthly Traffic Report
+                        <i class="bi bi-graph-up me-2"></i>  TopUp Report
+                    </a>
+                </li>
+                <li class="nav-item mb-2">
+                    <a class="nav-link text-dark"
+                       asp-controller="AccountHistory"
+                       asp-action="Index"
+                       asp-route-page="1"
+                       asp-route-pageSize="10">
+                        <i class="bi bi-graph-up me-2"></i>  Account History Report
                     </a>
                 </li>
                 

@@ -2,7 +2,7 @@
 
 namespace MIS.Web.Models
 {
-    public class TransactionInputModel : PageTransactionModel
+    public class TransactionInputModel :PageTransactionModel
     {
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }

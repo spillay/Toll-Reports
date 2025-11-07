@@ -46,6 +46,10 @@ builder.Services.AddScoped<IVarientPerformanceRepository, VarientPerformanceRepo
 builder.Services.AddScoped<IHourlyTrafficRepository, HourlyTrafficRepository>();
 builder.Services.AddScoped<IDailyTrafficRepository, DailyTrafficRepository>();
 builder.Services.AddScoped<IMonthlyTrafficRepository, MonthlyTrafficRepository>();
+builder.Services.AddScoped<IDailyCashupRepository, DailyCashupRepository>();
+builder.Services.AddScoped<ITopUpRepository, TopUpRepository>();
+builder.Services.AddScoped<IAccountHistoryRepository, AccountHistoryRepository>();
+
 
 
 // Program.cs - inside builder.Services section

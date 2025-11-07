@@ -21,6 +21,8 @@ namespace MIS.Models
         public byte PaymentIdentifierId { get; set; }
         public byte PaymentMethodId { get; set; }
         public byte RechargePointId { get; set; }
+        public byte RechargeShift { get; set; }
+        public string RechargeStation { get; set; }
         public double Amount { get; set; }
 
         public virtual PaymentIdentifier PaymentIdentifier { get; set; }

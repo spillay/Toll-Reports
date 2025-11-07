@@ -21,39 +21,51 @@ namespace Toll.Reporting.Api.Repositories
         /// Fetch paginated variant performance records with optional filters.
         /// </summary>
         public async Task<PagedResult<VarientPerformanceDto>> GetVarientPerformanceAsync(
-    DateTime startDate,
-    DateTime endDate,
-    List<string>? operationalShift = null,
-    List<string>? tollOperators = null,
-    int page = 1,
-    int pageSize = 10)
+            DateTime startDate,
+            DateTime endDate,
+            List<string>? operationalShift = null,
+            List<string>? tollOperators = null,
+            int page = 1,
+            int pageSize = 10)
         {
-            var query = from t in _context.Transactions
-                        join s in _context.Shifts on t.ShiftId equals s.ShiftId into shiftGroup
-                        from s in shiftGroup.DefaultIfEmpty()
-                        join su in _context.SystemUsers on t.SystemUserId equals su.SystemUserId into userGroup
-                        from su in userGroup.DefaultIfEmpty()
-                        join cc in _context.CollectorCashups
-                             on t.AllocatedToCollectorCashupId equals cc.CollectorCashupId into cashupGroup
-                        from cc in cashupGroup.DefaultIfEmpty()
-                        where t.TransactionDateTime >= startDate &&
-                              t.TransactionDateTime < endDate.AddDays(1)
-                        orderby t.TransactionDateTime descending
-                        select new
-                        {
-                            t.ShiftDate,
-                            Shift = s,
-                            User = su,
-                            t.ActualAmount,
-                            TotalDeclared = cc.TotalDeclared
-                        };
+            // ==================== BASE QUERY ====================
+            var query =
+                from t in _context.Transactions
+                join s in _context.Shifts on t.ShiftId equals s.ShiftId into shiftGroup
+                from s in shiftGroup.DefaultIfEmpty()
 
+                join su in _context.SystemUsers on t.SystemUserId equals su.SystemUserId into userGroup
+                from su in userGroup.DefaultIfEmpty()
+
+                    // Left join optional CollectorCashup records
+                join cc in _context.CollectorCashups
+                    on t.AllocatedToCollectorCashupId equals cc.CollectorCashupId into cashupGroup
+                from cc in cashupGroup.DefaultIfEmpty()
+
+                where t.TransactionDateTime >= startDate &&
+                      t.TransactionDateTime < endDate.AddDays(1)
+
+                orderby t.TransactionDateTime descending
+
+                select new
+                {
+                    t.ShiftDate,
+                    Shift = s,
+                    User = su,
+                    // Real declared cash from Transaction
+                    ActualAmount = (double?)t.ActualAmount,
+                    // Expected cash from Cashup (nullable)
+                    TotalDeclared = (double?)cc.TotalDeclared
+                };
+
+            // ==================== FILTERS ====================
             if (operationalShift != null && operationalShift.Any() && !operationalShift.Contains("-- All --"))
-                query = query.Where(x => operationalShift.Contains(x.Shift.Description));
+                query = query.Where(x => operationalShift.Contains(x.Shift.Description ?? string.Empty));
 
             if (tollOperators != null && tollOperators.Any() && !tollOperators.Contains("-- All --"))
-                query = query.Where(x => tollOperators.Contains(x.User.Username));
+                query = query.Where(x => tollOperators.Contains(x.User.Username ?? string.Empty));
 
+            // ==================== PAGINATION ====================
             var totalCount = await query.CountAsync();
 
             var pagedItems = await query
@@ -64,8 +76,8 @@ namespace Toll.Reporting.Api.Repositories
                     ShiftDate = x.ShiftDate,
                     ShiftDescription = x.Shift.Description ?? "-- None --",
                     TollOperator = x.User.Username ?? "-- None --",
-                    ActualAmount = x.ActualAmount,
-                    NominalTariff = x.TotalDeclared, 
+                    NominalTariff = x.TotalDeclared ?? 0.0, 
+                    ActualAmount = x.ActualAmount ?? 0.0,    
                     StartDate = startDate,
                     EndDate = endDate
                 })
@@ -80,12 +92,11 @@ namespace Toll.Reporting.Api.Repositories
             };
         }
 
-        // ==================== LOOKUP QUERIES ====================
-
         public async Task<IEnumerable<string>> GetShiftsAsync()
         {
             return await _context.Shifts
                                  .Select(s => s.Description)
+                                 .Where(s => s != null)
                                  .Distinct()
                                  .OrderBy(s => s)
                                  .ToListAsync();
@@ -95,6 +106,7 @@ namespace Toll.Reporting.Api.Repositories
         {
             return await _context.SystemUsers
                                  .Select(su => su.Username)
+                                 .Where(su => su != null)
                                  .Distinct()
                                  .OrderBy(su => su)
                                  .ToListAsync();

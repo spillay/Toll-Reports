@@ -19,7 +19,8 @@ namespace MIS.Models
             Transactions = new HashSet<Transaction>();
         }
 
-        public long RegisteredUserId { get; set; }
+        public long RegisterUserId { get; set; }
+        public string AccNr { get; set; }
         public int EntityId { get; set; }
         public byte EntityTypeId { get; set; }
         public string FirstName { get; set; }
@@ -27,6 +28,8 @@ namespace MIS.Models
         public string IdNumber { get; set; }
         public string CompanyName { get; set; }
         public string RegistrationNumber { get; set; }
+        public string PrimaryContact { get; set; }
+        public string PrimaryEmail { get; set; }
         public bool? IsPrepaid { get; set; }
         public byte DiscountTypeId { get; set; }
         public byte TransactionTypeId { get; set; }

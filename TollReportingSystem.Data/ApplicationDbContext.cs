@@ -905,7 +905,7 @@ namespace TollReportingSystem.Data
 
                 modelBuilder.Entity<RegisteredUser>(entity =>
                 {
-                    entity.HasKey(e => e.RegisteredUserId);
+                    entity.HasKey(e => e.RegisterUserId);
 
                     entity.ToTable("RegisteredUser");
 

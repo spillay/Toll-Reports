@@ -1,0 +1,259 @@
+﻿@model MIS.Web.Models.TopUpInputModel
+@using System.Globalization
+
+@{
+    ViewData["Title"] = "Top-Up Report";
+    var now = DateTime.Now;
+    var reportGeneratedAt = now.ToString("dd/MM/yyyy HH:mm:ss");
+    var currentUserId = User.Identity?.Name ?? "Lucky";
+    var reportVersion = "1.0.0";
+    var totalAmount = Model.PageData?.items?.Sum(i => i.AmountPaid) ?? 0;
+}
+
+<div class="card shadow-lg p-4 mb-4">
+    <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
+        <h3 class="text-primary fw-bold">Top-Up Report</h3>
+        <span class="text-muted">Generated: @reportGeneratedAt</span>
+    </div>
+
+    <!-- Filters -->
+    <form method="get" class="row g-3 mb-4">
+        <!-- Start Date -->
+        <div class="col-md-3">
+            <label class="form-label fw-semibold">Start Date & Time</label>
+            <input type="datetime-local" name="StartDate" class="form-control"
+                   value="@(Model.StartDate?.ToString("yyyy-MM-ddTHH:mm") ?? DateTime.Now.AddDays(-1).ToString("yyyy-MM-ddTHH:mm"))" />
+        </div>
+
+        <!-- End Date -->
+        <div class="col-md-3">
+            <label class="form-label fw-semibold">End Date & Time</label>
+            <input type="datetime-local" name="EndDate" class="form-control"
+                   value="@(Model.EndDate?.ToString("yyyy-MM-ddTHH:mm") ?? DateTime.Now.ToString("yyyy-MM-ddTHH:mm"))" />
+        </div>
+
+        <!-- Operational -->
+        <div class="col-md-2">
+            <label class="form-label fw-semibold">Operational Date</label>
+            <select name="OperationalDate" id="operationalDate" class="form-select">
+                <option value="">- Select -</option>
+                <option value="true" selected="@((Model.OperationalDate == true) ? "selected" : null)">Yes</option>
+                <option value="false" selected="@((Model.OperationalDate == false) ? "selected" : null)">No</option>
+            </select>
+        </div>
+
+        <!-- Shift -->
+        <div class="col-md-2">
+            <label class="form-label fw-semibold">Shift</label>
+            <select name="Shift" id="shiftSelect" class="form-select">
+                <option value="">- All -</option>
+                @foreach (var s in ViewBag.Shifts ?? new List<string>())
+                {
+                    <option value="@s" selected="@(Model.Shift == s ? "selected" : null)">@s</option>
+                }
+            </select>
+        </div>
+
+        <!-- Lane -->
+        <div class="col-md-2">
+            <label class="form-label fw-semibold">Lane / Workstation</label>
+            <select name="Lane" id="laneSelect" class="form-select">
+                <option value="">- All -</option>
+                @foreach (var lane in ViewBag.Lanes ?? new List<string>())
+                {
+                    <option value="@lane" selected="@(Model.Lane == lane ? "selected" : null)">@lane</option>
+                }
+            </select>
+        </div>
+
+        <!-- Account -->
+        <div class="col-md-2">
+            <label class="form-label fw-semibold">Account Number</label>
+            <select name="AccountNumber" id="accountSelect" class="form-select">
+                <option value="">- All -</option>
+                @foreach (var acc in ViewBag.AccountNumbers ?? new List<string>())
+                {
+                    <option value="@acc" selected="@(Model.AccountNumber == acc ? "selected" : null)">@acc</option>
+                }
+            </select>
+        </div>
+
+        <div class="col-md-2 d-flex align-items-end">
+            <button type="submit" class="btn btn-primary w-100">Filter</button>
+        </div>
+
+        <!-- Export Buttons -->
+        <div class="mt-3 text-end">
+            <button id="btnDownloadPdf" type="button" class="btn btn-danger me-2">
+                <i class="bi bi-file-earmark-pdf me-1"></i> Download PDF
+            </button>
+            <button id="btnDownloadExcel" type="button" class="btn btn-success">
+                <i class="bi bi-file-earmark-excel me-1"></i> Download Excel
+            </button>
+        </div>
+    </form>
+
+    <!-- Table -->
+    <div class="table-responsive">
+        <table id="reportTable" class="table table-bordered table-hover text-center align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Top-Up number</th>
+                    <th>Receipt number</th>
+                    <th>Date & Time</th>
+                    <th>Lane/Workstation</th>
+                    <th>Shift</th>
+                    <th>Operator</th>
+                    <th>Account number</th>
+                    <th>Account Name</th>
+                    <th>Amount Paid</th>
+                    <th>Payment Method</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (Model.PageData?.items != null && Model.PageData.items.Any())
+                {
+                    foreach (var item in Model.PageData.items)
+                    {
+                        <tr>
+                            <td>@item.TopUpNumber</td>
+                            <td>@item.TopUpNumber</td>
+                            <td>@item.TopUpDateTime.ToString("dd/MM/yyyy HH:mm")</td>
+                            <td>@item.LaneWorkstation</td>
+                            <td>@item.Shift</td>
+                            <td>@item.Operator</td>
+                            <td>@item.AccountNumber</td>
+                            <td>@item.AccountName</td>
+                            <td>@item.AmountPaid.ToString("N2", CultureInfo.InvariantCulture)</td>
+                            <td>@item.MethodOfPayment</td>
+                        </tr>
+                    }
+                    <tr class="fw-bold table-light">
+                        <td colspan="7" class="text-end">Total Amount Paid:</td>
+                        <td colspan="2">@totalAmount.ToString("N2", CultureInfo.InvariantCulture)</td>
+                    </tr>
+                }
+                else
+                {
+                    <tr><td colspan="9" class="text-muted">No records found</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Footer -->
+    <div class="mt-4 p-3 border-top bg-light small text-secondary">
+        <div class="row">
+            <div class="col-md-4">
+                <strong>Report Name:</strong> Top-Up Report<br />
+                <strong>Date Generated:</strong> @reportGeneratedAt
+            </div>
+            <div class="col-md-4">
+                <strong>User ID:</strong> @currentUserId
+            </div>
+            <div class="col-md-4 text-end">
+                <strong>Version:</strong> @reportVersion
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- JS for PDF & Excel Export -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+
+<script>
+    document.getElementById("btnDownloadPdf").addEventListener("click", async function () {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+
+        // Load Logos
+        const logoLeft = new Image();
+        logoLeft.src = '/images/lCC Logo.jpg';
+        const logoRight = new Image();
+        logoRight.src = '/images/ICT-Works Logo.jpg';
+        await new Promise(r => { logoLeft.onload = logoRight.onload = r; });
+
+        // Header
+        doc.addImage(logoLeft, "JPEG", 40, 25, 60, 60);
+        doc.addImage(logoRight, "JPEG", 740, 25, 60, 60);
+        doc.setFontSize(16);
+        doc.text("LEKKI-IKOYI LINK BRIDGE", 310, 45);
+        doc.setFontSize(14);
+        doc.text("TOP-UP REPORT", 355, 70);
+
+        // ✅ Filters used
+        const filters = [
+            `Start Date: ${document.querySelector('[name="StartDate"]').value || "N/A"}`,
+            `End Date: ${document.querySelector('[name="EndDate"]').value || "N/A"}`,
+            `Operational Date: ${document.querySelector('[name="OperationalDate"]').value || "N/A"}`,
+            `Shift: ${document.querySelector('[name="Shift"]').value || "All"}`,
+            `Lane: ${document.querySelector('[name="Lane"]').value || "All"}`,
+            `Account number: ${document.querySelector('[name="AccountNumber"]').value || "All"}`
+        ];
+        doc.setFontSize(10);
+        let y = 105;
+        filters.forEach(f => { doc.text(f, 40, y); y += 14; });
+
+        // Table
+        doc.autoTable({
+            html: "#reportTable",
+            startY: y + 5,
+            theme: "grid",
+            headStyles: { fillColor: [13, 110, 253] },
+            styles: { fontSize: 8, cellPadding: 3 },
+            didDrawPage: function (data) {
+                const footerY = doc.internal.pageSize.height - 40;
+                doc.setFontSize(9);
+                doc.text(`Report Version: 1.0.0`, 40, footerY);
+                doc.text(`Generated by: ${'@currentUserId'}`, 250, footerY);
+                doc.text(`Date & Time: ${'@reportGeneratedAt'}`, 500, footerY);
+                doc.text(`© 2025 Lekki Concession Company / ICT-Works`, 680, footerY);
+            }
+        });
+
+        doc.save("TopUpReport.pdf");
+    });
+
+    document.getElementById("btnDownloadExcel").addEventListener("click", function () {
+        const wb = XLSX.utils.book_new();
+        const ws_name = "TopUpReport";
+
+        // Collect filters for Excel header
+        const filters = [
+            ["Start Date", document.querySelector('[name="StartDate"]').value || "N/A"],
+            ["End Date", document.querySelector('[name="EndDate"]').value || "N/A"],
+            ["Operational Date", document.querySelector('[name="OperationalDate"]').value || "N/A"],
+            ["Shift", document.querySelector('[name="Shift"]').value || "All"],
+            ["Lane", document.querySelector('[name="Lane"]').value || "All"],
+            ["Account number", document.querySelector('[name="AccountNumber"]').value || "All"],
+            [],
+        ];
+
+        // Convert table to sheet
+        const table = document.querySelector("#reportTable");
+        const tableSheet = XLSX.utils.table_to_sheet(table);
+
+        // Combine filters + table data
+        XLSX.utils.sheet_add_aoa(tableSheet, filters, { origin: "A1" });
+        XLSX.utils.book_append_sheet(wb, tableSheet, ws_name);
+        XLSX.writeFile(wb, `TopUpReport_${new Date().toISOString().replace(/[:.]/g, '-')}.xlsx`);
+    });
+
+    // Disable Shift when Operational Date = No
+    document.getElementById("operationalDate").addEventListener("change", function () {
+        const shiftDropdown = document.getElementById("shiftSelect");
+        shiftDropdown.disabled = this.value === "false";
+        if (shiftDropdown.disabled) shiftDropdown.value = "";
+    });
+
+    window.addEventListener("load", function () {
+        const operational = document.getElementById("operationalDate").value;
+        const shiftDropdown = document.getElementById("shiftSelect");
+        if (operational === "false") {
+            shiftDropdown.value = "";
+            shiftDropdown.disabled = true;
+        }
+    });
+</script>

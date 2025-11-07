@@ -1,0 +1,400 @@
+﻿@model MIS.Web.Models.TransactionInputModel
+
+@{
+    var reportVersion = "1";
+    string currentUserId = "Lucky";
+    DateTime reportGeneratedAt = DateTime.Now;
+}
+
+<div class="card shadow-lg mb-4">
+    <div class="card-body">
+
+        <!-- Header -->
+        <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
+            <div></div>
+            <h2 class="mb-0 fw-bold text-primary">Transaction Report</h2>
+            <div></div>
+        </div>
+
+        <!-- Export Button -->
+        <div class="row mb-3">
+            <div class="col-md-2 d-flex align-items-end me-2">
+                <button id="btnDownloadPdf" type="button" class="btn btn-danger w-100 shadow-sm">
+                    <i class="bi bi-file-earmark-pdf"></i> Export PDF
+                </button>
+            </div>
+
+            <div class="col-md-2 d-flex align-items-end">
+                <button id="btnDownloadExcel" type="button" class="btn btn-success w-100 shadow-sm">
+                    <i class="bi bi-file-earmark-excel"></i> Export Excel
+                </button>
+            </div>
+        </div>
+
+
+        <!-- Filters -->
+        @Html.Partial("_TransactionFilters", Model)
+
+        <!-- Table -->
+        <div class="table-responsive">
+            <table class="table table-striped table-bordered text-center">
+                <thead class="table-light">
+                    <tr>
+                        <th>Lane Number</th>
+                        <th>Transaction Sequence</th>
+                        <th>Date</th>
+                        <th>Time</th>
+                        <th>Shift</th>
+                        <th>Operator ID</th>
+                        <th>Payment Method</th>
+                        <th>Tariff</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model?.items != null && Model.items.Any())
+                    {
+                        foreach (var item in Model.items)
+                        {
+                            <tr>
+                                <td>@item.lane_Nr</td>
+                                <td>@item.trx_Sequence_Nr</td>
+                                <td>@item.trx_Date</td>
+                                <td>@item.trx_Time</td>
+                                <td>@item.operational_Shift</td>
+                                <td>@item.toll_Operator_ID</td>
+                                <td>@item.method_of_Payment</td>
+                                <td>@item.tariff?.ToString()</td>
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="8" class="text-muted">No data available for the selected filters.</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            <!-- Pagination -->
+            @{
+    // Cast Model to filters object to preserve selected values
+    var filters = Model as MIS.Web.Models.TransactionInputModel;
+    int startPage = Math.Max(1, Model.page - 1);
+    int endPage = Math.Min(Model.totalPages, Model.page + 1);
+}
+
+<div class="mt-4 d-flex flex-column flex-md-row justify-content-between align-items-center border-top pt-3">
+    <div class="text-muted mb-2 mb-md-0">
+        Showing page <strong>@Model.page</strong> of <strong>@Model.totalPages</strong> |
+        Total records: <strong>@Model.totalCount</strong>
+    </div>
+
+    <nav aria-label="Transaction pagination">
+        <ul class="pagination justify-content-center">
+
+            <!-- Previous page -->
+            <li class="page-item @(Model.page <= 1 ? "disabled" : "")">
+                <a class="page-link" href="@Url.Action("Transaction", "Transaction", new { 
+                    page = Model.page - 1,
+                    pageSize = Model.pageSize,
+                    lane_Nr = filters?.lane_Nr,
+                    TollOperatorID = filters?.TollOperatorID,
+                    Shift = filters?.Shift,
+                    PaymentMethod = filters?.PaymentMethod,
+                    StartDate = filters?.StartDate.ToString("yyyy-MM-ddTHH:mm"),
+                    EndDate = filters?.EndDate.ToString("yyyy-MM-ddTHH:mm")
+                })">&laquo; Previous</a>
+            </li>
+
+            <!-- Page numbers -->
+            @for (int i = startPage; i <= endPage; i++)
+            {
+                <li class="page-item @(i == Model.page ? "active" : "")">
+                    <a class="page-link" href="@Url.Action("Transaction", "Transaction", new { 
+                        page = i,
+                        pageSize = Model.pageSize,
+                        lane_Nr = filters?.lane_Nr,
+                        TollOperatorID = filters?.TollOperatorID,
+                        Shift = filters?.Shift,
+                        PaymentMethod = filters?.PaymentMethod,
+                        StartDate = filters?.StartDate.ToString("yyyy-MM-ddTHH:mm"),
+                        EndDate = filters?.EndDate.ToString("yyyy-MM-ddTHH:mm")
+                    })">@i</a>
+                </li>
+            }
+
+            <!-- Next page -->
+            <li class="page-item @(Model.page >= Model.totalPages ? "disabled" : "")">
+                <a class="page-link" href="@Url.Action("Transaction", "Transaction", new { 
+                    page = Model.page + 1,
+                    pageSize = Model.pageSize,
+                    lane_Nr = filters?.lane_Nr,
+                    TollOperatorID = filters?.TollOperatorID,
+                    Shift = filters?.Shift,
+                    PaymentMethod = filters?.PaymentMethod,
+                    StartDate = filters?.StartDate.ToString("yyyy-MM-ddTHH:mm"),
+                    EndDate = filters?.EndDate.ToString("yyyy-MM-ddTHH:mm")
+                })">Next &raquo;</a>
+            </li>
+
+        </ul>
+    </nav>
+</div>
+
+        </div>
+
+        <!-- Footer -->
+        <div class="mt-4 p-3 border-top bg-light">
+            <table class="table table-borderless w-100 mb-0">
+                <tr>
+                    <td style="width: 35%;">
+                        <strong>Transaction Report</strong> 
+                    </td>
+                    <td style="width: 25%;">
+                        <strong>Date and Time:</strong><br />
+                        <em>@reportGeneratedAt.ToString("dd/MM/yyyy HH:mm:ss")</em>
+                    </td>
+                    <td style="width: 25%;">
+                        <strong>User ID:</strong><br />
+                        <em>@currentUserId</em>
+                    </td>
+                    <td class="text-end" style="width: 15%;">
+                        Page <strong>@Model.page</strong> of <strong>@Model.totalPages</strong>
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="4">
+                        <small class="text-muted">Reports Module Version Number: <strong>@reportVersion</strong></small>
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+    </div>
+</div>
+
+<!-- Scripts -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+@using System.Text.Json
+
+<script>
+document.getElementById("btnDownloadPdf").addEventListener("click", async function () {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 40;
+
+    const reportGeneratedAt = '@DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")';
+    const currentUserId = '@(User.Identity?.Name ?? "Lucky")';
+    const reportVersion = "1.0.0";
+
+    // --- Load Data from Model ---
+    const txData = @Html.Raw(System.Text.Json.JsonSerializer.Serialize((object)Model.items ?? new object[0]));
+
+    // --- Logos ---
+    const logoWidth = 90, logoHeight = 90, logoY = 25;
+    const leftLogoPath = '/images/lCC Logo.jpg';
+    const rightLogoPath = '/images/ICT-Works Logo.jpg';
+
+    const loadImage = src => new Promise(resolve => {
+        if (!src) return resolve(null);
+        const img = new Image();
+        img.crossOrigin = 'Anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null);
+        img.src = src;
+    });
+
+    const [leftLogo, rightLogo] = await Promise.all([loadImage(leftLogoPath), loadImage(rightLogoPath)]);
+
+    if (leftLogo) doc.addImage(leftLogo, 'JPEG', margin, logoY, logoWidth, logoHeight);
+    if (rightLogo) doc.addImage(rightLogo, 'JPEG', pageWidth - margin - logoWidth, logoY, logoWidth, logoHeight);
+
+    // --- Title ---
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.text("Transaction Report", pageWidth / 2, logoY + 50, { align: "center" });
+
+    // --- Filters Used Section ---
+    const filters = {
+        "Start Date": '@(Model.StartDate.ToString("dd/MM/yyyy HH:mm"))',
+        "End Date": '@(Model.EndDate.ToString("dd/MM/yyyy HH:mm"))',
+        "Lane No": '@(Model.lane_Nr ?? "All")',
+        "Operator": '@(Model.TollOperatorID ?? "All")',
+        "Shift": '@(Model.Shift ?? "All")',
+        "Payment Method": '@(Model.PaymentMethod ?? "All")'
+    };
+
+    let y = logoY + logoHeight + 15;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text("Filters Used:", margin, y);
+    y += 14;
+
+    for (const [key, value] of Object.entries(filters)) {
+        doc.text(`${key}: ${value}`, margin, y);
+        y += 14;
+    }
+
+    // --- Table ---
+    const headers = ["Lane", "Trx #", "Date", "Time", "Shift", "Operator", "Payment", "Tariff"];
+    const rows = (txData || []).map(t => [
+        t?.lane_Nr ?? '',
+        t?.trx_Sequence_Nr ?? '',
+        t?.trx_Date ?? '',
+        t?.trx_Time ?? '',
+        t?.operational_Shift ?? '',
+        t?.toll_Operator_ID ?? '',
+        t?.method_of_Payment ?? '',
+        (Number(t?.tariff ?? 0)).toFixed(2)
+    ]);
+
+    const tableStartY = y + 10;
+
+    doc.autoTable({
+        head: [headers],
+        body: rows,
+        startY: tableStartY,
+        theme: 'grid',
+        headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+        styles: { fontSize: 9, cellPadding: 4 },
+        columnStyles: {
+            0: { cellWidth: 60 }, 1: { cellWidth: 60 }, 2: { cellWidth: 65 },
+            3: { cellWidth: 45 }, 4: { cellWidth: 60 },
+            5: { cellWidth: 80 }, 6: { cellWidth: 80 }, 7: { cellWidth: 60, halign: 'right' }
+        },
+        margin: { left: margin, right: margin },
+        didDrawPage: function (data) {
+            const pageCount = doc.internal.getNumberOfPages();
+            const currentPage = doc.internal.getCurrentPageInfo().pageNumber;
+            const footerY = pageHeight - 50;
+
+            // --- Footer ---
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(10);
+            doc.text("Transaction Report", margin, footerY);
+            doc.text(`Date and Time: ${reportGeneratedAt}`, pageWidth / 2.5, footerY);
+            doc.text(`User ID: ${currentUserId}`, pageWidth / 1.5, footerY);
+            doc.text(`Page ${currentPage} of ${pageCount}`, pageWidth - margin, footerY, { align: 'right' });
+
+            doc.setFontSize(9);
+            doc.text(`Reports Module Version Number: ${reportVersion}`, margin, footerY + 14);
+        }
+    });
+
+    const filename = `Transaction_Report_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`;
+    doc.save(filename);
+});
+</script>
+
+<!-- SheetJS (xlsx) - CDN -->
+<script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+
+<script>
+    const txData = @Html.Raw(JsonSerializer.Serialize((object)Model.items ?? new object[0]));
+    const reportGeneratedAt = '@DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")';
+    const currentUserId = '@(User.Identity?.Name ?? "Lucky")';
+    const reportVersion = "1.0.0";
+
+    // small helper to convert values safely to number
+    const toNumber = v => {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : 0;
+    };
+
+    // Build rows and headers same as PDF for consistency
+    function buildExcelRows(items) {
+        // header labels (first row)
+        const headers = ["Lane", "Trx #", "Date", "Time", "Shift", "Operator", "Lane Name", "Payment", "Collector Class", "AVC Class", "Final Class", "Amount", "Card #", "Report Generated At", "User ID", "Report Version"];
+        
+        // rows data
+        const rows = (items || []).map(t => ([
+            t?.lane_Nr ?? '',
+            t?.trx_Sequence_Nr ?? '',
+            t?.trx_Date ?? '',
+            t?.trx_Time ?? '',
+            t?.operational_Shift ?? '',
+            t?.toll_Operator_ID ?? '',
+            t?.lane_Name ?? '',
+            t?.method_of_Payment ?? '',
+            t?.toll_Collector_Class ?? '',
+            t?.avC_Class ?? '',
+            t?.final_Class ?? '',
+            toNumber(t?.tariff),
+            t?.tac_Card_Number ?? '',
+            reportGeneratedAt,
+            currentUserId,
+            reportVersion
+        ]));
+
+        // put header row first for unified json_to_sheet
+        return [headers, ...rows];
+    }
+
+    function createWorksheetFromRows(rows) {
+        // XLSX.utils.aoa_to_sheet expects an array-of-arrays
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+
+        ws['!cols'] = [
+            { wch: 8 },   // Lane
+            { wch: 12 },  // Trx #
+            { wch: 12 },  // Date
+            { wch: 8 },   // Time
+            { wch: 8 },   // Shift
+            { wch: 15 },  // Operator
+            { wch: 20 },  // Lane Name
+            { wch: 12 },  // Payment
+            { wch: 15 },  // Collector Class
+            { wch: 12 },  // AVC Class
+            { wch: 12 },  // Final Class
+            { wch: 12 },  // Amount
+            { wch: 18 },  // Card #
+            { wch: 20 },  // Report Generated At
+            { wch: 12 },  // User ID
+            { wch: 12 }   // Report Version
+        ];
+
+        const range = XLSX.utils.decode_range(ws['!ref']);
+        for (let R = range.s.r + 1; R <= range.e.r; ++R) {
+            const cellAddress = { c: 11, r: R }; 
+            const cellRef = XLSX.utils.encode_cell(cellAddress);
+            const cell = ws[cellRef];
+            if (cell && (typeof cell.v === 'number')) {
+                cell.t = 'n';
+                cell.z = '"$"#,##0.00;[Red]\-"$"#,##0.00'; 
+            } else if (!cell) {
+                ws[cellRef] = { t: 'n', v: 0, z: '"$"#,##0.00;[Red]\-"$"#,##0.00' };
+            }
+        }
+
+        return ws;
+    }
+
+    document.getElementById("btnDownloadExcel").addEventListener("click", function () {
+        const items = Array.isArray(txData) ? txData : (txData ? Object.values(txData) : []);
+        if (!items || items.length === 0) {
+            alert("No transaction data to export for the selected filters.");
+            return;
+        }
+
+        const rows = buildExcelRows(items);
+
+        const ws = createWorksheetFromRows(rows);
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Transactions");
+
+        const safeFilename = `Transaction_Report_${new Date().toISOString().replace(/[:.]/g, '-')}.xlsx`;
+
+        try {
+            XLSX.writeFile(wb, safeFilename, { bookType: "xlsx", type: "binary" });
+        } catch (err) {
+            console.error("Excel export failed:", err);
+            alert("Failed to generate Excel file. See console for details.");
+        }
+    });
+</script>

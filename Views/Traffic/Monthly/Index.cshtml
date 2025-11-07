@@ -1,0 +1,448 @@
+﻿@model MIS.Web.Models.Traffic.Monthly.PageMonthlyTrafficModel
+@using System.Globalization
+
+@{
+    var input = ViewBag.InputModel as MIS.Web.Models.Traffic.Monthly.MonthlyTrafficInputModel
+                ?? new MIS.Web.Models.Traffic.Monthly.MonthlyTrafficInputModel();
+    var classifications = ViewBag.Classifications as List<string> ?? new List<string>();
+}
+
+<div class="card shadow-lg mb-4">
+    <div class="card-body">
+        <!-- Header -->
+        <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
+            <div></div>
+            <h2 class="mb-0 fw-bold text-primary">Monthly Traffic Report</h2>
+            <div></div>
+        </div>
+
+        <!-- Export Buttons -->
+        <div class="row mb-3">
+            <div class="col-md-2 d-flex align-items-end me-2">
+                <button id="btnDownloadPdf" type="button" class="btn btn-danger w-100 shadow-sm">
+                    <i class="bi bi-file-earmark-pdf"></i> Export PDF
+                </button>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button id="btnDownloadExcel" type="button" class="btn btn-success w-100 shadow-sm">
+                    <i class="bi bi-file-earmark-excel"></i> Export Excel
+                </button>
+            </div>
+        </div>
+
+        <!-- Filter Form -->
+        <form method="get" asp-controller="MonthlyTraffic" asp-action="Index" id="filterForm" class="mb-4">
+            <div class="row g-3 align-items-end">
+                <!-- Year -->
+                <div class="col-md-3">
+                    <label class="form-label">Year</label>
+                    <select name="year" id="yearSelect" class="form-select">
+                        <option value="">- All -</option>
+                        @if (ViewBag.Years != null)
+                        {
+                            foreach (var y in ViewBag.Years as List<int>)
+                            {
+                                <option value="@y" selected="@(y == (input.Year ?? 0) ? "selected" : null)">@y</option>
+                            }
+                        }
+                    </select>
+                </div>
+
+                <!-- Month -->
+                <div class="col-md-3">
+                    <label class="form-label">Month</label>
+                    <select name="month" id="monthSelect" class="form-select" @( (ViewBag.Months as List<int>)?.Count == 0 ? "disabled" : "")>
+                        <option value="">- All -</option>
+                        @if (ViewBag.Months != null)
+                        {
+                            foreach (var m in ViewBag.Months as List<int>)
+                            {
+                                <option value="@m" selected="@(m == (input.Month ?? 0) ? "selected" : null)">
+                                    @CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(m)
+                                </option>
+                            }
+                        }
+                    </select>
+                </div>
+
+
+                <!-- Operational Month -->
+                <div class="col-md-3">
+                    <label class="form-label d-block">Operational Month</label>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="operationalMonth" id="opYes" value="true" @(input.OperationalMonth ? "checked" : "")>
+                        <label class="form-check-label" for="opYes">Yes</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="operationalMonth" id="opNo" value="false" @(!input.OperationalMonth ? "checked" : "")>
+                        <label class="form-check-label" for="opNo">No</label>
+                    </div>
+                </div>
+                <!-- Classification -->
+                <div class="col-md-3">
+                    <label class="form-label">Class</label>
+                    <select name="classification" class="form-select" id="classificationSelect">
+                        <option value="">- All -</option>
+                        <option value="Class 1">Class 1</option>
+                        <option value="Class 2">Class 2</option>
+                        <option value="Class 4">Class 4</option>
+                        <option value="Class M">Class M</option>
+                    </select>
+                </div>
+                <!-- Shifts -->
+                <div class="col-12 mt-2">
+                    <label class="form-label">Shifts</label>
+                    <div id="shiftsContainer" class="mb-3">
+                        @for (int i = 1; i <= 3; i++)
+                        {
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input shift-checkbox" type="checkbox" name="shifts" value="@i" id="shift@i"
+                                       @(input.Shifts.Contains(i) ? "checked" : "") @(input.OperationalMonth ? "" : "disabled")>
+                                <label class="form-check-label" for="shift@i">
+                                    Shift @i
+                                    @(i == 1 ? "" : i == 2 ? "" : "")
+                                </label>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-primary w-100">Filter</button>
+                </div>
+            </div>
+        </form>
+
+        <!-- Data Table -->
+        <div class="table-responsive mt-3">
+            <table class="table table-bordered table-striped text-center align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th style="min-width:140px">Month</th>
+                        <th style="min-width:120px">Traffic / %</th>
+                        @foreach (var cls in classifications)
+                        {
+                            <th>@cls</th>
+                        }
+                        <th>Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.Items.Any())
+                    {
+                        var monthGroups = Model.Items.GroupBy(x => new { x.Year, x.Month })
+                        .OrderBy(g => g.Key.Year)
+                        .ThenBy(g => g.Key.Month)
+                        .ToList();
+
+                        var globalTotals = classifications.ToDictionary(c => c, c => 0);
+                        var globalMaximums = classifications.ToDictionary(c => c, c => 0);
+
+                        foreach (var monthGroup in monthGroups)
+                        {
+                            var monthlyTotals = classifications.ToDictionary(c => c, c => 0);
+                            var monthMax = classifications.ToDictionary(c => c, c => 0);
+                            int monthGrandTotal = monthGroup.Sum(x => x.Count);
+
+                            var monthName = CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(monthGroup.Key.Month) + " " + monthGroup.Key.Year;
+
+                            <!-- Monthly Data Row -->
+                            <tr>
+                                <td>@monthName</td>
+                                <td>Traffic</td>
+                                @foreach (var cls in classifications)
+                                {
+                                    int count = monthGroup.FirstOrDefault(x => x.Classification == cls)?.Count ?? 0;
+                                    <td>@count.ToString("N0")</td>
+                                    monthlyTotals[cls] += count;
+                                    globalTotals[cls] += count;
+                                    monthMax[cls] = Math.Max(monthMax[cls], count);
+                                    globalMaximums[cls] = Math.Max(globalMaximums[cls], count);
+                                }
+                                <td>@monthGrandTotal.ToString("N0")</td>
+                            </tr>
+
+                            <!-- Percentage Row -->
+                            <tr>
+                                <td></td>
+                                <td>Percentage</td>
+                                @foreach (var cls in classifications)
+                                {
+                                    double percent = monthGrandTotal > 0 ? (double)monthlyTotals[cls] / monthGrandTotal * 100 : 0;
+                                    <td>@percent.ToString("0.00")%</td>
+                                }
+                                <td>100%</td>
+                            </tr>
+
+                            <!-- Average Row -->
+                            <tr>
+                                <td></td>
+                                <td>Average</td>
+                                @foreach (var cls in classifications)
+                                {
+                                    <td>@monthlyTotals[cls].ToString("N0")</td>
+                                }
+                                <td>@monthlyTotals.Values.Sum().ToString("N0")</td>
+                            </tr>
+
+                            <!-- Maximum Row -->
+                            <tr>
+                                <td></td>
+                                <td>Maximum</td>
+                                @foreach (var cls in classifications)
+                                {
+                                    <td>@monthMax[cls].ToString("N0")</td>
+                                }
+                                <td>@monthMax.Values.Sum().ToString("N0")</td>
+                            </tr>
+                        }
+
+                        var grandTotal = globalTotals.Values.Sum();
+                        var monthCount = monthGroups.Count;
+                        var globalPercentages = globalTotals.ToDictionary(kv => kv.Key, kv => grandTotal > 0 ? (double)kv.Value / grandTotal * 100 : 0);
+                        var globalAverages = globalTotals.ToDictionary(kv => kv.Key, kv => monthCount > 0 ? kv.Value / monthCount : 0);
+
+                        <tr class="table-secondary fw-bold">
+                            <td colspan="2">Total for the Months</td>
+                            @foreach (var cls in classifications)
+                            {
+                                <td>@globalTotals[cls].ToString("N0")</td>
+                            }
+                            <td>@grandTotal.ToString("N0")</td>
+                        </tr>
+
+                        <tr class="table-secondary fw-bold">
+                            <td colspan="2">Percentage</td>
+                            @foreach (var cls in classifications)
+                            {
+                                <td>@globalPercentages[cls].ToString("0.00")%</td>
+                            }
+                            <td>100%</td>
+                        </tr>
+
+                        <tr class="table-secondary fw-bold">
+                            <td colspan="2">Average</td>
+                            @foreach (var cls in classifications)
+                            {
+                                <td>@globalAverages[cls].ToString("N0")</td>
+                            }
+                            <td>@globalAverages.Values.Sum().ToString("N0")</td>
+                        </tr>
+
+                        <tr class="table-secondary fw-bold">
+                            <td colspan="2">Maximum</td>
+                            @foreach (var cls in classifications)
+                            {
+                                <td>@globalMaximums[cls].ToString("N0")</td>
+                            }
+                            <td>@globalMaximums.Values.Sum().ToString("N0")</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="@(classifications.Count + 3)" class="text-center text-muted py-4">
+                                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                                No data available for the selected filters.
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+
+            </table>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <!-- Dependencies -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            console.log("Monthly Traffic PDF/Excel Export Ready ✅");
+
+            // === SETTINGS ===
+            const currentUser = '@(User.Identity?.Name ?? "Unknown User")';
+            const reportGeneratedAt = '@DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")';
+            const reportVersion = '1.0.0';
+            const leftLogoUrl = '/images/lCC Logo.jpg';
+            const rightLogoUrl = '/images/ICT-Works Logo.jpg';
+
+            // === HELPERS ===
+            async function loadImageAsDataUrl(src) {
+                return new Promise((resolve) => {
+                    const img = new Image();
+                    img.crossOrigin = "Anonymous";
+                    img.onload = function () {
+                        try {
+                            const canvas = document.createElement("canvas");
+                            canvas.width = img.naturalWidth;
+                            canvas.height = img.naturalHeight;
+                            const ctx = canvas.getContext("2d");
+                            ctx.drawImage(img, 0, 0);
+                            const mime = src.toLowerCase().endsWith(".png")
+                                ? "image/png"
+                                : "image/jpeg";
+                            resolve(canvas.toDataURL(mime));
+                        } catch (err) {
+                            console.warn("Image conversion failed:", err);
+                            resolve(null);
+                        }
+                    };
+                    img.onerror = () => resolve(null);
+                    img.src = src;
+                });
+            }
+
+            // === PDF EXPORT ===
+            const pdfBtn = document.getElementById("btnDownloadPdf");
+            if (pdfBtn) {
+                pdfBtn.addEventListener("click", async () => {
+                    try {
+                        if (!window.jspdf || !window.jspdf.jsPDF) {
+                            alert("PDF library not loaded — please refresh and try again.");
+                            return;
+                        }
+
+                        const { jsPDF } = window.jspdf;
+                        const doc = new jsPDF({
+                            orientation: "landscape",
+                            unit: "pt",
+                            format: "a4"
+                        });
+
+                        const pageWidth = doc.internal.pageSize.getWidth();
+                        const pageHeight = doc.internal.pageSize.getHeight();
+                        const margin = 40;
+
+                        // --- Load logos ---
+                        const [leftLogo, rightLogo] = await Promise.all([
+                            loadImageAsDataUrl(leftLogoUrl),
+                            loadImageAsDataUrl(rightLogoUrl)
+                        ]);
+
+                        if (leftLogo) doc.addImage(leftLogo, "JPEG", margin, 30, 80, 80);
+                        if (rightLogo) doc.addImage(rightLogo, "JPEG", pageWidth - margin - 80, 30, 80, 80);
+
+                        // --- Header ---
+                        doc.setFont("helvetica", "bold");
+                        doc.setFontSize(14);
+                        doc.text("LEKKI CONCESSION COMPANY LIMITED", pageWidth / 2, 50, { align: "center" });
+                        doc.setFontSize(12);
+                        doc.text("Monthly Traffic Report", pageWidth / 2, 72, { align: "center" });
+
+                        // --- Meta info ---
+                        doc.setFont("helvetica", "normal");
+                        doc.setFontSize(10);
+                        let y = 110;
+                        doc.text(`Generated By: ${currentUser}`, margin, y);
+                        doc.text(`Date: ${reportGeneratedAt}`, margin, y + 14);
+                        doc.text(`Version: ${reportVersion}`, margin, y + 28);
+
+                        // --- Table Extraction ---
+                        const table = document.querySelector("table");
+                        if (!table) {
+                            alert("No table found to export.");
+                            return;
+                        }
+
+                        const headers = Array.from(table.querySelectorAll("thead th")).map(th => th.innerText.trim());
+                        const body = Array.from(table.querySelectorAll("tbody tr")).map(tr =>
+                            Array.from(tr.querySelectorAll("td")).map(td => td.innerText.trim())
+                        );
+
+                        if (!headers.length || !body.length) {
+                            alert("No data found to export in table.");
+                            return;
+                        }
+
+                        // --- AutoTable ---
+                        doc.autoTable({
+                            head: [headers],
+                            body,
+                            startY: y + 50,
+                            theme: "grid",
+                            headStyles: {
+                                fillColor: [41, 128, 185],
+                                textColor: 255,
+                                fontStyle: "bold"
+                            },
+                            styles: {
+                                fontSize: 9,
+                                cellPadding: 4,
+                                valign: "middle",
+                                halign: "center"
+                            },
+                            alternateRowStyles: { fillColor: [245, 245, 245] },
+                            didParseCell: function (data) {
+                              try {
+                                    const firstCell = data.row.cells[0]?.raw?.trim?.() ?? "";
+                                    // Match "Month Year" like "May 2025"
+                                    if (data.section === 'body' && /^\w+\s+\d{4}$/.test(firstCell)) {
+                                        Object.values(data.row.cells).forEach(c => {
+                                            c.styles.fillColor = [240, 240, 240];
+                                            c.styles.fontStyle = 'bold';
+                                            c.styles.halign = 'left';
+                                        });
+                                    }
+                                } catch (err) {
+                                    console.warn("⚠️ didParseCell failed:", err);
+                                }
+                            },
+
+                            didDrawPage: function (data) {
+                                const pageCount = doc.internal.getNumberOfPages();
+                                const currentPage = doc.internal.getCurrentPageInfo().pageNumber;
+                                const footerY = pageHeight - 50;
+                                doc.setFontSize(9);
+                                doc.text("Monthly Traffic Report", margin, footerY);
+                                doc.text(`User: ${currentUser}`, pageWidth / 1.6, footerY);
+                                doc.text(`Page ${currentPage} of ${pageCount}`, pageWidth - margin, footerY, { align: "right" });
+                                doc.text(`Reports Module Version: ${reportVersion}`, margin, footerY + 14);
+                            }
+                        });
+
+                        // --- Save File ---
+                        const filename = `Monthly_Traffic_Report_${new Date().toISOString().replace(/[:.]/g, "-")}.pdf`;
+                        doc.save(filename);
+                        console.log("✅ PDF export complete:", filename);
+                    } catch (err) {
+                        console.error("❌ PDF Export failed:", err);
+                        alert("An error occurred while generating the PDF. Check console for details.");
+                    }
+                });
+            }
+
+            // === EXCEL EXPORT ===
+            const excelBtn = document.getElementById("btnDownloadExcel");
+            if (excelBtn) {
+                excelBtn.addEventListener("click", () => {
+                    try {
+                        const table = document.querySelector("table");
+                        if (!table) {
+                            alert("No table found to export.");
+                            return;
+                        }
+
+                        const wb = XLSX.utils.book_new();
+                        const ws = XLSX.utils.table_to_sheet(table, { raw: true });
+                        const colCount = table.querySelectorAll("thead th").length;
+                        ws["!cols"] = new Array(colCount).fill({ wpx: 100 });
+                        XLSX.utils.book_append_sheet(wb, ws, "Monthly Traffic Report");
+
+                        const filename = `Monthly_Traffic_Report_${new Date().toISOString().replace(/[:.]/g, "-")}.xlsx`;
+                        XLSX.writeFile(wb, filename);
+                        console.log("✅ Excel export complete:", filename);
+                    } catch (err) {
+                        console.error("❌ Excel Export failed:", err);
+                        alert("An error occurred while generating the Excel file. Check console for details.");
+                    }
+                });
+            }
+        });
+    </script>
+}
+
+

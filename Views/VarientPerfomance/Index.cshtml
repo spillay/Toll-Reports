@@ -1,0 +1,302 @@
+﻿@model MIS.Web.Models.VarientPerfomanceInputModel
+@using System.Text.Json
+
+@{
+    ViewData["Title"] = "Staff Variations & Performance Report";
+    var reportVersion = "1.0.0";
+    var currentUser = User.Identity?.Name ?? "Lucky";
+    var reportGeneratedAt = DateTime.Now;
+
+    // Pagination window (3 visible pages max)
+    int maxPagesToShow = 3;
+    int startPage = Math.Max(1, Model.page - 1);
+    int endPage = Math.Min(Model.totalPages, startPage + maxPagesToShow - 1);
+    if (endPage - startPage + 1 < maxPagesToShow && startPage > 1)
+        startPage = Math.Max(1, endPage - maxPagesToShow + 1);
+}
+
+<div class="card shadow-lg mb-4">
+    <div class="card-body">
+
+        <!-- Header -->
+        <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
+            <h2 class="mb-0 fw-bold text-primary">Staff Variations & Performance Report</h2>
+        </div>
+
+        <!-- Export Buttons -->
+        <div class="row mb-3">
+            <div class="col-md-2 d-flex align-items-end me-2">
+                <button id="btnDownloadPdf" type="button" class="btn btn-danger w-100 shadow-sm">
+                    <i class="bi bi-file-earmark-pdf"></i> Export PDF
+                </button>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button id="btnDownloadExcel" type="button" class="btn btn-success w-100 shadow-sm">
+                    <i class="bi bi-file-earmark-excel"></i> Export Excel
+                </button>
+            </div>
+        </div>
+
+        <!-- Filters Form -->
+        <form method="get" asp-action="VarientPerfomances" asp-controller="VarientPerfomance" class="row mb-3">
+            <div class="col-md-3">
+                <label for="StartDate" class="form-label fw-semibold">Start Date & Time</label>
+                <input type="datetime-local" id="StartDate" name="startDate" class="form-control"
+                       value="@Model.StartDate.ToString("yyyy-MM-ddTHH:mm")" />
+            </div>
+
+            <div class="col-md-3">
+                <label for="EndDate" class="form-label fw-semibold">End Date & Time</label>
+                <input type="datetime-local" id="EndDate" name="endDate" class="form-control"
+                       value="@Model.EndDate.ToString("yyyy-MM-ddTHH:mm")" />
+            </div>
+
+            <div class="col-md-3">
+                <label for="Shift" class="form-label fw-semibold">Operational Shift</label>
+                <select id="Shift" name="shift" class="form-select"
+                        asp-items="@(new SelectList(ViewBag.Shifts, Model.Shift))">
+                    <option value="">All</option>
+                </select>
+            </div>
+
+            <div class="col-md-3">
+                <label for="TollOperatorID" class="form-label fw-semibold">Toll Operator ID</label>
+                <select id="TollOperatorID" name="tollOperatorID" class="form-select"
+                        asp-items="@(new SelectList(ViewBag.TollOperators, Model.TollOperatorID))">
+                    <option value="">All</option>
+                </select>
+            </div>
+
+            <div class="col-md-3 mt-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">Filter</button>
+            </div>
+        </form>
+
+        <!-- Table -->
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover text-center align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Shift Date</th>
+                        <th>Shift Description</th>
+                        <th>Operator</th>
+                        <th>Cash Expected</th>
+                        <th>Cash Declared</th>
+                        <th>Cash Difference</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.items != null && Model.items.Any())
+                    {
+                        foreach (var item in Model.items)
+                        {
+                            <tr>
+                                <td>@item.ShiftDate?.ToString("yyyy-MM-dd")</td>
+                                <td>@item.ShiftDescription</td>
+                                <td>@item.TollOperator</td>
+                                <td>@((item.NominalTariff ?? 0).ToString("N2"))</td>
+                                <td>@((item.NettAmount ?? 0).ToString("N2"))</td>
+
+                                <td>
+                                    @{
+                                        double expected = item.NominalTariff ?? 0;
+                                        double declared = item.NettAmount ?? 0;
+                                        double difference = expected - declared;
+                                    }
+                                    @difference.ToString("N2")
+                                </td>
+
+
+
+
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="6">No records found.</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="mt-4 d-flex flex-column flex-md-row justify-content-between align-items-center border-top pt-3">
+            <div class="text-muted mb-2 mb-md-0">
+                Showing page <strong>@Model.page</strong> of <strong>@Model.totalPages</strong> |
+                Total records: <strong>@Model.totalCount</strong>
+            </div>
+
+            <nav aria-label="Varient pagination">
+                <ul class="pagination justify-content-center mb-0">
+                    <li class="page-item @(Model.page <= 1 ? "disabled" : "")">
+                        <a class="page-link"
+                           href="@Url.Action("VarientPerfomances", "VarientPerfomance",
+                           new { page = Model.page - 1, pageSize = Model.pageSize,
+                                 StartDate = Model.StartDate.ToString("yyyy-MM-ddTHH:mm"),
+                                 EndDate = Model.EndDate.ToString("yyyy-MM-ddTHH:mm"),
+                                 Shift = Model.Shift, TollOperatorID = Model.TollOperatorID })">&laquo; Previous</a>
+                    </li>
+
+                    @for (int i = startPage; i <= endPage; i++)
+                    {
+                        <li class="page-item @(i == Model.page ? "active" : "")">
+                            <a class="page-link"
+                               href="@Url.Action("VarientPerfomances", "VarientPerfomance",
+                               new { page = i, pageSize = Model.pageSize,
+                                     StartDate = Model.StartDate.ToString("yyyy-MM-ddTHH:mm"),
+                                     EndDate = Model.EndDate.ToString("yyyy-MM-ddTHH:mm"),
+                                     Shift = Model.Shift, TollOperatorID = Model.TollOperatorID })">@i</a>
+                        </li>
+                    }
+
+                    <li class="page-item @(Model.page >= Model.totalPages ? "disabled" : "")">
+                        <a class="page-link"
+                           href="@Url.Action("VarientPerfomances", "VarientPerfomance",
+                           new { page = Model.page + 1, pageSize = Model.pageSize,
+                                 StartDate = Model.StartDate.ToString("yyyy-MM-ddTHH:mm"),
+                                 EndDate = Model.EndDate.ToString("yyyy-MM-ddTHH:mm"),
+                                 Shift = Model.Shift, TollOperatorID = Model.TollOperatorID })">Next &raquo;</a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+
+        <!-- Footer -->
+        <hr class="my-3" />
+        <div class="row text-muted small">
+            <div class="col-md-4">
+                <p class="fw-bold mb-1 text-dark">Staff Variations & Performance Report</p>
+                <p class="mb-0">Reports Module Version Number: <strong>@reportVersion</strong></p>
+            </div>
+            <div class="col-md-4 text-center">
+                <p class="fw-bold mb-1 text-dark">Date and Time:</p>
+                <p class="mb-0">@reportGeneratedAt.ToString("dd/MM/yyyy HH:mm:ss")</p>
+            </div>
+            <div class="col-md-4 text-end">
+                <p class="fw-bold mb-1 text-dark">User ID:</p>
+                <p class="mb-0">@currentUser</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SCRIPTS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+
+<script>
+const variantData = @Html.Raw(JsonSerializer.Serialize(Model.items ?? new List<MIS.Web.Models.VarientPerfomance.VarientPerfomanceModel>()));
+const reportGeneratedAt = '@reportGeneratedAt.ToString("dd/MM/yyyy HH:mm:ss")';
+const currentUser = '@currentUser';
+const reportVersion = '@reportVersion';
+
+const appliedFilters = {
+    "Start Date": '@Model.StartDate.ToString("dd/MM/yyyy HH:mm")',
+    "End Date": '@Model.EndDate.ToString("dd/MM/yyyy HH:mm")',
+    "Shift": '@(string.IsNullOrEmpty(Model.Shift) ? "All" : Model.Shift)',
+    "Operator": '@(string.IsNullOrEmpty(Model.TollOperatorID) ? "All" : Model.TollOperatorID)'
+};
+
+// ===== PDF EXPORT =====
+document.getElementById("btnDownloadPdf").addEventListener("click", async () => {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 40;
+
+    // LOGOS
+    const logoWidth = 90, logoHeight = 90, logoY = 25;
+    const loadImage = src => new Promise(res => {
+        const img = new Image(); img.crossOrigin = 'Anonymous';
+        img.onload = () => res(img); img.onerror = () => res(null); img.src = src;
+    });
+    const [leftLogo, rightLogo] = await Promise.all([
+        loadImage('/images/lCC Logo.jpg'),
+        loadImage('/images/ICT-Works Logo.jpg')
+    ]);
+    if (leftLogo) doc.addImage(leftLogo, 'JPEG', margin, logoY, logoWidth, logoHeight);
+    if (rightLogo) doc.addImage(rightLogo, 'JPEG', pageWidth - margin - logoWidth, logoY, logoWidth, logoHeight);
+
+    // TITLE
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.text("Staff Variations & Performance Report", pageWidth / 2, logoY + 50, { align: "center" });
+
+    // FILTERS
+    let y = logoY + logoHeight + 10;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text("Filters Used:", margin, y);
+    y += 14;
+    for (const [key, val] of Object.entries(appliedFilters)) {
+        doc.text(`${key}: ${val}`, margin, y); y += 14;
+    }
+
+    // TABLE
+    const headers = ["Shift Date","Shift Description","Operator","Expected","Declared","Difference"];
+    const rows = (variantData || []).map(v => [
+        v.ShiftDate, v.ShiftDescription, v.TollOperator,
+        (v.NominalTariff ?? 0).toFixed(2),
+        (v.NettAmount ?? 0).toFixed(2),
+        ((v.NominalTariff ?? 0) - (v.NettAmount ?? 0)).toFixed(2)
+    ]);
+
+    doc.autoTable({
+        head: [headers],
+        body: rows,
+        startY: y + 10,
+        theme: 'grid',
+        headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+        styles: { fontSize: 9, cellPadding: 4 },
+        didDrawPage: data => {
+            const pageCount = doc.internal.getNumberOfPages();
+            const currentPage = doc.internal.getCurrentPageInfo().pageNumber;
+            const footerY = pageHeight - 50;
+            doc.setFontSize(10);
+            doc.text("Staff Variations & Performance Report", margin, footerY);
+            doc.text(`Date: ${reportGeneratedAt}`, pageWidth / 2.5, footerY);
+            doc.text(`User: ${currentUser}`, pageWidth / 1.6, footerY);
+            doc.text(`Page ${currentPage} of ${pageCount}`, pageWidth - margin, footerY, { align: "right" });
+            doc.setFontSize(9);
+            doc.text(`Version: ${reportVersion}`, margin, footerY + 14);
+        }
+    });
+
+    doc.save(`Varient_Performance_Report_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
+});
+
+// ===== EXCEL EXPORT =====
+document.getElementById("btnDownloadExcel").addEventListener("click", function () {
+    if (!variantData?.length) return alert("No data available to export.");
+
+    const rows = variantData.map(v => ({
+        "Shift Date": v.ShiftDate,
+        "Shift Description": v.ShiftDescription,
+        "Operator": v.TollOperator,
+        "Expected": v.NominalTariff,
+        "Declared": v.NettAmount,
+        "Difference": (v.NominalTariff - v.NettAmount)
+    }));
+
+    const totalExpected = rows.reduce((a,b)=>a+(b["Expected"]||0),0);
+    const totalDeclared = rows.reduce((a,b)=>a+(b["Declared"]||0),0);
+    rows.push({});
+    rows.push({
+        "Shift Description": "TOTAL",
+        "Expected": totalExpected,
+        "Declared": totalDeclared,
+        "Difference": totalExpected - totalDeclared
+    });
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Performance Report");
+    XLSX.writeFile(wb, `Varient_Performance_Report_${new Date().toISOString().replace(/[:.]/g, '-')}.xlsx`);
+});
+</script>

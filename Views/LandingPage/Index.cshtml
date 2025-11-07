@@ -1,0 +1,116 @@
+﻿
+@model MIS.Web.Pages.LandingPage.IndexModel
+@{
+   
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="landing-page">
+    <!-- Hero Section -->
+    <section class="hero-section bg-primary text-white py-5">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-lg-12 text-center">
+                    
+                    <h1 class="lead my-4">LEKKI-IKOYI LINK BRIDGE</h1>
+                    <div class="hero-buttons">
+                        <a href="/Transaction" class="btn btn-light btn-lg me-3">View Transactions</a>
+                        <a href="/Traffic" class="btn btn-outline-light btn-lg">Traffic Reports</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Quick Stats Section -->
+    <section class="features-section py-5">
+        <div class="container">
+            <div class="text-center mb-5">
+                <h2>Quick Access</h2>
+                <p class="lead">Manage your toll plaza operations efficiently</p>
+            </div>
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="feature-card text-center p-4">
+                        <div class="feature-icon mb-3">
+                            <i class="bi bi-cash-stack fa-3x text-primary"></i>
+                        </div>
+                        <h4>Transactions</h4>
+                        <p>View and manage all toll transactions and payments.</p>
+                        <a href="/Transaction" class="btn btn-outline-primary">View Transactions</a>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="feature-card text-center p-4">
+                        <div class="feature-icon mb-3">
+                            <i class="bi bi-exclamation-triangle fa-3x text-primary"></i>
+                        </div>
+                        <h4>Variance Perfomances</h4>
+                        <p>Monitor and resolve any transaction Variance Perfomances.</p>
+                        <a href="VarientPerfomance/VarientPerfomances" class="btn btn-outline-primary">Check  Variance Perfomances</a>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="feature-card text-center p-4">
+                        <div class="feature-icon mb-3">
+                            <i class="bi bi-graph-up fa-3x text-primary"></i>
+                        </div>
+                        <h4>Traffic Reports</h4>
+                        <p>Analyze hourly, daily, and monthly traffic patterns.</p>
+                        <a href="/Traffic/HourlyReport" class="btn btn-outline-primary">View Reports</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- System Overview -->
+    <section class="stats-section bg-light py-5">
+        <div class="container">
+            <div class="row text-center">
+                <div class="col-md-3">
+                    <h3 class="display-4 fw-bold text-primary">24/7</h3>
+                    <p>Operations</p>
+                </div>
+                <div class="col-md-3">
+                    <h3 class="display-4 fw-bold text-primary">100%</h3>
+                    <p>Digital Transactions</p>
+                </div>
+                <div class="col-md-3">
+                    <h3 class="display-4 fw-bold text-primary">Real-time</h3>
+                    <p>Monitoring</p>
+                </div>
+                <div class="col-md-3">
+                    <h3 class="display-4 fw-bold text-primary">Secure</h3>
+                    <p>Data Management</p>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+
+<style>
+    .landing-page {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    .hero-section {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .feature-card {
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        transition: transform 0.3s ease;
+        height: 100%;
+    }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+        }
+
+    .stats-section {
+        background-color: #f8f9fa !important;
+    }
+</style>

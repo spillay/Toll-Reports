@@ -1,108 +1,143 @@
-﻿using Microsoft.EntityFrameworkCore;
-using Toll.Reporting.Api.DTOs;
-using Toll.Reporting.Api.Repositories;
-using TollReportingSystem.Data;
-using System;
+﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
-using System.Collections.Generic;
+using Microsoft.EntityFrameworkCore;
+using Toll.Reporting.Api.DTOs;
+using Toll.Reporting.Api.Repositories.Interfaces;
+using TollReportingSystem.Data;
 
-public class TopUpRepository : ITopUpRepository
+namespace Toll.Reporting.Api.Repositories
 {
-    private readonly ApplicationDbContext _context;
-
-    public TopUpRepository(ApplicationDbContext context)
+    public class TopUpRepository : ITopUpRepository
     {
-        _context = context;
-    }
+        private readonly ApplicationDbContext _context;
 
-    public async Task<PagedResult<TopUpDto>> GetTopUpsAsync(
-        DateTime startDate,
-        DateTime endDate,
-        string? operatorId = null,
-        string? lane = null,
-        string? shift = null,
-        string? accountNumber = null,
-        bool? operationalDate = null,
-        int page = 1,
-        int pageSize = 50)
-    {
-        var query =
-            from rut in _context.RegisteredUserTopUps
+        public TopUpRepository(ApplicationDbContext context)
+        {
+            _context = context;
+        }
 
-            join ru in _context.RegisteredUsers
-                on rut.RegisterUserId equals ru.RegisterUserId into ruGroup
-            from ru in ruGroup.DefaultIfEmpty()
+        public async Task<PagedResult<TopUpDto>> GetTopUpsAsync(
+            DateTime startDate,
+            DateTime endDate,
+            string? shift = null,
+            string? operatorId = null,
+            string? lane = null,
+            string? accountNumber = null,
+            int page = 1,
+            int pageSize = 30)
+        {
+            // Ensure endDate covers entire end day
+            if (endDate.TimeOfDay == TimeSpan.Zero)
+                endDate = endDate.AddDays(1).AddSeconds(-1);
 
-            join pm in _context.PaymentMethods
-                on rut.PaymentMethodId equals pm.PaymentMethodId into pmGroup
-            from pm in pmGroup.DefaultIfEmpty()
+            // -------------------------
+            // BASE QUERY (strongly typed)
+            // -------------------------
+            var query =
+                from rut in _context.RegisteredUserTopUps.AsNoTracking()
+                join ru in _context.RegisteredUsers.AsNoTracking()
+                    on rut.RegisterUserId equals ru.RegisterUserId into ruGroup
+                from ru in ruGroup.DefaultIfEmpty()
+                join pm in _context.PaymentMethods.AsNoTracking()
+                    on rut.PaymentMethodId equals pm.PaymentMethodId into pmGroup
+                from pm in pmGroup.DefaultIfEmpty()
+                where rut.RechargedOn >= startDate && rut.RechargedOn <= endDate
+                select new
+                {
+                    TopUp = rut,
+                    User = ru,
+                    Payment = pm
+                };
 
-            where rut.RechargedOn >= startDate && rut.RechargedOn <= endDate
-            select new
+            // -------------------------
+            // APPLY FILTERS (still in SQL)
+            // -------------------------
+
+            if (!string.IsNullOrWhiteSpace(shift))
             {
-                rut.RegisteredUserTopUpId,
-                rut.RechargedOn,
-                rut.RechargeStation,
-                rut.RechargeShift,
-                rut.SystemUserId,  
-                ru.RegisterUserId,
-                ru.AccNr,
-                ru.CompanyName,
-                rut.Amount,
-                PaymentDesc = pm.Description
+                query = query.Where(x =>
+                    x.TopUp.RechargeShift.ToString() == shift);
+            }
+
+            if (!string.IsNullOrWhiteSpace(operatorId))
+            {
+                query = query.Where(x =>
+                    x.TopUp.SystemUserId.ToString() == operatorId);
+            }
+
+            if (!string.IsNullOrWhiteSpace(lane))
+            {
+                query = query.Where(x =>
+                    x.TopUp.RechargeStation == lane);
+            }
+
+            if (!string.IsNullOrWhiteSpace(accountNumber))
+            {
+                var acc = accountNumber;
+
+                // Try to treat it also as numeric RegisterUserId
+                bool isNumeric = long.TryParse(acc, out var accId);
+
+                query = query.Where(x =>
+                    // Match on identifier (RegisteredUserIdentifier)
+                    (x.User != null && x.User.RegisteredUserIdentifiers
+                        .Any(i => i.RegisteredIdentifier == acc))
+                    ||
+                    // OR fallback to RegisterUserId if numeric
+                    (isNumeric && x.User != null && x.User.RegisterUserId == accId)
+                );
+            }
+
+            // -------------------------
+            // COUNT BEFORE PAGING
+            // -------------------------
+            var totalCount = await query.CountAsync();
+
+            // -------------------------
+            // PAGED RESULT (SQL LEVEL)
+            // -------------------------
+            var items = await query
+                .OrderByDescending(x => x.TopUp.RechargedOn)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(x => new TopUpDto
+                {
+                    TopUpNumber = (int)x.TopUp.RegisteredUserTopUpId,
+                    TopUpDateTime = x.TopUp.RechargedOn,
+                    LaneWorkstation = x.TopUp.RechargeStation ?? string.Empty,
+                    Shift = x.TopUp.RechargeShift.ToString(),
+                    Operator = x.TopUp.SystemUserId.ToString(),
+
+                    AccountNumber = x.User != null &&
+                                    x.User.RegisteredUserIdentifiers.Any()
+                        ? x.User.RegisteredUserIdentifiers
+                            .OrderBy(i => i.RegisteredIdentifier) 
+                            .Select(i => i.RegisteredIdentifier)
+                            .FirstOrDefault()
+                        : (x.User != null
+                            ? x.User.RegisterUserId.ToString()
+                            : string.Empty),
+
+                    AccountName = x.User != null
+                        ? (x.User.CompanyName ?? string.Empty)
+                        : string.Empty,
+
+                    AmountPaid = x.TopUp.Amount,
+                    MethodOfPayment = x.Payment != null
+                        ? (x.Payment.Description ?? string.Empty)
+                        : string.Empty
+                })
+                .ToListAsync();
+
+            return new PagedResult<TopUpDto>
+            {
+                Items = items,
+                TotalCount = totalCount,
+                Page = page,
+                PageSize = pageSize,
+                TotalPages = (int)Math.Ceiling((double)totalCount / pageSize)
             };
-
-        var totalCount = await query.CountAsync();
-
-        var resultList = await query
-            .OrderByDescending(x => x.RechargedOn)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .ToListAsync();
-
-        var items = resultList.Select(x => new TopUpDto
-        {
-            TopUpNumber = Convert.ToInt32(x.RegisteredUserTopUpId),
-            TopUpDateTime = x.RechargedOn,
-            LaneWorkstation = x.RechargeStation ?? string.Empty,
-            Shift = x.RechargeShift.ToString() ?? string.Empty,
-
-            Operator = x.SystemUserId.ToString(),
-
-            AccountNumber = !string.IsNullOrEmpty(x.AccNr)
-                ? x.AccNr
-                : x.RegisterUserId.ToString(),
-
-            AccountName = x.CompanyName ?? string.Empty,
-            AmountPaid = Convert.ToDecimal(x.Amount),
-            MethodOfPayment = x.PaymentDesc ?? string.Empty
-        }).ToList();
-
-        if (!string.IsNullOrWhiteSpace(operatorId))
-            items = items
-                .Where(x => x.Operator.Equals(operatorId, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-        if (!string.IsNullOrWhiteSpace(lane))
-            items = items
-                .Where(x => x.LaneWorkstation.Equals(lane, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-        if (!string.IsNullOrWhiteSpace(shift))
-            items = items
-                .Where(x => x.Shift.Equals(shift, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-        if (!string.IsNullOrWhiteSpace(accountNumber))
-            items = items
-                .Where(x => x.AccountNumber.Equals(accountNumber, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-        return new PagedResult<TopUpDto>
-        {
-            TotalCount = totalCount,
-            Items = items
-        };
+        }
     }
 }

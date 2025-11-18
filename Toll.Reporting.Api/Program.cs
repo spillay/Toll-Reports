@@ -1,44 +1,60 @@
-using Microsoft.Extensions.Hosting.WindowsServices;
-using Microsoft.EntityFrameworkCore;
-using TollReportingSystem.Data; // <-- Your EF DbContext (Database First)
-using Toll.Reporting.Api.Repositories; // <-- Your repositories interfaces & implementations
-
-
+﻿using Microsoft.EntityFrameworkCore;
+using Toll.Reporting.Api.Repositories;
+using Toll.Reporting.Api.Repositories.Implementations;
+using Toll.Reporting.Api.Repositories.Interfaces;
+using TollReportingSystem.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ====================
+// Windows Service
+// ====================
 builder.Services.AddWindowsService();
 
-// Add services to the container.
+// ====================
+// Controllers + JSON FIX
+// ====================
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        // ⭐ MOST IMPORTANT FIX — return PascalCase for MVC frontend
+        options.JsonSerializerOptions.PropertyNamingPolicy = null;
+    });
 
-builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Register DbContext with SQL Server
-// Connection string comes from appsettings.json
-
+// ====================
+// Load Configuration
+// ====================
 var configBuilder = new ConfigurationBuilder().AddJsonFile("appsettings.json").Build();
-var configSection = configBuilder.GetSection("ConnectionStrings");
-var connectionString = configSection["SQLServerConnection"] ?? null;
-var configServer = configBuilder.GetSection("Server");
-var port = configServer["Port"];
-var host = configServer["Host"];
+var connectionString = configBuilder.GetConnectionString("SQLServerConnection");
 
+var configServer = configBuilder.GetSection("Server");
+var host = configServer["Host"];
+var port = configServer["Port"];
+
+// ====================
+// DbContext
+// ====================
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(connectionString));
 
-// Add CORS policy
+// ====================
+// CORS
+// ====================
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll", policy =>
-        policy.AllowAnyOrigin()
+    options.AddPolicy("AllowFrontend", policy =>
+        policy.WithOrigins("http://localhost:8081")
               .AllowAnyMethod()
               .AllowAnyHeader());
 });
-// Register repositories with Dependency Injection
-// Scoped = one instance per request (recommended for DbContext)
+
+// ====================
+// Dependency Injection
+// ====================
 builder.Services.AddScoped<ITransactionRepository, TransactionRepository>();
 builder.Services.AddScoped<IComprehensiveRepository, ComprehensiveRepository>();
 builder.Services.AddScoped<IDiscrepancyRepository, DiscrepancyRepository>();
@@ -49,25 +65,30 @@ builder.Services.AddScoped<IMonthlyTrafficRepository, MonthlyTrafficRepository>(
 builder.Services.AddScoped<IDailyCashupRepository, DailyCashupRepository>();
 builder.Services.AddScoped<ITopUpRepository, TopUpRepository>();
 builder.Services.AddScoped<IAccountHistoryRepository, AccountHistoryRepository>();
+builder.Services.AddScoped<IAccountUsageSummaryRepository, AccountUsageSummaryRepository>();
+builder.Services.AddScoped<IAccountUsageDetailsRepository, AccountUsageDetailsRepository>();
 
-
-
-// Program.cs - inside builder.Services section
-//builder.Services.Configure<SSRSOptions>(builder.Configuration.GetSection("SSRS"));
 builder.Services.AddHttpClient();
 
+// ====================
+// Build App
+// ====================
 var app = builder.Build();
+
 app.UseCors("AllowFrontend");
-// Configure the HTTP request pipeline.
+
 if (app.Environment.IsDevelopment())
 {
-    Console.WriteLine("In Development environment");
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
 app.UseAuthorization();
-
 app.MapControllers();
 
-app.Run($"http://{host}:{port}");
+// ====================
+// Run
+// ====================
+//app.Run($"http://{host}:{port}");
+app.Run("http://0.0.0.0:4567");
+

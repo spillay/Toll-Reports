@@ -1073,14 +1073,14 @@ namespace TollReportingSystem.Data
                         .OnDelete(DeleteBehavior.ClientSetNull)
                         .HasConstraintName("FK_RegisteredUserIdentifier_RegisteredUser");
 
-                    entity.HasOne(d => d.VehicleType)
-                        .WithMany(p => p.RegisteredUserIdentifiers)
-                        .HasForeignKey(d => d.VehicleTypeId)
-                        .OnDelete(DeleteBehavior.ClientSetNull)
-                        .HasConstraintName("FK_RegisteredUserIdentifier_VehicleType");
+                 
+                   
                 });
+                
+           
 
-                modelBuilder.Entity<RegisteredUserIdentifierTollPlazaApplicableDiscount>(entity =>
+
+            modelBuilder.Entity<RegisteredUserIdentifierTollPlazaApplicableDiscount>(entity =>
                 {
                     entity.HasKey(e => new { e.RegisteredUserIdentifierId, e.TollPlazaId });
 

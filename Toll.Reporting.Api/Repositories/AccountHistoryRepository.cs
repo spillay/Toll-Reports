@@ -1,13 +1,12 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Toll.Reporting.Api.DTOs;
-using Toll.Reporting.Api.Repositories;
+using Toll.Reporting.Api.Repositories.Interfaces;
 using TollReportingSystem.Data;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace Toll.Reporting.Api.Repositories
+namespace Toll.Reporting.Api.Repositories.Implementations
 {
     public class AccountHistoryRepository : IAccountHistoryRepository
     {
@@ -18,132 +17,176 @@ namespace Toll.Reporting.Api.Repositories
             _context = context;
         }
 
-        public async Task<AccountHistoryDto> GetAccountHistoryAsync(string accountNumber)
+        public async Task<AccountHistoryDto> GetAccountHistoryAsync(
+    string accountNumber,
+    DateTime? startDate,
+    DateTime? endDate)
         {
-            // ✅ CASE 1: No filter → Return all accounts (no header)
+            // Normalize dates
+            DateTime start = startDate?.ToUniversalTime() ?? DateTime.MinValue;
+            DateTime end = endDate?.ToUniversalTime() ?? DateTime.MaxValue;
+
+            if (endDate.HasValue && endDate.Value.TimeOfDay == TimeSpan.Zero)
+                end = endDate.Value.Date.AddDays(1).AddSeconds(-1).ToUniversalTime();
+
+            // ==============================================================
+            // CASE 1 — ALL ACCOUNTS
+            // ==============================================================
             if (string.IsNullOrWhiteSpace(accountNumber))
             {
-                var allRecords = await (
+                // --- TOP UPS (executes safely in SQL)
+                var tops = await (
                     from rtu in _context.RegisteredUserTopUps.AsNoTracking()
-                    join ru in _context.RegisteredUsers.AsNoTracking() on rtu.RegisterUserId equals ru.RegisterUserId
-                    join pm in _context.PaymentMethods.AsNoTracking() on rtu.PaymentMethodId equals pm.PaymentMethodId into pmGroup
+                    join ru in _context.RegisteredUsers.AsNoTracking()
+                        on rtu.RegisterUserId equals ru.RegisterUserId
+                    join pm in _context.PaymentMethods.AsNoTracking()
+                        on rtu.PaymentMethodId equals pm.PaymentMethodId into pmGroup
                     from pm in pmGroup.DefaultIfEmpty()
-                    join t in _context.Transactions.AsNoTracking() on ru.RegisterUserId equals t.RegisteredUserId into tGroup
-                    from t in tGroup.DefaultIfEmpty()
-                    join l in _context.Lanes.AsNoTracking() on t.LaneId equals l.LaneId into lGroup
+                    where rtu.RechargedOn >= start && rtu.RechargedOn <= end
+                    select new AccountHistoryRecordDto
+                    {
+                        LaneName = "Lekki-Ikoyi",
+                        TransactionType = "Top-up",
+                        TransactionAmount = 0m,
+                        TopUpAmount = (decimal)rtu.Amount,
+                        UserBalance = (decimal)ru.Balance,
+                        PaymentMethod = pm.Description ?? "N/A",
+                        TransactionDateTime = rtu.RechargedOn,
+                        RegisteredIdentifier = "N/A",
+                        NumberPlate = "N/A",
+                        Description = $"Account {ru.RegisterUserId} ({ru.FirstName} {ru.LastName})"
+                    }
+                ).ToListAsync();
+
+                // --- TRANSACTIONS (executes safely in SQL)
+                var trxs = await (
+                    from t in _context.Transactions.AsNoTracking()
+                    join ru in _context.RegisteredUsers.AsNoTracking()
+                        on t.RegisteredUserId equals ru.RegisterUserId
+                    join l in _context.Lanes.AsNoTracking()
+                        on t.LaneId equals l.LaneId into lGroup
                     from l in lGroup.DefaultIfEmpty()
-                    join tt in _context.TransactionTypes.AsNoTracking() on t.TransactionTypeId equals tt.TransactionTypeId into ttGroup
+                    join tt in _context.TransactionTypes.AsNoTracking()
+                        on t.TransactionTypeId equals tt.TransactionTypeId into ttGroup
                     from tt in ttGroup.DefaultIfEmpty()
-                    join rui in _context.RegisteredUserIdentifiers.AsNoTracking() on ru.RegisterUserId equals rui.RegisteredUserId into ruiGroup
-                    from rui in ruiGroup.DefaultIfEmpty()
+                    where t.TransactionDateTime >= start && t.TransactionDateTime <= end
                     select new AccountHistoryRecordDto
                     {
                         LaneName = l.LaneName ?? "Lekki-Ikoyi",
-                        TransactionType = tt.Description ?? "N/A",
-                        TransactionAmount = t.NettAmount != null ? Convert.ToDecimal(t.NettAmount) : 0,
-                        TopUpAmount = rtu.Amount != null ? Convert.ToDecimal(rtu.Amount) : 0,
-                        UserBalance = ru.Balance != null ? Convert.ToDecimal(ru.Balance) : 0,
-                        PaymentMethod = pm.Description ?? "N/A",
-                        TransactionDateTime = t.TransactionDateTime != null
-                        ? t.TransactionDateTime
-                        : rtu.RechargedOn,
-                        RegisteredIdentifier = rui.RegisteredIdentifier ?? "N/A",
-                        NumberPlate = rui.NumberPlateDetails ?? "N/A",
-                        Description = $"Account: {ru.AccNr} ({ru.FirstName} {ru.LastName})"
+                        TransactionType = tt.Description ?? "Lane Transaction",
+                        TransactionAmount = (decimal)t.NettAmount,
+                        TopUpAmount = 0m,
+                        UserBalance = (decimal)ru.Balance,
+                        PaymentMethod = "SmartCard",
+                        TransactionDateTime = t.TransactionDateTime,
+                        RegisteredIdentifier = "N/A",
+                        NumberPlate = "N/A",
+                        Description = $"Account {ru.RegisterUserId} ({ru.FirstName} {ru.LastName})"
                     }
-                )
-                .OrderByDescending(x => x.TransactionDateTime)
-                .Take(5000)
-                .ToListAsync();
+                ).ToListAsync();
 
-                // Return all history (no header)
+                // --- MERGE IN MEMORY (solves the EF translation problem)
+                var all = tops.Concat(trxs)
+                              .OrderByDescending(x => x.TransactionDateTime)
+                              .Take(5000)
+                              .ToList();
+
                 return new AccountHistoryDto
                 {
                     AccountHeader = null,
-                    HistoryRecords = allRecords
+                    HistoryRecords = all
                 };
             }
 
-            // ✅ CASE 2: Filtered by account number
+            // ==================================================================
+            // CASE 2 — SPECIFIC ACCOUNT (this part was already working)
+            // ==================================================================
+            long accId = Convert.ToInt64(accountNumber.Trim());
+
             var accountHeader = await _context.RegisteredUsers
-                .Where(ru => ru.AccNr.Trim() == accountNumber.Trim())
+                .Where(ru => ru.RegisterUserId == accId)
                 .Select(ru => new AccountHeaderDto
                 {
-                    AccountNumber = ru.AccNr,
-                    AccountHolder = (ru.CompanyName ?? ((ru.FirstName ?? "") + " " + (ru.LastName ?? ""))).Trim(),
+                    AccountNumber = ru.RegisterUserId.ToString(),
+                    AccountHolder = ru.CompanyName ?? $"{ru.FirstName} {ru.LastName}",
                     AccountStatus = ru.IsActive == true ? "Active" : "Inactive",
                     AccountType = ru.IsPrepaid == true ? "Prepaid" : "Postpaid",
                     MobileNumber = ru.PrimaryContact ?? "N/A",
                     Email = ru.PrimaryEmail ?? "N/A",
-                    AccountBalance = ru.Balance != null ? Convert.ToDecimal(ru.Balance) : 0
+                    AccountBalance = (decimal)ru.Balance
                 })
                 .FirstOrDefaultAsync();
 
             if (accountHeader == null)
-                return new AccountHistoryDto
-                {
-                    AccountHeader = null,
-                    HistoryRecords = new List<AccountHistoryRecordDto>()
-                };
+                return new AccountHistoryDto { HistoryRecords = new() };
 
-            // ✅ Transactions (Deducts)
-            var transactionsQuery =
+            // TRANSACTIONS
+            var accTrx = await (
                 from t in _context.Transactions.AsNoTracking()
-                join ru in _context.RegisteredUsers.AsNoTracking() on t.RegisteredUserId equals ru.RegisterUserId
-                join l in _context.Lanes.AsNoTracking() on t.LaneId equals l.LaneId into lGroup
+                join ru in _context.RegisteredUsers.AsNoTracking()
+                    on t.RegisteredUserId equals ru.RegisterUserId
+                join l in _context.Lanes.AsNoTracking()
+                    on t.LaneId equals l.LaneId into lGroup
                 from l in lGroup.DefaultIfEmpty()
-                join tt in _context.TransactionTypes.AsNoTracking() on t.TransactionTypeId equals tt.TransactionTypeId into ttGroup
+                join tt in _context.TransactionTypes.AsNoTracking()
+                    on t.TransactionTypeId equals tt.TransactionTypeId into ttGroup
                 from tt in ttGroup.DefaultIfEmpty()
-                join rui in _context.RegisteredUserIdentifiers.AsNoTracking() on ru.RegisterUserId equals rui.RegisteredUserId into ruiGroup
-                from rui in ruiGroup.DefaultIfEmpty()
-                where ru.AccNr.Trim() == accountNumber.Trim()
+                where ru.RegisterUserId == accId
+                      && t.TransactionDateTime >= start
+                      && t.TransactionDateTime <= end
                 select new AccountHistoryRecordDto
                 {
                     LaneName = l.LaneName ?? "Lekki-Ikoyi",
                     TransactionType = tt.Description ?? "Lane Transaction",
-                    TransactionAmount = t.NettAmount != null ? Convert.ToDecimal(t.NettAmount) : 0,
-                    TopUpAmount = 0,
-                    UserBalance = ru.Balance != null ? Convert.ToDecimal(ru.Balance) : 0,
+                    TransactionAmount = (decimal)t.NettAmount,
+                    TopUpAmount = 0m,
+                    UserBalance = (decimal)ru.Balance,
                     PaymentMethod = "SmartCard",
                     TransactionDateTime = t.TransactionDateTime,
-                    RegisteredIdentifier = rui.RegisteredIdentifier ?? "N/A",
-                    NumberPlate = rui.NumberPlateDetails ?? "N/A",
-                    Description = tt.Description ?? "Lane Transactions"
-                };
+                    RegisteredIdentifier = "N/A",
+                    NumberPlate = "N/A",
+                    Description = "Lane Transaction"
+                }
+            ).ToListAsync();
 
-            // ✅ Top-Ups (Credits)
-            var topUpsQuery =
+            // TOP-UPS
+            var accTopUps = await (
                 from rtu in _context.RegisteredUserTopUps.AsNoTracking()
-                join ru in _context.RegisteredUsers.AsNoTracking() on rtu.RegisterUserId equals ru.RegisterUserId
-                join pm in _context.PaymentMethods.AsNoTracking() on rtu.PaymentMethodId equals pm.PaymentMethodId into pmGroup
+                join ru in _context.RegisteredUsers.AsNoTracking()
+                    on rtu.RegisterUserId equals ru.RegisterUserId
+                join pm in _context.PaymentMethods.AsNoTracking()
+                    on rtu.PaymentMethodId equals pm.PaymentMethodId into pmGroup
                 from pm in pmGroup.DefaultIfEmpty()
-                where ru.AccNr.Trim() == accountNumber.Trim()
+                where ru.RegisterUserId == accId
+                      && rtu.RechargedOn >= start
+                      && rtu.RechargedOn <= end
                 select new AccountHistoryRecordDto
                 {
                     LaneName = "Lekki-Ikoyi",
                     TransactionType = "Top-up",
-                    TransactionAmount = 0,
-                    TopUpAmount = rtu.Amount != null ? Convert.ToDecimal(rtu.Amount) : 0,
-                    UserBalance = ru.Balance != null ? Convert.ToDecimal(ru.Balance) : 0,
+                    TransactionAmount = 0m,
+                    TopUpAmount = (decimal)rtu.Amount,
+                    UserBalance = (decimal)ru.Balance,
                     PaymentMethod = pm.Description ?? "Back-Office",
                     TransactionDateTime = rtu.RechargedOn,
                     RegisteredIdentifier = "N/A",
                     NumberPlate = "N/A",
                     Description = "Account Top-up"
-                };
+                }
+            ).ToListAsync();
 
-            // ✅ Merge and return both
-            var historyRecords = await transactionsQuery
-                .Concat(topUpsQuery)
-                .OrderBy(r => r.TransactionDateTime)
-                .Take(2000)
-                .ToListAsync();
+            // FINAL MERGE (safe)
+            var history = accTrx.Concat(accTopUps)
+                                .OrderBy(x => x.TransactionDateTime)
+                                .Take(3000)
+                                .ToList();
 
             return new AccountHistoryDto
             {
                 AccountHeader = accountHeader,
-                HistoryRecords = historyRecords
+                HistoryRecords = history
             };
         }
+
     }
 }

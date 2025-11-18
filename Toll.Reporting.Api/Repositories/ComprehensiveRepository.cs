@@ -26,7 +26,7 @@ public class ComprehensiveRepository : IComprehensiveRepository
         List<string>? paymentMethods = null,
         List<string>? transactionTypes = null)
     {
-        // 🧩 MAIN QUERY (all joins use consistent nullable key types)
+        // ✅ MAIN QUERY
         var query =
             from t in _context.Transactions
 
@@ -64,24 +64,24 @@ public class ComprehensiveRepository : IComprehensiveRepository
             from tpd in tpdGroup.DefaultIfEmpty()
 
             where t.TransactionDateTime >= startDate && t.TransactionDateTime <= endDate
+
             select new
             {
                 t.TransactionDateTime,
                 Shift = s.Description,
-                Operator = u.Username,
+                TollOperator = u.Username, // ✅ Use username instead of ID
                 LaneName = l.LaneName,
                 TransactionType = tt.Description,
                 DiscountType = d.Description,
                 ManualClass = tc.ClassDescription,
                 TariffPlanId = t.TariffPlanId,
-                // Using TransactionType as payment method (no PaymentMethod field in Transaction)
-                MethodOfPayment = tt.Description,
+                MethodOfPayment = tt.Description, // Using TransactionType as MethodOfPayment
                 AmountInclusive = tpd.AmountInclusive
             };
 
         var raw = await query.AsNoTracking().ToListAsync();
 
-        // 🧠 Helper: Normalize filter sets (case-insensitive)
+        // Helper: Convert filters to lowercase sets
         static HashSet<string>? ToSet(List<string>? list) =>
             list?.Select(s => s.Trim().ToLowerInvariant()).ToHashSet();
 
@@ -96,11 +96,11 @@ public class ComprehensiveRepository : IComprehensiveRepository
         static bool Match(string? value, HashSet<string>? set) =>
             set == null || (value != null && set.Contains(value.Trim().ToLowerInvariant()));
 
-        // 🧾 Filter + Map to DTO
+        // ✅ Filter + Map to DTO
         var result = raw
             .Where(x =>
                 Match(x.Shift, shiftSet) &&
-                Match(x.Operator, opSet) &&
+                Match(x.TollOperator, opSet) &&
                 Match(x.LaneName, laneSet) &&
                 Match(x.DiscountType, discSet) &&
                 Match(x.ManualClass, classSet) &&
@@ -117,7 +117,8 @@ public class ComprehensiveRepository : IComprehensiveRepository
                 ManualTollClass = x.ManualClass,
                 TariffPlanId = x.TariffPlanId,
                 AmountInclusive = x.AmountInclusive,
-                MethodOfPayment = x.MethodOfPayment
+                MethodOfPayment = x.MethodOfPayment,
+                TollOperatorID = x.TollOperator // ✅ Map username to TollOperatorID property
             })
             .OrderByDescending(x => x.TransactionDateTime)
             .ToList();

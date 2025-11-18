@@ -88,8 +88,11 @@
                 
                 <div class="mx-auto text-center">
                     <h2 class="fw-bold text-secondary mb-0">
-                        LEKKI-IKOYI LINK BRIDGE
+                        LEKKI CONCESSION COMPANY LIMITED
                     </h2>
+                    <h3 class="fw-bold text-secondary mb-0">
+                        LEKKI-IKOYI LINK BRIDGE
+                    </h3>
                 </div>
                 <div>
                     <img src="~/images/ICT-Works Logo.jpg" alt="ICT Works Logo" style="height: 100px; width 100px;" />
@@ -104,26 +107,111 @@
         <nav class="sidebar bg-body bg-transparent p-3 vh-100">
             <ul class="nav flex-column">
                 <li class="nav-item mb-2">
-                    <a class="nav-link text-dark" asp-controller="Transaction" asp-action="transaction" asp-route-page="1" asp-route-pageSize="10">
-                        <i class="bi bi-cash-stack me-2"></i> Transactions
+                    <a class="nav-link text-dark d-flex justify-content-between align-items-center"
+                       data-bs-toggle="collapse"
+                       href="#transactionMenu"
+                       role="button"
+                       aria-expanded="false"
+                       aria-controls="transactionMenu">
+                        <span><i class="bi bi-graph-up me-2"></i> Lane Transactions</span>
+                        <i class="bi bi-caret-down-fill"></i>
                     </a>
-                </li>
-                <li class="nav-item mb-2">
-                    <a class="nav-link text-dark" asp-controller="Discrepancy" asp-action="Index">
-                        <i class="bi bi-exclamation-triangle me-2"></i> Discrepancies
-                    </a>
+
+                    <div class="collapse ms-3" id="transactionMenu">
+                        <ul class="nav flex-column">
+                            <li class="nav-item mb-2">
+                                <a class="nav-link text-dark" asp-controller="Transaction" asp-action="transaction" asp-route-page="1" asp-route-pageSize="10">
+                                    <i class="bi bi-cash-stack me-2"></i> Transaction Details
+                                </a>
+                            </li>
+                            <li class="nav-item mb-2">
+                                <a class="nav-link text-dark" asp-controller="Discrepancy" asp-action="Index">
+                                    <i class="bi bi-exclamation-triangle me-2"></i> Discrepancies
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
                 </li>
 
                 <li class="nav-item mb-2">
-                    <a class="nav-link text-dark" asp-controller="Comprehensive" asp-action="Index">
-                        <i class="bi bi-graph-up me-2"></i> Comprehensive
+                    <a class="nav-link text-dark d-flex justify-content-between align-items-center"
+                       data-bs-toggle="collapse"
+                       href="#productivityMenu"
+                       role="button"
+                       aria-expanded="false"
+                       aria-controls="productivityMenu">
+                        <span><i class="bi bi-graph-up me-2"></i> Productivity</span>
+                        <i class="bi bi-caret-down-fill"></i>
                     </a>
+
+                    <div class="collapse ms-3" id="productivityMenu">
+                        <ul class="nav flex-column">
+                            <li class="nav-item mb-2">
+                                <a class="nav-link text-dark" asp-controller="VarientPerfomance" asp-action="VarientPerfomances" asp-route-page="1" asp-route-pageSize="10">
+                                    <i class="bi bi-graph-up me-2"></i> Staff Performance Report
+                                </a>
+                            </li>
+                        
+                        </ul>
+                    </div>
                 </li>
+
                 <li class="nav-item mb-2">
-                    <a class="nav-link text-dark" asp-controller="VarientPerfomance" asp-action="VarientPerfomances" asp-route-page="1" asp-route-pageSize="10">
-                        <i class="bi bi-graph-up me-2"></i> Staff Variance and Perfomance
+                    <a class="nav-link text-dark d-flex justify-content-between align-items-center"
+                       data-bs-toggle="collapse"
+                       href="#userAccountsMenu"
+                       role="button"
+                       aria-expanded="false"
+                       aria-controls="userAccountsMenu">
+                        <span><i class="bi bi-graph-up me-2"></i> User Accounts </span>
+                        <i class="bi bi-caret-down-fill"></i>
                     </a>
+
+                    <div class="collapse ms-3" id="userAccountsMenu">
+                        <ul class="nav flex-column">
+                            <li class="nav-item mb-2">
+                                <a class="nav-link text-dark"
+                                   asp-controller="TopUp"
+                                   asp-action="Index"
+                                   asp-route-page="1"
+                                   asp-route-pageSize="10">
+                                    <i class="bi bi-graph-up me-2"></i>  TopUp Report
+                                </a>
+                            </li>
+                            <li class="nav-item mb-2">
+                                <a class="nav-link text-dark"
+                                   asp-controller="AccountHistory"
+                                   asp-action="Index"
+                                   asp-route-page="1"
+                                   asp-route-pageSize="10">
+                                    <i class="bi bi-graph-up me-2"></i>  Account History Report
+                                </a>
+                            </li>
+                            <li class="nav-item mb-2">
+                                <a class="nav-link text-dark"
+                                   asp-controller="AccountUsageSummary"
+                                   asp-action="Index"
+                                   asp-route-page="1"
+                                   asp-route-pageSize="10">
+                                    <i class="bi bi-graph-up me-2"></i>  Account Usage Summary Report
+                                </a>
+                            </li>
+                            <li class="nav-item mb-2">
+                                <a class="nav-link text-dark"
+                                   asp-controller="AccountUsageDetails"
+                                   asp-action="Index"
+                                   asp-route-page="1"
+                                   asp-route-pageSize="10">
+                                    <i class="bi bi-graph-up me-2"></i>  Account Usage Details Report
+                                </a>
+                            </li>
+
+                        </ul>
+                    </div>
                 </li>
+               
+                
+
                 <!-- Traffic Reports Dropdown -->
                 <li class="nav-item mb-2">
                     <a class="nav-link text-dark d-flex justify-content-between align-items-center"
@@ -132,7 +220,7 @@
                        role="button"
                        aria-expanded="false"
                        aria-controls="trafficReportsMenu">
-                        <span><i class="bi bi-graph-up me-2"></i> Traffic Reports</span>
+                        <span><i class="bi bi-graph-up me-2"></i>Traffic and Statistical </span>
                         <i class="bi bi-caret-down-fill"></i>
                     </a>
 
@@ -170,32 +258,69 @@
                 </li>
 
                 <li class="nav-item mb-2">
-                    <a class="nav-link text-dark"
-                       asp-controller="DailyCashup"
-                       asp-action="Index"
-                       asp-route-page="1"
-                       asp-route-pageSize="10">
-                        <i class="bi bi-graph-up me-2"></i> Daily Cashup Report
+                    <a class="nav-link text-dark d-flex justify-content-between align-items-center"
+                       data-bs-toggle="collapse"
+                       href="#financialMenu"
+                       role="button"
+                       aria-expanded="false"
+                       aria-controls="financialMenu">
+                        <span><i class="bi bi-graph-up me-2"></i> Financial </span>
+                        <i class="bi bi-caret-down-fill"></i>
                     </a>
+
+                    <div class="collapse ms-3" id="financialMenu">
+                        <ul class="nav flex-column">
+
+                            <li class="nav-item mb-2">
+                                <a class="nav-link text-dark" asp-controller="Comprehensive" asp-action="Index">
+                                    <i class="bi bi-graph-up me-2"></i> Comprehensive
+                                </a>
+                            </li>
+
+                            <li class="nav-item mb-2">
+                                <a class="nav-link text-dark"
+                                   asp-controller="DailyCashup"
+                                   asp-action="Index"
+                                   asp-route-page="1"
+                                   asp-route-pageSize="10">
+                                    <i class="bi bi-graph-up me-2"></i> Daily Cash Report
+                                </a>
+                            </li>
+
+                            <li class="nav-item mb-2">
+                                <a class="nav-link text-dark"
+                                   href="/">
+                                    <i class="bi bi-graph-up me-2"></i> End of Day Report
+                                </a>
+                            </li>
+
+                        </ul>
+                    </div>
                 </li>
+
                 <li class="nav-item mb-2">
-                    <a class="nav-link text-dark"
-                       asp-controller="TopUp"
-                       asp-action="Index"
-                       asp-route-page="1"
-                       asp-route-pageSize="10">
-                        <i class="bi bi-graph-up me-2"></i>  TopUp Report
+                    <a class="nav-link text-dark d-flex justify-content-between align-items-center"
+                       data-bs-toggle="collapse"
+                       href="#performanceMenu"
+                       role="button"
+                       aria-expanded="false"
+                       aria-controls="performanceMenu">
+                        <span><i class="bi bi-graph-up me-2"></i> System Performance and Maintenance</span>
+                        <i class="bi bi-caret-down-fill"></i>
                     </a>
+
+                    <div class="collapse ms-3" id="performanceMenu">
+                        <ul class="nav flex-column">
+                            <li class="nav-item mb-2">
+                                <a class="nav-link text-dark" href="/" >
+                                    <i class="bi bi-graph-up me-2"></i> AVC Accuracy
+                                </a>
+                            </li>
+
+                        </ul>
+                    </div>
                 </li>
-                <li class="nav-item mb-2">
-                    <a class="nav-link text-dark"
-                       asp-controller="AccountHistory"
-                       asp-action="Index"
-                       asp-route-page="1"
-                       asp-route-pageSize="10">
-                        <i class="bi bi-graph-up me-2"></i>  Account History Report
-                    </a>
-                </li>
+               
                 
             </ul>
         </nav>

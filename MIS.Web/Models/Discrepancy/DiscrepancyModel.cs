@@ -4,34 +4,38 @@ namespace MIS.Web.Models.Discrepancy
 {
     public class DiscrepancyModel
     {
-        public string? lane_Nr { get; set; }
-        public int trx_Sequence_Nr { get; set; }
-        public string trx_Date { get; set; } = string.Empty;
-        public string trx_Time { get; set; } = string.Empty;
-        public string operational_Shift { get; set; } = string.Empty;
-        public string? toll_Operator_ID { get; set; }
-        public string? lane_Name { get; set; }
-        public string? method_of_Payment { get; set; }
-        public string? toll_Collector_Class { get; set; }
-        public string? avC_Class { get; set; }
-        public string? final_Class { get; set; }
-        public decimal tariff { get; set; }
-        public decimal updated_tariff { get; set; }
-        public string? takenAction { get; set; }
+        public int Lane_Nr { get; set; }
+        public string Trx_Sequence_Nr { get; set; } = string.Empty;
+        public string Trx_Date { get; set; } = string.Empty;
+        public string Trx_Time { get; set; } = string.Empty;
+        public string Operational_Shift { get; set; } = string.Empty;
+        public string Toll_Operator_ID { get; set; } = string.Empty;
+        public string Lane_Name { get; set; } = string.Empty;
+        public string Method_of_Payment { get; set; } = string.Empty;
+        public string Toll_Collector_Class { get; set; } = string.Empty;
+        public string AVC_Class { get; set; } = string.Empty;
+        public string Final_Class { get; set; } = string.Empty;
+        public decimal Tariff { get; set; }
+        public decimal Updated_Tariff { get; set; }
+        public string TakenAction { get; set; } = string.Empty;
 
-        public decimal TariffDifference => updated_tariff - tariff;
+        public decimal TariffDifference => Updated_Tariff - Tariff;
 
         public DateTime TransactionDateTime
         {
             get
             {
-                if (DateTime.TryParseExact(trx_Date, "dd/MM/yyyy", null, System.Globalization.DateTimeStyles.None, out var datePart)
-                    && DateTime.TryParseExact(trx_Time, "HH:mm:ss", null, System.Globalization.DateTimeStyles.None, out var timePart))
+                if (DateTime.TryParseExact(Trx_Date, "dd/MM/yyyy", null,
+                    System.Globalization.DateTimeStyles.None, out var datePart)
+                    && DateTime.TryParseExact(Trx_Time, "HH:mm:ss", null,
+                    System.Globalization.DateTimeStyles.None, out var timePart))
                 {
                     return datePart.Add(timePart.TimeOfDay);
                 }
-                if (DateTime.TryParse($"{trx_Date} {trx_Time}", out var dt))
+
+                if (DateTime.TryParse($"{Trx_Date} {Trx_Time}", out var dt))
                     return dt;
+
                 return DateTime.MinValue;
             }
         }

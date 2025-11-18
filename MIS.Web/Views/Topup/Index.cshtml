@@ -1,0 +1,490 @@
+﻿@model MIS.Web.Models.TopUpInputModel
+@using System.Globalization
+@using System.Linq
+@removeTagHelper "Microsoft.AspNetCore.Mvc.TagHelpers.OptionTagHelper, Microsoft.AspNetCore.Mvc.TagHelpers"
+
+@{
+    ViewData["Title"] = "Top-Up Report";
+
+    var reportGeneratedAt = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
+    var currentUserId = User.Identity?.Name ?? "Lucky";
+    var reportVersion = "2.0.0.11";
+
+    var totalAmount = Model.PageData?.items?.Sum(i => i.AmountPaid) ?? 0;
+
+    int maxPagesToShow = 3;
+    int currentPage = Model.PageData?.page ?? 1;
+    int totalPages = Model.PageData?.totalPages ?? 1;
+
+    int startPage = Math.Max(1, currentPage - 1);
+    int endPage = Math.Min(totalPages, startPage + maxPagesToShow - 1);
+    if (endPage - startPage + 1 < maxPagesToShow && startPage > 1)
+        startPage = Math.Max(1, endPage - maxPagesToShow + 1);
+}
+
+<div class="card shadow-lg p-4 mb-4">
+
+    <!-- ===========================
+         HEADER
+    ============================ -->
+    <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
+        <h2 class="mb-0 fw-bold text-primary text-center w-100">TOP-UP REPORT</h2>
+    </div>
+
+    <!-- ===========================
+         FILTERS
+    ============================ -->
+    <form method="get" class="row g-3 mb-4">
+
+    <div class="col-md-3">
+        <label class="form-label fw-semibold">Start Date And Time</label>
+        <input type="datetime-local" name="StartDate" class="form-control"
+               value="@(Model.StartDate?.ToString("yyyy-MM-ddTHH:mm")
+                        ?? DateTime.Now.AddDays(-1).ToString("yyyy-MM-ddTHH:mm"))" />
+    </div>
+
+    <div class="col-md-3">
+        <label class="form-label fw-semibold">End Date And Time</label>
+        <input type="datetime-local" name="EndDate" class="form-control"
+               value="@(Model.EndDate?.ToString("yyyy-MM-ddTHH:mm")
+                        ?? DateTime.Now.ToString("yyyy-MM-ddTHH:mm"))" />
+    </div>
+
+    <div class="col-md-2">
+        <label class="form-label fw-semibold">Operational Date</label>
+        <select name="OperationalDate" id="operationalDate" class="form-select">
+            <option value="">- Select -</option>
+            <option value="true" @(Model.OperationalDate == true ? "selected" : "")>Yes</option>
+            <option value="false" @(Model.OperationalDate == false ? "selected" : "")>No</option>
+        </select>
+    </div>
+
+    <div class="col-md-2">
+        <label class="form-label fw-semibold">Operational Shift</label>
+        <select name="Shift" id="shiftSelect"
+                class="form-select"
+                @(Model.OperationalDate == false ? "disabled" : "")>
+            <option value="">- All -</option>
+            @foreach (var s in ViewBag.Shifts ?? new List<string>())
+            {
+                <option value="@s" @(Model.Shift == s ? "selected" : "")>@s</option>
+            }
+        </select>
+    </div>
+
+    <!-- ⭐ NEW: Toll Operator Filter -->
+  <div class="col-md-2">
+    <label class="form-label fw-semibold">Toll Operator</label>
+    <select name="TollOperator" class="form-select">
+        <option value="">- All -</option>
+        @foreach (var op in ViewBag.TollOperators ?? new List<string>())
+        {
+            <option value="@op" @(Model.TollOperator == op ? "selected" : "")>@op</option>
+        }
+    </select>
+</div>
+
+
+    <div class="col-md-2">
+        <label class="form-label fw-semibold">Lane / Workstation</label>
+        <select name="Lane" class="form-select">
+            <option value="">- All -</option>
+            @foreach (var lane in ViewBag.Lanes ?? new List<string>())
+            {
+                <option value="@lane" @(Model.Lane == lane ? "selected" : "")>@lane</option>
+            }
+        </select>
+    </div>
+
+    <div class="col-md-2">
+        <label class="form-label fw-semibold">Account Number</label>
+        <select name="AccountNumber" class="form-select">
+            <option value="">- All -</option>
+            @foreach (var acc in ViewBag.AccountNumbers ?? new List<string>())
+            {
+                <option value="@acc" @(Model.AccountNumber == acc ? "selected" : "")>@acc</option>
+            }
+        </select>
+    </div>
+
+    <div class="col-md-2 d-flex align-items-end">
+        <button type="submit" class="btn btn-primary w-100">Filter</button>
+    </div>
+
+    <!-- EXCEL + PDF BUTTONS -->
+    <div class="mt-3 text-end">
+        <button id="btnDownloadPdf" type="button" class="btn btn-danger me-2">
+            <i class="bi bi-file-earmark-pdf"></i> Download PDF
+        </button>
+        <button id="btnDownloadExcel" type="button" class="btn btn-success">
+            <i class="bi bi-file-earmark-excel"></i> Download Excel
+        </button>
+    </div>
+
+</form>
+
+
+    <!-- ===========================
+         PAGED TABLE (UI ONLY)
+    ============================ -->
+    <div class="table-responsive">
+        <table id="pagedTable" class="table table-bordered table-hover text-center align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Top-Up Number</th>
+                    <th>Receipt Number</th>
+                    <th>Top-up Date-Time</th>
+                    <th>Lane/Workstation</th>
+                    <th>Shift</th>
+                    <th>Operator</th>
+                    <th>Account Number</th>
+                    <th>Account Name</th>
+                    <th>Amount Paid</th>
+                    <th>Method Of Payment</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                @if (Model.PageData?.items != null && Model.PageData.items.Any())
+                {
+                    foreach (var item in Model.PageData.items)
+                    {
+                        <tr>
+                            <td>@item.TopUpNumber</td>
+                            <td>@item.TopUpNumber</td> <!-- placeholder for receipt # -->
+                            <td>@item.TopUpDateTime.ToString("dd/MM/yyyy HH:mm")</td>
+                            <td>@item.LaneWorkstation</td>
+                            <td>@item.Shift</td>
+                            <td>@item.TollOperator</td>
+                            <td>@item.AccountNumber</td>
+                            <td>@item.AccountName</td>
+                            <td>@item.AmountPaid.ToString("N2", CultureInfo.InvariantCulture)</td>
+                            <td>@item.MethodOfPayment</td>
+                        </tr>
+                    }
+
+                    <!-- TOTAL ROW -->
+                    <tr class="fw-bold table-light">
+                        <td colspan="8" class="text-end">Total Top-ups for the Selection:</td>
+                        <td colspan="2">@totalAmount.ToString("N2", CultureInfo.InvariantCulture)</td>
+                    </tr>
+                }
+                else
+                {
+                    <tr><td colspan="10" class="text-muted">No records found</td></tr>
+                }
+            </tbody>
+        </table>
+
+      <!-- Footer -->
+            <div class="mt-4 p-3 border-top ">
+                <table class="table table-borderless w-100 mb-0 align-middle">
+                    <tr>
+                        <td class="fw-bold text-dark">Top-Up  Report</td>
+                        <td><strong>Date and Time:</strong> @reportGeneratedAt</td>
+                        <td><strong>User ID:</strong> @currentUserId</td>
+                        <td class="text-end">
+                            Page <strong>@Model.page</strong> of <strong>@Model.totalPages</strong>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan="4">
+                            <small class="text-muted">
+                                Reports Module Version Number: <strong>@reportVersion</strong>
+                            </small>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+    </div>
+
+    <!-- ===========================
+         PAGINATION
+    ============================ -->
+    @if (totalPages > 1)
+    {
+        <nav aria-label="TopUp pagination" class="mt-3">
+            <ul class="pagination justify-content-center">
+
+                <!-- Prev -->
+                <li class="page-item @(currentPage <= 1 ? "disabled" : "")">
+                    <a class="page-link"
+                       href="@(Url.Action("Index", new {
+                                StartDate = Model.StartDate?.ToString("yyyy-MM-ddTHH:mm"),
+                                EndDate = Model.EndDate?.ToString("yyyy-MM-ddTHH:mm"),
+                                OperationalDate = Model.OperationalDate,
+                                Shift = Model.Shift,
+                                Lane = Model.Lane,
+                                AccountNumber = Model.AccountNumber,
+                                page = currentPage - 1,
+                                pageSize = Model.pageSize
+                            }))">
+                        Previous
+                    </a>
+                </li>
+
+                @for (int i = startPage; i <= endPage; i++)
+                {
+                    <li class="page-item @(i == currentPage ? "active" : "")">
+                        <a class="page-link"
+                           href="@(Url.Action("Index", new {
+                                    StartDate = Model.StartDate?.ToString("yyyy-MM-ddTHH:mm"),
+                                    EndDate = Model.EndDate?.ToString("yyyy-MM-ddTHH:mm"),
+                                    OperationalDate = Model.OperationalDate,
+                                    Shift = Model.Shift,
+                                    Lane = Model.Lane,
+                                    AccountNumber = Model.AccountNumber,
+                                    page = i,
+                                    pageSize = Model.pageSize
+                                }))">
+                            @i
+                        </a>
+                    </li>
+                }
+
+                <!-- Next -->
+                <li class="page-item @(currentPage >= totalPages ? "disabled" : "")">
+                    <a class="page-link"
+                       href="@(Url.Action("Index", new {
+                                StartDate = Model.StartDate?.ToString("yyyy-MM-ddTHH:mm"),
+                                EndDate = Model.EndDate?.ToString("yyyy-MM-ddTHH:mm"),
+                                OperationalDate = Model.OperationalDate,
+                                Shift = Model.Shift,
+                                Lane = Model.Lane,
+                                AccountNumber = Model.AccountNumber,
+                                page = currentPage + 1,
+                                pageSize = Model.pageSize
+                            }))">
+                        Next
+                    </a>
+                </li>
+            </ul>
+        </nav>
+    }
+</div>
+
+<!-- ===========================
+     EXPORT SCRIPTS (FULL DATA)
+=========================== -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+
+<script>
+// ===================================================================
+// ⭐ 1. READ FILTERS FROM THE RAZOR PAGE
+// ===================================================================
+function getFilters() {
+    return {
+        StartDate: document.querySelector('[name="StartDate"]').value,
+        EndDate: document.querySelector('[name="EndDate"]').value,
+        OperationalDate: document.querySelector('[name="OperationalDate"]').value,
+        Shift: document.querySelector('[name="Shift"]').value,
+        TollOperator: document.querySelector('[name="TollOperator"]').value,   // ⭐ FIXED
+        Lane: document.querySelector('[name="Lane"]').value,
+        AccountNumber: document.querySelector('[name="AccountNumber"]').value
+    };
+}
+
+// ===================================================================
+// ⭐ 2. BUILD EXPORT URL (INCLUDES TOLLOPERATOR)
+// ===================================================================
+function buildExportUrl() {
+    const f = getFilters();
+
+    const params = new URLSearchParams({
+        StartDate: f.StartDate || "",
+        EndDate: f.EndDate || "",
+        OperationalDate: f.OperationalDate || "",
+        Shift: f.Shift || "",
+        TollOperator: f.TollOperator || "",     // ⭐ FIXED
+        Lane: f.Lane || "",
+        AccountNumber: f.AccountNumber || ""
+    });
+
+    return `/TopUp/export?${params.toString()}`;
+}
+
+// ===================================================================
+// ⭐ 3. PDF EXPORT (FULL DATASET)
+// ===================================================================
+document.getElementById("btnDownloadPdf").addEventListener("click", async () => {
+
+    const response = await fetch(buildExportUrl());
+    const fullData = await response.json();
+
+    if (!fullData || fullData.length === 0) {
+        alert("No data available for export.");
+        return;
+    }
+
+    const grandTotal = fullData.reduce((sum, r) => sum + (r.amountPaid || 0), 0);
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+
+    // --------------------------
+    // Load Logos
+    // --------------------------
+    const leftLogo = new Image();
+    const rightLogo = new Image();
+    leftLogo.src = "/images/lCC Logo.jpg";
+    rightLogo.src = "/images/ICT-Works Logo.jpg";
+
+    await Promise.all([
+        new Promise(res => leftLogo.onload = res),
+        new Promise(res => rightLogo.onload = res)
+    ]);
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    doc.addImage(leftLogo, "JPEG", 40, 25, 60, 60);
+    doc.addImage(rightLogo, "JPEG", pageWidth - 100, 25, 60, 60);
+
+    // --------------------------
+    // Report Title
+    // --------------------------
+    doc.setFontSize(16);
+    doc.text("LEKKI-IKOYI LINK BRIDGE", pageWidth / 2, 45, { align: "center" });
+    doc.setFontSize(14);
+    doc.text("TOP-UP REPORT", pageWidth / 2, 70, { align: "center" });
+
+    // --------------------------
+    // Filters Used
+    // --------------------------
+    const f = getFilters();
+    const filterLines = [
+        `Start Date & Time: ${f.StartDate || "N/A"}`,
+        `End Date & Time: ${f.EndDate || "N/A"}`,
+        `Operational Date: ${f.OperationalDate || "N/A"}`,
+        `Operational Shift: ${f.Shift || "All"}`,
+        `Toll Operator: ${f.TollOperator || "All"}`,       // ⭐ FIXED
+        `Lane / Workstation: ${f.Lane || "All"}`,
+        `Account Number: ${f.AccountNumber || "All"}`
+    ];
+
+    doc.setFontSize(10);
+    let yPos = 105;
+    filterLines.forEach(line => {
+        doc.text(line, 40, yPos);
+        yPos += 14;
+    });
+
+    // --------------------------
+    // Table Body
+    // --------------------------
+    const tableRows = fullData.map(r => [
+        r.topUpNumber,
+        r.topUpNumber,
+        r.topUpDateTime ? new Date(r.topUpDateTime).toLocaleString() : "",
+        r.laneWorkstation,
+        r.shift,
+        r.tollOperator ?? r.operator,   // ⭐ GUARANTEED
+        r.accountNumber,
+        r.accountName,
+        r.amountPaid,
+        r.methodOfPayment
+    ]);
+
+    doc.autoTable({
+        head: [[
+            "Top-Up Number",
+            "Receipt Number",
+            "Top-Up Date & Time",
+            "Lane / Workstation",
+            "Shift",
+            "Operator",
+            "Account Number",
+            "Account Name",
+            "Amount Paid",
+            "Method of Payment"
+        ]],
+        body: tableRows,
+        startY: yPos + 5,
+        theme: "grid",
+        headStyles: { fillColor: [13, 110, 253] },
+        styles: { fontSize: 8, cellPadding: 3 },
+
+        didDrawPage: function (data) {
+            const footerY = doc.internal.pageSize.height - 40;
+            doc.setFontSize(9);
+            doc.text(`Report Version: 2.0.0.11`, 40, footerY);
+            doc.text(`Generated By: @currentUserId`, 250, footerY);
+            doc.text(`Date & Time: @reportGeneratedAt`, 500, footerY);
+
+            doc.text(
+                "© 2025 Lekki Concession Company / ICT-Works",
+                pageWidth - 40,
+                footerY,
+                { align: "right" }
+            );
+        }
+    });
+
+    // --------------------------
+    // GRAND TOTAL
+    // --------------------------
+    const finalY = doc.lastAutoTable.finalY + 25;
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text(
+        `TOTAL TOP-UP AMOUNT: ${grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+        40,
+        finalY
+    );
+
+    doc.save("TopUpReport.pdf");
+});
+
+// ===================================================================
+// ⭐ 4. EXCEL EXPORT
+// ===================================================================
+document.getElementById("btnDownloadExcel").addEventListener("click", async () => {
+
+    const response = await fetch(buildExportUrl());
+    const fullData = await response.json();
+
+    if (!fullData || fullData.length === 0) {
+        alert("No data available for export.");
+        return;
+    }
+
+    const grandTotal = fullData.reduce((sum, r) => sum + (r.amountPaid || 0), 0);
+
+    const header = [
+        "Top-Up Number",
+        "Receipt Number",
+        "Top-Up Date & Time",
+        "Lane/Workstation",
+        "Shift",
+        "Operator",
+        "Account Number",
+        "Account Name",
+        "Amount Paid",
+        "Method of Payment"
+    ];
+
+    const rows = fullData.map(r => [
+        r.topUpNumber,
+        r.topUpNumber,
+        r.topUpDateTime,
+        r.laneWorkstation,
+        r.shift,
+        r.tollOperator ?? r.operator,   // ⭐ FIXED
+        r.accountNumber,
+        r.accountName,
+        r.amountPaid,
+        r.methodOfPayment
+    ]);
+
+    rows.push([]);
+    rows.push(["", "", "", "", "", "", "TOTAL", grandTotal, ""]);
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+
+    XLSX.utils.book_append_sheet(wb, ws, "TopUpReport");
+    XLSX.writeFile(wb, `TopUpReport_${new Date().toISOString().replace(/[:.]/g, "-")}.xlsx`);
+});
+</script>
+
+

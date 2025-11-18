@@ -1,8 +1,12 @@
-﻿using System.Threading.Tasks;
+﻿using System;
+using System.Threading.Tasks;
 using Toll.Reporting.Api.DTOs;
 
 public interface IAccountHistoryRepository
 {
-   
-    Task<AccountHistoryDto> GetAccountHistoryAsync(string accountNumber);
+    Task<AccountHistoryDto> GetAccountHistoryAsync(
+        string accountNumber,
+        DateTime? startDate,
+        DateTime? endDate
+    );
 }

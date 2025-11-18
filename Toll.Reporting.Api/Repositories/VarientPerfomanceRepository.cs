@@ -17,9 +17,6 @@ namespace Toll.Reporting.Api.Repositories
             _context = context;
         }
 
-        /// <summary>
-        /// Fetch paginated variant performance records with optional filters.
-        /// </summary>
         public async Task<PagedResult<VarientPerformanceDto>> GetVarientPerformanceAsync(
             DateTime startDate,
             DateTime endDate,
@@ -29,59 +26,102 @@ namespace Toll.Reporting.Api.Repositories
             int pageSize = 10)
         {
             // ==================== BASE QUERY ====================
-            var query =
+            var baseQuery =
                 from t in _context.Transactions
                 join s in _context.Shifts on t.ShiftId equals s.ShiftId into shiftGroup
                 from s in shiftGroup.DefaultIfEmpty()
-
                 join su in _context.SystemUsers on t.SystemUserId equals su.SystemUserId into userGroup
                 from su in userGroup.DefaultIfEmpty()
-
-                    // Left join optional CollectorCashup records
-                join cc in _context.CollectorCashups
-                    on t.AllocatedToCollectorCashupId equals cc.CollectorCashupId into cashupGroup
+                join cc in _context.CollectorCashups on t.AllocatedToCollectorCashupId equals cc.CollectorCashupId into cashupGroup
                 from cc in cashupGroup.DefaultIfEmpty()
-
-                where t.TransactionDateTime >= startDate &&
-                      t.TransactionDateTime < endDate.AddDays(1)
-
-                orderby t.TransactionDateTime descending
-
+                where t.TransactionDateTime >= startDate && t.TransactionDateTime <= endDate
                 select new
                 {
                     t.ShiftDate,
-                    Shift = s,
-                    User = su,
-                    // Real declared cash from Transaction
-                    ActualAmount = (double?)t.ActualAmount,
-                    // Expected cash from Cashup (nullable)
-                    TotalDeclared = (double?)cc.TotalDeclared
+                    ShiftDescription = s.Description,
+                    TollOperator = su.Username,
+                    CashExpected = (double?)(t.ActualAmount ?? 0.0),
+                    CashDeclared = (double?)(cc.TotalDeclared)
                 };
 
             // ==================== FILTERS ====================
-            if (operationalShift != null && operationalShift.Any() && !operationalShift.Contains("-- All --"))
-                query = query.Where(x => operationalShift.Contains(x.Shift.Description ?? string.Empty));
+            if (operationalShift != null && operationalShift.Any())
+                baseQuery = baseQuery.Where(x => operationalShift.Contains(x.ShiftDescription));
+            if (tollOperators != null && tollOperators.Any())
+                baseQuery = baseQuery.Where(x => tollOperators.Contains(x.TollOperator));
 
-            if (tollOperators != null && tollOperators.Any() && !tollOperators.Contains("-- All --"))
-                query = query.Where(x => tollOperators.Contains(x.User.Username ?? string.Empty));
+            var data = await baseQuery.AsNoTracking().ToListAsync();
 
-            // ==================== PAGINATION ====================
-            var totalCount = await query.CountAsync();
-
-            var pagedItems = await query
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .Select(x => new VarientPerformanceDto
+            // ==================== GROUP BY OPERATOR (PER SHIFT) ====================
+            var operatorGroups = data
+                .GroupBy(x => new { x.ShiftDescription, x.TollOperator })
+                .Select(g => new VarientPerformanceDto
                 {
-                    ShiftDate = x.ShiftDate,
-                    ShiftDescription = x.Shift.Description ?? "-- None --",
-                    TollOperator = x.User.Username ?? "-- None --",
-                    NominalTariff = x.TotalDeclared ?? 0.0, 
-                    ActualAmount = x.ActualAmount ?? 0.0,    
+                    ShiftDate = g.First().ShiftDate,
+                    ShiftDescription = g.Key.ShiftDescription ?? "-- None --",
+                    TollOperator = g.Key.TollOperator ?? "-- None --",
+                    NominalTariff = g.Sum(y => y.CashExpected ?? 0.0),
+                    ActualAmount = g.Sum(y => y.CashDeclared ?? 0.0),
+                    Difference = g.Sum(y => (y.CashDeclared ?? 0.0) - (y.CashExpected ?? 0.0)),
                     StartDate = startDate,
                     EndDate = endDate
                 })
-                .ToListAsync();
+                .OrderBy(x => x.ShiftDescription)
+                .ThenBy(x => x.TollOperator)
+                .ToList();
+
+            // ==================== SHIFT TOTALS ====================
+            var withShiftTotals = new List<VarientPerformanceDto>();
+
+            foreach (var shiftGroup in operatorGroups.GroupBy(g => g.ShiftDescription))
+            {
+                // Add operator-level rows first
+                withShiftTotals.AddRange(shiftGroup);
+
+                // Then add a total row for this shift
+                withShiftTotals.Add(new VarientPerformanceDto
+                {
+                    ShiftDate = shiftGroup.First().ShiftDate,
+                    ShiftDescription = $"{shiftGroup.Key?.ToUpper() ?? "-- NONE --"} TOTAL",
+                    TollOperator = "—",
+                    NominalTariff = shiftGroup.Sum(x => x.NominalTariff),
+                    ActualAmount = shiftGroup.Sum(x => x.ActualAmount),
+                    Difference = shiftGroup.Sum(x => x.Difference),
+                    StartDate = startDate,
+                    EndDate = endDate
+                });
+            }
+
+            // ==================== GRAND TOTAL ====================
+            if (withShiftTotals.Any())
+            {
+                var grandTotal = new VarientPerformanceDto
+                {
+                    ShiftDate = withShiftTotals.First().ShiftDate,
+                    ShiftDescription = "GRAND TOTAL",
+                    TollOperator = "—",
+                    NominalTariff = withShiftTotals
+                        .Where(x => x.ShiftDescription.EndsWith("TOTAL"))
+                        .Sum(x => x.NominalTariff),
+                    ActualAmount = withShiftTotals
+                        .Where(x => x.ShiftDescription.EndsWith("TOTAL"))
+                        .Sum(x => x.ActualAmount),
+                    Difference = withShiftTotals
+                        .Where(x => x.ShiftDescription.EndsWith("TOTAL"))
+                        .Sum(x => x.Difference),
+                    StartDate = startDate,
+                    EndDate = endDate
+                };
+
+                withShiftTotals.Add(grandTotal);
+            }
+
+            // ==================== PAGINATION ====================
+            var totalCount = withShiftTotals.Count;
+            var pagedItems = withShiftTotals
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToList();
 
             return new PagedResult<VarientPerformanceDto>
             {
@@ -92,24 +132,25 @@ namespace Toll.Reporting.Api.Repositories
             };
         }
 
+        // === Dropdown Helper Methods ===
         public async Task<IEnumerable<string>> GetShiftsAsync()
         {
             return await _context.Shifts
-                                 .Select(s => s.Description)
-                                 .Where(s => s != null)
-                                 .Distinct()
-                                 .OrderBy(s => s)
-                                 .ToListAsync();
+                .Select(s => s.Description)
+                .Where(s => s != null)
+                .Distinct()
+                .OrderBy(s => s)
+                .ToListAsync();
         }
 
         public async Task<IEnumerable<string>> GetTollOperatorsAsync()
         {
             return await _context.SystemUsers
-                                 .Select(su => su.Username)
-                                 .Where(su => su != null)
-                                 .Distinct()
-                                 .OrderBy(su => su)
-                                 .ToListAsync();
+                .Select(su => su.Username)
+                .Where(su => su != null)
+                .Distinct()
+                .OrderBy(su => su)
+                .ToListAsync();
         }
     }
 }

@@ -1,10 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Toll.Reporting.Api.DTOs;
 using TollReportingSystem.Data;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace Toll.Reporting.Api.Repositories
 {
@@ -17,9 +13,7 @@ namespace Toll.Reporting.Api.Repositories
             _context = context;
         }
 
-        /// <summary>
-        /// Fetch paginated transaction details with optional filters.
-        /// </summary>
+        // 🔹 Fetch Transaction Details
         public async Task<PagedResult<TransactionDetailsDto>> GetTransactionDetailsAsync(
             DateTime startDate,
             DateTime endDate,
@@ -30,79 +24,61 @@ namespace Toll.Reporting.Api.Repositories
             int page = 1,
             int pageSize = 10)
         {
-            // Base query joining related tables
-            var query = from t in _context.Transactions
+            // Include full end of day
+            if (endDate.TimeOfDay == TimeSpan.Zero)
+                endDate = endDate.AddDays(1).AddSeconds(-1);
 
-                        join s in _context.Shifts on t.ShiftId equals s.ShiftId into shiftGroup
-                        from s in shiftGroup.DefaultIfEmpty()
+            var query =
+                from t in _context.Transactions.AsNoTracking()
+                join s in _context.Shifts on t.ShiftId equals s.ShiftId into shiftGroup
+                from s in shiftGroup.DefaultIfEmpty()
+                join su in _context.SystemUsers on t.SystemUserId equals su.SystemUserId into userGroup
+                from su in userGroup.DefaultIfEmpty()
+                join l in _context.Lanes on t.LaneId equals l.LaneId into laneGroup
+                from l in laneGroup.DefaultIfEmpty()
+                join tt in _context.TransactionTypes on t.TransactionTypeId equals tt.TransactionTypeId into typeGroup
+                from tt in typeGroup.DefaultIfEmpty()
+                join tc1 in _context.TollClasses on t.ManualTollClassId equals tc1.TollClassId into tc1Group
+                from tc1 in tc1Group.DefaultIfEmpty()
+                join tc2 in _context.TollClasses on t.AutomaticTollClassId equals tc2.TollClassId into tc2Group
+                from tc2 in tc2Group.DefaultIfEmpty()
+                join tc3 in _context.TollClasses on t.ActualTollClassId equals tc3.TollClassId into tc3Group
+                from tc3 in tc3Group.DefaultIfEmpty()
+                join tpd in _context.TariffPlanDetails
+                    on new { t.TariffPlanId, TollClassId = t.ManualTollClassId }
+                    equals new { tpd.TariffPlanId, tpd.TollClassId } into tariffGroup
+                from tpd in tariffGroup.DefaultIfEmpty()
+                where t.TransactionDateTime >= startDate && t.TransactionDateTime <= endDate
+                select new
+                {
+                    Transaction = t,
+                    Shift = s,
+                    Operator = su,
+                    Lane = l,
+                    Type = tt,
+                    TollClass1 = tc1,
+                    TollClass2 = tc2,
+                    TollClass3 = tc3,
+                    Tariff = tpd
+                };
 
-                        join su in _context.SystemUsers on t.SystemUserId equals su.SystemUserId into userGroup
-                        from su in userGroup.DefaultIfEmpty()
+            // ✅ Apply filters safely
+            if (operationalShift?.Any() == true && !operationalShift.Contains("-- All --"))
+                query = query.Where(x => x.Shift != null && operationalShift.Contains(x.Shift.Description));
 
-                        join l in _context.Lanes on t.LaneId equals l.LaneId into laneGroup
-                        from l in laneGroup.DefaultIfEmpty()
+            if (tollOperators?.Any() == true && !tollOperators.Contains("-- All --"))
+                query = query.Where(x => x.Operator != null && tollOperators.Contains(x.Operator.Username));
 
-                        join tt in _context.TransactionTypes
-                            on t.TransactionTypeId equals tt.TransactionTypeId into typeGroup
-                        from tt in typeGroup.DefaultIfEmpty()
+            if (laneNames?.Any() == true && !laneNames.Contains("-- All --"))
+                query = query.Where(x => x.Lane != null && laneNames.Contains(x.Lane.LaneName));
 
-                        join tc1 in _context.TollClasses on t.ManualTollClassId equals tc1.TollClassId into tc1Group
-                        from tc1 in tc1Group.DefaultIfEmpty()
+            if (paymentMethods?.Any() == true && !paymentMethods.Contains("-- All --"))
+                query = query.Where(x => x.Type != null && paymentMethods.Contains(x.Type.Description));
 
-                        join tc2 in _context.TollClasses on t.AutomaticTollClassId equals tc2.TollClassId into tc2Group
-                        from tc2 in tc2Group.DefaultIfEmpty()
-
-                        join tc3 in _context.TollClasses on t.ActualTollClassId equals tc3.TollClassId into tc3Group
-                        from tc3 in tc3Group.DefaultIfEmpty()
-
-                        join tpd in _context.TariffPlanDetails
-                            on new { t.TariffPlanId, TollClassId = t.ManualTollClassId }
-                            equals new { tpd.TariffPlanId, tpd.TollClassId } into tariffGroup
-                        from tpd in tariffGroup.DefaultIfEmpty()
-
-                        where t.TransactionDateTime >= startDate &&
-                              t.TransactionDateTime < endDate.AddDays(1)
-                        orderby t.TransactionDateTime descending
-
-                        select new
-                        {
-                            Transaction = t,
-                            Shift = s,
-                            User = su,
-                            Lane = l,
-                            Type = tt,
-                            TollClass1 = tc1,
-                            TollClass2 = tc2,
-                            TollClass3 = tc3,
-                            Tariff = tpd
-                        };
-
-            // ✅ Apply optional filters dynamically
-            if (operationalShift != null && operationalShift.Any() && !operationalShift.Contains("-- All --"))
-            {
-                query = query.Where(x => operationalShift.Contains(x.Shift.Description));
-            }
-
-            if (tollOperators != null && tollOperators.Any() && !tollOperators.Contains("-- All --"))
-            {
-                query = query.Where(x => tollOperators.Contains(x.User.Username));
-            }
-
-            if (laneNames != null && laneNames.Any() && !laneNames.Contains("-- All --"))
-            {
-                query = query.Where(x => laneNames.Contains(x.Lane.LaneName));
-            }
-
-            if (paymentMethods != null && paymentMethods.Any() && !paymentMethods.Contains("-- All --"))
-            {
-                query = query.Where(x => paymentMethods.Contains(x.Type.Description));
-            }
-
-            // Count total records before pagination
             var totalCount = await query.CountAsync();
 
-            // Apply pagination
-            var pagedItems = await query
+            var items = await query
+                .OrderByDescending(x => x.Transaction.TransactionDateTime)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .Select(x => new TransactionDetailsDto
@@ -111,122 +87,66 @@ namespace Toll.Reporting.Api.Repositories
                     Trx_Sequence_Nr = x.Transaction.TransactionNumber.ToString(),
                     Trx_Date = x.Transaction.TransactionDateTime.ToString("dd/MM/yyyy"),
                     Trx_Time = x.Transaction.TransactionDateTime.ToString("HH:mm:ss"),
-                    Operational_Shift = x.Shift.Description ?? "-- None --",
-                    Toll_Operator_ID = x.User.Username ?? "-- None --",
-                    Lane_Name = x.Lane.LaneName ?? "-- None --",
-                    Method_of_Payment = x.Type.Description ?? "-- None --",
-                    Toll_Collector_Class = x.TollClass1.ClassDescription ?? "-- None --",
-                    AVC_Class = x.TollClass2.ClassDescription ?? "-- None --",
-                    Final_Class = x.TollClass3.ClassDescription ?? "-- None --",
-                    Tariff = Convert.ToDecimal(x.Tariff != null ? x.Tariff.AmountInclusive : 0),
+                    Operational_Shift = x.Shift != null ? x.Shift.Description : "-- None --",
+                    Toll_Operator_ID = x.Operator != null ? x.Operator.Username : "-- None --",
+                    Lane_Name = x.Lane != null ? x.Lane.LaneName : "-- None --",
+                    Method_of_Payment = x.Type != null ? x.Type.Description : "-- None --",
+                    Toll_Collector_Class = x.TollClass1 != null ? x.TollClass1.ClassDescription : "-- None --",
+                    AVC_Class = x.TollClass2 != null ? x.TollClass2.ClassDescription : "-- None --",
+                    Final_Class = x.TollClass3 != null ? x.TollClass3.ClassDescription : "-- None --",
+                    Tariff = x.Tariff != null ? (double?)x.Tariff.AmountInclusive : 0,
                     Tac_Card_Number = x.Transaction.CardNumber,
                     StartDate = startDate,
                     EndDate = endDate
                 })
                 .ToListAsync();
 
-            //  Return paged result
-            var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
-
             return new PagedResult<TransactionDetailsDto>
             {
-                Items = pagedItems,
+                Items = items,
                 TotalCount = totalCount,
                 Page = page,
                 PageSize = pageSize,
-                TotalPages = totalPages
+                TotalPages = (int)Math.Ceiling((double)totalCount / pageSize)
             };
-
         }
 
-        public async Task<TransactionFilterOptionsDto> GetTransactionFilterOptionsAsync(
-            DateTime startDate,
-            DateTime endDate,
-            List<string>? operationalShift = null,
-            List<string>? tollOperators = null,
-            List<string>? laneNames = null,
-            List<string>? paymentMethods = null)
+        // 🔹 Fetch Filter Options
+        public async Task<TransactionDetailsDto> GetTransactionFilterOptionsAsync(DateTime startDate, DateTime endDate)
         {
-            var query = from t in _context.Transactions
-                        join s in _context.Shifts on t.ShiftId equals s.ShiftId into shiftGroup
-                        from s in shiftGroup.DefaultIfEmpty()
-                        join su in _context.SystemUsers on t.SystemUserId equals su.SystemUserId into userGroup
-                        from su in userGroup.DefaultIfEmpty()
-                        join l in _context.Lanes on t.LaneId equals l.LaneId into laneGroup
-                        from l in laneGroup.DefaultIfEmpty()
-                        join tt in _context.TransactionTypes on t.TransactionTypeId equals tt.TransactionTypeId into typeGroup
-                        from tt in typeGroup.DefaultIfEmpty()
-                        where t.TransactionDateTime >= startDate && t.TransactionDateTime <= endDate
-                        select new
-                        {
-                            Shift = s.Description,
-                            Operator = su.Username,
-                            Lane = l.LaneName,
-                            Payment = tt.Description
-                        };
+            var shifts = await _context.Shifts
+                .Select(s => s.Description)
+                .Distinct()
+                .OrderBy(s => s)
+                .ToListAsync();
 
-            if (operationalShift?.Any() == true && !operationalShift.Contains("-- All --"))
-                query = query.Where(x => operationalShift.Contains(x.Shift));
+            var operators = await _context.SystemUsers
+                .Select(u => u.Username)
+                .Distinct()
+                .OrderBy(u => u)
+                .ToListAsync();
 
-            if (tollOperators?.Any() == true && !tollOperators.Contains("-- All --"))
-                query = query.Where(x => tollOperators.Contains(x.Operator));
+            var lanes = await _context.Lanes
+                .Select(l => l.LaneName)
+                .Distinct()
+                .OrderBy(l => l)
+                .ToListAsync();
 
-            if (laneNames?.Any() == true && !laneNames.Contains("-- All --"))
-                query = query.Where(x => laneNames.Contains(x.Lane));
+            var paymentMethods = await _context.TransactionTypes // ✅ fixed (PaymentMethods table may not exist)
+                .Select(pm => pm.Description)
+                .Distinct()
+                .OrderBy(pm => pm)
+                .ToListAsync();
 
-            if (paymentMethods?.Any() == true && !paymentMethods.Contains("-- All --"))
-                query = query.Where(x => paymentMethods.Contains(x.Payment));
-
-            var shifts = await query.Select(x => x.Shift).Where(x => x != null && x != "").Distinct().OrderBy(x => x).ToListAsync();
-            var ops = await query.Select(x => x.Operator).Where(x => x != null && x != "").Distinct().OrderBy(x => x).ToListAsync();
-            var lanes = await query.Select(x => x.Lane).Where(x => x != null && x != "").Distinct().OrderBy(x => x).ToListAsync();
-            var pays = await query.Select(x => x.Payment).Where(x => x != null && x != "").Distinct().OrderBy(x => x).ToListAsync();
-
-            return new TransactionFilterOptionsDto
+            return new TransactionDetailsDto
             {
+                StartDate = startDate,
+                EndDate = endDate,
                 Shifts = shifts,
-                TollOperators = ops,
+                TollOperators = operators,
                 Lanes = lanes,
-                PaymentMethods = pays
+                PaymentMethods = paymentMethods
             };
-        }
-
-        // ==================== LOOKUP QUERIES ====================
-
-        public async Task<IEnumerable<string>> GetShiftsAsync()
-        {
-            return await _context.Shifts
-                                 .Select(s => s.Description)
-                                 .Distinct()
-                                 .OrderBy(s => s)
-                                 .ToListAsync();
-        }
-
-        public async Task<IEnumerable<string>> GetTollOperatorsAsync()
-        {
-            return await _context.SystemUsers
-                                 .Select(su => su.Username)
-                                 .Distinct()
-                                 .OrderBy(su => su)
-                                 .ToListAsync();
-        }
-
-        public async Task<IEnumerable<string>> GetLanesAsync()
-        {
-            return await _context.Lanes
-                                 .Select(l => l.LaneName)
-                                 .Distinct()
-                                 .OrderBy(l => l)
-                                 .ToListAsync();
-        }
-
-        public async Task<IEnumerable<string>> GetPaymentMethodsAsync()
-        {
-            return await _context.PaymentMethods
-                                 .Select(pm => pm.Description)
-                                 .Distinct()
-                                 .OrderBy(pm => pm)
-                                 .ToListAsync();
         }
     }
 }

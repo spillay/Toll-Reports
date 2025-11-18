@@ -1,0 +1,318 @@
+﻿@model MIS.Web.Models.AccountUsageSummary.PageAccountUsageSummaryModel
+@using System.Globalization
+
+@{
+    ViewData["Title"] = "Account Usage Summary Report";
+
+    // Dates from controller
+    DateTime startDate = ViewBag.StartDate is DateTime s ? s : DateTime.Now.AddDays(-30);
+    DateTime endDate = ViewBag.EndDate is DateTime e ? e : DateTime.Now;
+
+    var reportGeneratedAt = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
+    var currentUserId = User.Identity?.Name ?? "Lucky";
+    var reportVersion = "2.0.0.11";
+
+    var summary = Model?.Summary;   
+}
+
+<div class="card shadow-lg p-4 mb-4">
+
+    <!-- HEADER -->
+    <div class="position-relative border-bottom pb-2 mb-3">
+        <h2 class="fw-bold text-primary text-center mb-0">
+            ACCOUNT USAGE SUMMARY REPORT
+        </h2>
+
+        <div class="position-absolute top-0 end-0 d-flex gap-2">
+            <button id="btnDownloadPdf" class="btn btn-danger btn-sm">
+                <i class="fa fa-file-pdf"></i> Export PDF
+            </button>
+            <button id="btnDownloadExcel" class="btn btn-success btn-sm">
+                <i class="fa fa-file-excel"></i> Export Excel
+            </button>
+        </div>
+    </div>
+
+
+    <!-- FILTERS -->
+    <form method="get" class="row g-3 mb-4">
+
+        <div class="col-md-4">
+            <label class="form-label fw-semibold">Start Date and Time</label>
+            <input type="datetime-local"
+                   name="StartDate"
+                   class="form-control"
+                   value="@startDate.ToString("yyyy-MM-ddTHH:mm")" />
+        </div>
+
+        <div class="col-md-4">
+            <label class="form-label fw-semibold">End Date and Time</label>
+            <input type="datetime-local"
+                   name="EndDate"
+                   class="form-control"
+                   value="@endDate.ToString("yyyy-MM-ddTHH:mm")" />
+        </div>
+
+        <div class="col-md-2 align-self-end">
+            <button class="btn btn-primary w-100" type="submit">Apply</button>
+        </div>
+
+    </form>
+
+
+    <!-- ===================== SUMMARY ===================== -->
+    <div class="border rounded p-3 mb-4 bg-light">
+
+        <h5 class="fw-bold text-secondary mb-3">SUMMARY</h5>
+
+        <div class="row g-3">
+
+            <div class="col-md-4">
+                <strong>Registered Accounts:</strong>
+                <span class="float-end">@summary?.TotalAccounts</span>
+            </div>
+
+            <div class="col-md-4">
+                <strong>Active:</strong>
+                <span class="float-end">@summary?.Active</span>
+            </div>
+
+            <div class="col-md-4">
+                <strong>Dormant:</strong>
+                <span class="float-end">@summary?.Dormant</span>
+            </div>
+
+            <div class="col-md-4">
+                <strong>Terminated:</strong>
+                <span class="float-end">@summary?.Terminated</span>
+            </div>
+
+            <div class="col-md-4">
+                <strong>Registered E-ID Devices:</strong>
+                <span class="float-end">@summary?.TotalEIdDevices</span>
+            </div>
+
+            <div class="col-md-4">
+                <strong>ETC Tags:</strong>
+                <span class="float-end">@summary?.TotalEtcTags</span>
+            </div>
+
+            <div class="col-md-4">
+                <strong>Smart Cards:</strong>
+                <span class="float-end">@summary?.TotalSmartCards</span>
+            </div>
+
+            <div class="col-md-4">
+                <strong>Number of Registered Vehicles:</strong>
+                <span class="float-end">@summary?.TotalVehicles</span>
+            </div>
+
+        </div>
+    </div>
+
+
+    <!-- ===================== TABLE ===================== -->
+    <div class="table-responsive">
+        <table id="detailsTable" class="table table-bordered table-striped table-sm text-center align-middle">
+
+            <!-- =======================
+                 GROUPED TABLE HEADERS
+            ======================== -->
+            <thead>
+
+                <!-- Row 1 (Group Titles) -->
+                <tr class="table-primary fw-bold">
+                    <th rowspan="2">Account Number</th>
+                    <th rowspan="2">Account Status</th>
+                    <th rowspan="2">Opening Balance</th>
+                    <th rowspan="2">Closing Balance</th>
+
+                    <th colspan="2" class="bg-light">Lane Transactions</th>
+
+                    <th colspan="2" class="bg-light">Lane Discount</th>
+
+                    <th colspan="2" class="bg-light">Frequent User Discount</th>
+
+                    <th colspan="2" class="bg-light">Happy Hour Discount</th>
+
+                    <th colspan="2" class="bg-light">Journey Discount</th>
+
+                    <th colspan="2" class="bg-light">Receipts</th>
+
+                    <th colspan="2" class="bg-light">Payments</th>
+
+                    <th colspan="2" class="bg-light">Refund</th>
+                </tr>
+
+                <!-- Row 2 (Column Titles) -->
+                <tr class="table-secondary">
+                    <!-- Lane Transactions -->
+                    <th>Count</th>
+                    <th>Value</th>
+
+                    <!-- Lane Discount -->
+                    <th>Count</th>
+                    <th>Value</th>
+
+                    <!-- Frequent User Discount -->
+                    <th>Count</th>
+                    <th>Value</th>
+
+                    <!-- Happy Hour Discount -->
+                    <th>Count</th>
+                    <th>Value</th>
+
+                    <!-- Journey Discount -->
+                    <th>Count</th>
+                    <th>Value</th>
+
+                    <!-- Receipts -->
+                    <th>Top-ups</th>
+                    <th>Deposits</th>
+
+                    <!-- Payments -->
+                    <th>Fees</th>
+                    <th>Refunds</th>
+
+                    <!-- Refund -->
+                    <th>Account</th>
+                    <th>Deposit</th>
+                </tr>
+
+            </thead>
+
+
+            <!-- =======================
+                 BODY
+            ======================== -->
+            <tbody>
+                @if (Model?.Items?.Any() == true)
+                {
+                    foreach (var item in Model.Items)
+                    {
+                        <tr>
+                            <td>@item.AccountNumber</td>
+                            <td>@item.AccountStatus</td>
+                            <td class="text-end">@item.OpeningBalance.ToString("N2")</td>
+                            <td class="text-end">@item.ClosingBalance.ToString("N2")</td>
+
+                            <!-- Lane Transactions -->
+                            <td class="text-end">@item.LaneTransactionCount</td>
+                            <td class="text-end">@item.LaneTransactionValue.ToString("N2")</td>
+
+                            <!-- Lane Discount -->
+                            <td class="text-end">@item.LaneDiscountCount</td>
+                            <td class="text-end">@item.LaneDiscountValue.ToString("N2")</td>
+
+                            <!-- Frequent User Discount -->
+                            <td class="text-end">@item.FrequentUserDiscountCount</td>
+                            <td class="text-end">@item.FrequentUserDiscountValue.ToString("N2")</td>
+
+                            <!-- Happy Hour Discount -->
+                            <td class="text-end">@item.HappyHourDiscountCount</td>
+                            <td class="text-end">@item.HappyHourDiscountValue.ToString("N2")</td>
+
+                            <!-- Journey Discount -->
+                            <td class="text-end">@item.JourneyDiscountCount</td>
+                            <td class="text-end">@item.JourneyDiscountValue.ToString("N2")</td>
+
+                            <!-- Receipts -->
+                            <td class="text-end">@item.ReceiptTopUp.ToString("N2")</td>
+                            <td class="text-end">@item.ReceiptDeposit.ToString("N2")</td>
+
+                            <!-- Payments -->
+                            <td class="text-end">@item.PaymentFees.ToString("N2")</td>
+                            <td class="text-end">@item.PaymentRefunds.ToString("N2")</td>
+
+                            <!-- Refund -->
+                            <td class="text-end">@item.RefundAccount.ToString("N2")</td>
+                            <td class="text-end">@item.RefundDeposit.ToString("N2")</td>
+                        </tr>
+                    }
+                }
+                else
+                {
+                    <tr>
+                        <td colspan="20" class="text-muted text-center">No records found.</td>
+                    </tr>
+                }
+            </tbody>
+
+        </table>
+
+    </div>
+
+    <!-- Footer -->
+    <div class="mt-4 p-3 border-top ">
+        <table class="table table-borderless w-100 mb-0 align-middle">
+            <tr>
+                <td class="fw-bold text-dark">Account Usage Summary Report</td>
+                <td><strong>Date and Time:</strong> @reportGeneratedAt</td>
+                <td><strong>User ID:</strong> @currentUserId</td>
+                <td class="text-end">
+                    Page <strong>@Model.page</strong> of <strong>@Model.totalPages</strong>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="4">
+                    <small class="text-muted">
+                        Reports Module Version Number: <strong>@reportVersion</strong>
+                    </small>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+</div>
+
+
+
+@section Scripts {
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+
+    <script>
+        // ============= PDF EXPORT =============
+        document.getElementById("btnDownloadPdf")?.addEventListener("click", async () => {
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const margin = 40;
+            let y = 20;
+
+            doc.setFont("helvetica", "bold").setFontSize(16);
+            doc.text("ACCOUNT USAGE SUMMARY REPORT", pageWidth / 2, y + 20, { align: "center" });
+
+            y = 100;
+            doc.setFontSize(10).setFont("helvetica", "normal");
+            doc.text("Generated By: @currentUserId", margin, y);
+            y += 12;
+            doc.text("Generated On: @reportGeneratedAt", margin, y);
+            y += 12;
+            doc.text("Version: @reportVersion", margin, y);
+            y += 20;
+
+            doc.autoTable({
+                html: "#detailsTable",
+                startY: y,
+                theme: "grid",
+                margin: { left: margin, right: margin },
+                styles: { fontSize: 8 }
+            });
+
+            doc.save(`AccountUsageSummary_${new Date().toISOString().replace(/[:.]/g, "-")}.pdf`);
+        });
+
+
+        // ============= EXCEL EXPORT =============
+        document.getElementById("btnDownloadExcel")?.addEventListener("click", () => {
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.table_to_sheet(document.getElementById("detailsTable"));
+            XLSX.utils.book_append_sheet(wb, ws, "Summary");
+            XLSX.writeFile(wb, `AccountUsageSummary_${new Date().toISOString().replace(/[:.]/g, "-")}.xlsx`);
+        });
+    </script>
+}

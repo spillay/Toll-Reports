@@ -79,7 +79,13 @@ namespace Toll.Reporting.Api.Repositories
             var rawData = await query.ToListAsync();
 
             // Step 4. Project to DTOs (in memory)
-            var projected = rawData.Select(x => new DiscrepancyDto
+            var projected = rawData
+            // ✅ Filter out "Both Correct" rows before projection
+            .Where(x =>
+                string.IsNullOrEmpty(x.ActualClass) || // keep if no final class
+                !(x.ManualClass == x.ActualClass && x.AutomaticClass == x.ActualClass) // keep if not both correct
+            )
+            .Select(x => new DiscrepancyDto
             {
                 Lane_Nr = x.Lane_Nr,
                 Trx_Sequence_Nr = x.Trx_Sequence_Nr.ToString(),
@@ -94,15 +100,18 @@ namespace Toll.Reporting.Api.Repositories
                 Final_Class = x.ActualClass ?? "",
                 Tariff = x.AmountInclusive ?? 0,
                 Updated_Tariff = x.AmountExclusive ?? 0,
-                TakenAction =
-                    (x.ManualClass == x.ActualClass && x.AutomaticClass == x.ActualClass)
-                        ? "Both Correct"
-                        : (x.ManualClass == x.ActualClass)
-                            ? "Operator Correct"
-                            : (x.AutomaticClass == x.ActualClass)
-                                ? "AVC Correct"
-                                : "Both Incorrect"
-            }).ToList();
+
+                // ✅ Only assign TakenAction if FinalClass exists
+                TakenAction = string.IsNullOrEmpty(x.ActualClass)
+                    ? "" 
+                    : (x.ManualClass == x.ActualClass)
+                        ? (x.AutomaticClass == x.ActualClass ? "" : "AVC Error")
+                        : (x.AutomaticClass == x.ActualClass)
+                            ? "Toll Collector Error"
+                            : "Both Incorrect"
+            })
+            .ToList();
+
 
             // ✅ Step 5. Apply TakenAction filter (case-insensitive)
             if (takenAction?.Any() == true)
@@ -117,12 +126,24 @@ namespace Toll.Reporting.Api.Repositories
                     .ToList();
             }
 
-            // Step 6. Pagination
+            // Step 6. Pagination (skip only if not exportAll)
             var totalCount = projected.Count;
-            var pagedItems = projected
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .ToList();
+            List<DiscrepancyDto> pagedItems;
+
+            if (pageSize == int.MaxValue)
+            {
+                // Return all data for export
+                pagedItems = projected;
+            }
+            else
+            {
+                // Keep normal pagination for UI
+                pagedItems = projected
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToList();
+            }
+
 
             // Step 7. Return paged result
             return new PagedResult<DiscrepancyDto>

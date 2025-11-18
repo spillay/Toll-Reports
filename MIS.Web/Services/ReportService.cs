@@ -12,24 +12,21 @@ namespace MIS.Web.Services
     public class ReportService : IReportService
     {
         private readonly HttpClient _httpClient;
-        private readonly IConfiguration _configuration;
+        private readonly IConfiguration _config;
 
-        public ReportService(HttpClient httpClient, IConfiguration configuration)
+        public ReportService(HttpClient httpClient, IConfiguration config)
         {
             _httpClient = httpClient;
-            _configuration = configuration;
+            _config = config;
         }
 
-        // Fetch transaction data with correct parameter names
+        // ✅ Fetch paginated transaction data
         public async Task<PageTransactionModel> GetTransactionDetailsAsync(TransactionInputModel model)
         {
-            string baseUrl = _configuration["BaseApiUrl:Link"];
-            string endpoint = _configuration["ApiSettings:TransactionEndpoint"];
-
-            // Build query
+            string baseUrl = _config["BaseApiUrl:Link"];
+            string endpoint = _config["ApiSettings:TransactionEndpoint"];
             string url = $"{baseUrl}{endpoint}?startDate={model.StartDate:yyyy-MM-ddTHH:mm:ss}&endDate={model.EndDate:yyyy-MM-ddTHH:mm:ss}&page={model.page}&pageSize={model.pageSize}";
 
-            // Match backend parameter names
             if (!string.IsNullOrEmpty(model.Shift))
                 url += $"&operationalShift={Uri.EscapeDataString(model.Shift)}";
             if (!string.IsNullOrEmpty(model.TollOperatorID))
@@ -44,36 +41,34 @@ namespace MIS.Web.Services
             var response = await _httpClient.GetAsync(url);
             if (!response.IsSuccessStatusCode)
             {
-                Console.WriteLine($"[WARN] Transaction API returned {response.StatusCode}");
+                Console.WriteLine($"[WARN] API returned {response.StatusCode}");
                 return new PageTransactionModel { items = new List<TransactionModel>() };
             }
 
-            var json = await response.Content.ReadAsStringAsync();
+            string json = await response.Content.ReadAsStringAsync();
             var data = JsonConvert.DeserializeObject<PageTransactionModel>(json);
             return data ?? new PageTransactionModel { items = new List<TransactionModel>() };
         }
 
-        //  Fetch dropdown filter options
-        public async Task<FilterOptionsModel> GetTransactionFilterOptionsAsync(TransactionInputModel model)
+        // ✅ Fetch dropdown filters — now uses TransactionInputModel (no separate FilterOptionsModel)
+        public async Task<TransactionInputModel> GetTransactionFilterOptionsAsync(TransactionInputModel model)
         {
-            string baseUrl = _configuration["BaseApiUrl:Link"];
-            string endpoint = _configuration["ApiSettings:TransactionFilterOptionsEndpoint"];
+            string baseUrl = _config["BaseApiUrl:Link"];
+            string endpoint = _config["ApiSettings:TransactionFilterOptionsEndpoint"];
             string url = $"{baseUrl}{endpoint}?startDate={model.StartDate:yyyy-MM-ddTHH:mm:ss}&endDate={model.EndDate:yyyy-MM-ddTHH:mm:ss}";
 
-            Console.WriteLine($"[DEBUG] Fetching filter options from: {url}");
+            Console.WriteLine($"[DEBUG] Filter Options API URL => {url}");
 
             var response = await _httpClient.GetAsync(url);
             if (!response.IsSuccessStatusCode)
             {
-                Console.WriteLine($"[WARN] Filter options API returned {response.StatusCode}");
-                return new FilterOptionsModel();
+                Console.WriteLine($"[WARN] Filter Options API returned {response.StatusCode}");
+                return new TransactionInputModel();
             }
 
-            var json = await response.Content.ReadAsStringAsync();
-            Console.WriteLine($"[DEBUG] Filter Options JSON => {json}");
-
-            var filters = JsonConvert.DeserializeObject<FilterOptionsModel>(json);
-            return filters ?? new FilterOptionsModel();
+            string json = await response.Content.ReadAsStringAsync();
+            var filters = JsonConvert.DeserializeObject<TransactionInputModel>(json);
+            return filters ?? new TransactionInputModel();
         }
     }
 }

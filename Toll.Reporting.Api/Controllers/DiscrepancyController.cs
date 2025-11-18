@@ -19,20 +19,28 @@ namespace Toll.Reporting.Api.Controllers
         // GET /api/discrepancy
         [HttpGet]
         public async Task<IActionResult> GetDiscrepancy(
-            [FromQuery] DateTime startDate,
-            [FromQuery] DateTime endDate,
-            [FromQuery] List<string>? operationalShift = null,
-            [FromQuery] List<string>? tollOperators = null,
-            [FromQuery] List<string>? laneNames = null,
-            [FromQuery] List<string>? paymentMethods = null,
-            [FromQuery] List<string>? takenAction = null,
-            [FromQuery] int page = 1,
-            [FromQuery] int pageSize = 50)
+     [FromQuery] DateTime startDate,
+     [FromQuery] DateTime endDate,
+     [FromQuery] List<string>? operationalShift = null,
+     [FromQuery] List<string>? tollOperators = null,
+     [FromQuery] List<string>? laneNames = null,
+     [FromQuery] List<string>? paymentMethods = null,
+     [FromQuery] List<string>? takenAction = null,
+     [FromQuery] bool exportAll = false,  
+     [FromQuery] int page = 1,
+     [FromQuery] int pageSize = 50)
         {
             try
             {
                 if (startDate == default || endDate == default)
                     return BadRequest("startDate and endDate are required");
+
+                // ✅ If exporting, disable pagination
+                if (exportAll)
+                {
+                    page = 1;
+                    pageSize = int.MaxValue;
+                }
 
                 var result = await _repository.GetDiscrepancyAsync(
                     startDate, endDate,
@@ -45,7 +53,6 @@ namespace Toll.Reporting.Api.Controllers
             }
             catch (Exception ex)
             {
-                //  Log to console + return the full message for debugging
                 _logger.LogError(ex, "Error while getting discrepancy");
 
                 return StatusCode(500, new
@@ -55,5 +62,6 @@ namespace Toll.Reporting.Api.Controllers
                 });
             }
         }
+
     }
 }

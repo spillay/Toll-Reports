@@ -9,12 +9,11 @@ namespace Toll.Reporting.Api.Repositories
         Task<PagedResult<TopUpDto>> GetTopUpsAsync(
             DateTime startDate,
             DateTime endDate,
+            string? shift = null,
             string? operatorId = null,
             string? lane = null,
-            string? shift = null,
             string? accountNumber = null,
-            bool? operationalDate = null,
             int page = 1,
-            int pageSize = 50);
+            int pageSize = 30);
     }
 }

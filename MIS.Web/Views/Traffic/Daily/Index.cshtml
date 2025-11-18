@@ -6,7 +6,7 @@
 
     var reportGeneratedAt = DateTime.Now;
     var currentUser = User.Identity?.Name ?? "Lucky";
-    var reportVersion = "1.0.0";
+    var reportVersion = "2.0.0.11";
 
     var input = Model.Filters ?? new MIS.Web.Models.Traffic.Daily.DailyTrafficInputModel();
     var classifications = Model.Classifications ?? new List<string>();
@@ -15,9 +15,10 @@
     <div class="card-body">
 
         <!-- Header -->
-        <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
-            <h2 class="mb-0 fw-bold text-primary">Daily Traffic Report</h2>
+        <div class="text-center mb-3 border-bottom pb-2">
+            <h2 class="mb-0 fw-bold text-primary">DAILY TRAFFIC REPORT</h2>
         </div>
+
 
         <!-- Export Buttons -->
         <div class="row mb-3">
@@ -42,7 +43,7 @@
                 <thead class="table-light">
                     <tr>
                         <th>Date</th>
-                        <th>Traffic / %</th>
+                        <th></th>
                         @foreach (var cls in classifications)
                         {
                             <th>@cls</th>
@@ -53,7 +54,10 @@
                 <tbody>
                     @if (Model.Items != null && Model.Items.Any())
                     {
-                        var grouped = Model.Items.GroupBy(x => x.Date.Date).OrderBy(g => g.Key);
+                        var grouped = Model.Items
+                        .GroupBy(x => x.Date.Date)
+                        .OrderBy(g => g.Key);
+
                         var totalsPerClass = classifications.ToDictionary(c => c, c => 0);
 
                         foreach (var group in grouped)
@@ -64,44 +68,84 @@
                             <tr>
                                 <td>@group.Key.ToString("dd/MM/yyyy")</td>
                                 <td>Traffic</td>
+
                                 @foreach (var cls in classifications)
                                 {
                                     int count = group.FirstOrDefault(x => x.Classification == cls)?.Count ?? 0;
                                     <td>@count</td>
                                     totalsPerClass[cls] += count;
                                 }
+
                                 <td>@rowTotal</td>
                             </tr>
 
-                            <!-- Percentage Row -->
+                            <!-- DAILY PERCENTAGES USING GRAND TOTAL (CALCULATED LATER) -->
                             <tr>
                                 <td></td>
                                 <td>Percentage</td>
+
                                 @foreach (var cls in classifications)
                                 {
                                     int count = group.FirstOrDefault(x => x.Classification == cls)?.Count ?? 0;
-                                    double percent = rowTotal > 0 ? (double)count / rowTotal * 100 : 0;
-                                    <td>@percent.ToString("0.00")%</td>
+
+                                    <!-- TEMP place-holder -->
+                                    <td class="daily-percent" data-count="@count"></td>
                                 }
-                                <td>100%</td>
+
+                                <td class="daily-total" data-rowtotal="@rowTotal"></td>
                             </tr>
                         }
 
-                        <!-- Statistics -->
+                        <!-- NOW WE CAN COMPUTE GRAND TOTAL -->
                         var grandTotal = totalsPerClass.Values.Sum();
-                        var daysCount = grouped.Count();
-                        var averages = totalsPerClass.ToDictionary(kv => kv.Key, kv => daysCount > 0 ? (int)Math.Round((double)kv.Value / daysCount) : 0);
 
-                        var maximums = classifications.ToDictionary(cls => cls,
-                        cls => Model.Items.Where(x => x.Classification == cls)
+                        <!-- Now populate daily percentages using grandTotal -->
+                        <script>
+                            document.querySelectorAll(".daily-percent").forEach(cell => {
+                                const count = parseInt(cell.dataset.count);
+                                const pct = @grandTotal > 0 ? (count / @grandTotal * 100).toFixed(2) : "0.00";
+                                cell.innerHTML = pct + "%";
+                            });
+
+                            document.querySelectorAll(".daily-total").forEach(cell => {
+                                const total = parseInt(cell.dataset.rowtotal);
+                                const pct = @grandTotal > 0 ? (total / @grandTotal * 100).toFixed(2) : "0.00";
+                                cell.innerHTML = pct + "%";
+                            });
+                        </script>
+
+
+                        <!-- PERIOD STATS -->
+                        var averages = totalsPerClass.ToDictionary(
+                        kv => kv.Key,
+                        kv => grouped.Count() > 0 ? (int)Math.Round((double)kv.Value / grouped.Count()) : 0
+                        );
+
+                        var maximums = classifications.ToDictionary(
+                        cls => cls,
+                        cls => Model.Items
+                        .Where(x => x.Classification == cls)
                         .GroupBy(x => x.Date.Date)
                         .Select(g => g.Sum(x => x.Count))
                         .DefaultIfEmpty(0)
-                        .Max());
+                        .Max()
+                        );
 
-                        <!-- Totals -->
+                        var percentagesForPeriod = classifications.ToDictionary(
+                        cls => cls,
+                        cls => grandTotal > 0
+                        ? (double)totalsPerClass[cls] / grandTotal * 100
+                        : 0
+                        );
+
+                        double totalPercentForPeriod = grandTotal > 0
+                        ? (double)grandTotal / grandTotal * 100
+                        : 0;
+
+
+                        <!-- TOTAL ROW -->
                         <tr class="table-secondary fw-bold">
-                            <td>Total for the Month</td>
+                            <td>Total for the Period</td>
                             <td></td>
                             @foreach (var cls in classifications)
                             {
@@ -110,6 +154,18 @@
                             <td>@grandTotal</td>
                         </tr>
 
+                        <!-- PERCENTAGE ROW BASED ON GRAND TOTAL -->
+                        <tr class="table-secondary fw-bold">
+                            <td>Percentage for the Period</td>
+                            <td></td>
+                            @foreach (var cls in classifications)
+                            {
+                                <td>@percentagesForPeriod[cls].ToString("0.00")%</td>
+                            }
+                            <td>@totalPercentForPeriod.ToString("0.00")%</td>
+                        </tr>
+
+                        <!-- AVERAGE -->
                         <tr class="table-secondary fw-bold">
                             <td>Average</td>
                             <td></td>
@@ -120,6 +176,7 @@
                             <td>@averages.Values.Sum()</td>
                         </tr>
 
+                        <!-- MAXIMUM -->
                         <tr class="table-secondary fw-bold">
                             <td>Maximum</td>
                             <td></td>
@@ -129,6 +186,7 @@
                             }
                             <td>@maximums.Values.Sum()</td>
                         </tr>
+
                     }
                     else
                     {
@@ -140,30 +198,50 @@
                         </tr>
                     }
                 </tbody>
+
             </table>
         </div>
 
-        <!-- Footer -->
-        <div class="mt-4 p-3 border-top bg-light">
-            <table class="table table-borderless w-100 mb-0">
-                <tr>
+
+        <!-- HEADER BLOCK - MATCHES YOUR SCREENSHOT -->
+        <div class="border-bottom pb-2 mb-3">
+            <table class="table table-borderless mb-0 w-100">
+                <tr class="align-top">
+                    <!-- Report Name -->
                     <td style="width: 35%;">
-                        <strong>Daily Traffic Report</strong>
+                        <strong>Daily Traffic Report</strong><br />
+                        
                     </td>
-                    <td style="width: 25%;">
+
+                    <!-- Date and Time -->
+                    <td style="width: 30%;">
                         <strong>Date and Time:</strong><br />
                         <em>@reportGeneratedAt.ToString("dd/MM/yyyy HH:mm:ss")</em>
                     </td>
+
+                    <!-- User ID -->
                     <td style="width: 25%;">
                         <strong>User ID:</strong><br />
                         <em>@currentUser</em>
                     </td>
-                    <td class="text-end" style="width: 15%;">
-                        Version: <strong>@reportVersion</strong>
+
+                    <!-- Page X of X -->
+                    <td style="width: 10%; white-space: nowrap;" class="text-end">
+                        Page 1 of 1
+                    </td>
+                </tr>
+
+                <!-- VERSION ROW -->
+                <tr>
+                    <td colspan="4">
+                        <strong>Reports Module Version Number:</strong>
+                        <span>@reportVersion</span>
                     </td>
                 </tr>
             </table>
         </div>
+
+
 
     </div>
 </div>
@@ -208,19 +286,22 @@
         doc.setFontSize(16);
         doc.text("Daily Traffic Report", pageWidth / 2, logoY + 50, { align: "center" });
 
-        // === FILTERS SECTION ===
+        // === FILTERS ===
         const startY = logoY + logoHeight + 20;
         doc.setFont("helvetica", "normal");
         doc.setFontSize(10);
+
         const filters = {
             "Start Date": '@Model.Filters.StartDate.ToString("dd/MM/yyyy")',
             "End Date": '@Model.Filters.EndDate.ToString("dd/MM/yyyy")',
             "Classification": '@(Model.Filters.Classification ?? "All")',
             "Operational Day": '@(Model.Filters.OperationalDay ? "Yes" : "No")'
         };
+
         let y = startY;
         doc.text("Filters Used:", margin, y);
         y += 14;
+
         for (const [key, value] of Object.entries(filters)) {
             doc.text(`${key}: ${value}`, margin, y);
             y += 12;
@@ -230,10 +311,10 @@
         const trafficData = @Html.Raw(JsonSerializer.Serialize(Model.Items ?? new List<MIS.Web.Models.Traffic.Daily.DailyTrafficModel>()));
         const classifications = @Html.Raw(JsonSerializer.Serialize(Model.Classifications ?? new List<string>()));
 
-        const headers = ["Date", "Traffic / %", ...classifications, "Total"];
+        const headers = ["Date", "", ...classifications, "Total"];
         const rows = [];
 
-        // Normalize PascalCase names to JS
+        // Group by day
         const grouped = {};
         trafficData.forEach(item => {
             const date = item.Date?.split("T")[0];
@@ -244,9 +325,16 @@
             });
         });
 
+        // Compute Grand Total
+        const totals = classifications.map(c =>
+            trafficData.filter(x => x.Classification === c).reduce((a, b) => a + (b.Count || 0), 0)
+        );
+        const grandTotal = totals.reduce((a, b) => a + b, 0);
+
         // Build rows per date
         for (const [date, list] of Object.entries(grouped)) {
-            const total = list.reduce((sum, i) => sum + (i.count || 0), 0);
+
+            const rowTotal = list.reduce((sum, i) => sum + (i.count || 0), 0);
 
             // Traffic Row
             const trafficRow = [date, "Traffic"];
@@ -254,38 +342,58 @@
                 const found = list.find(x => x.classification === c);
                 trafficRow.push(found ? found.count : 0);
             });
-            trafficRow.push(total);
+            trafficRow.push(rowTotal);
             rows.push(trafficRow);
 
-            // Percentage Row
+            // Percentage Row (based on GRAND TOTAL)
             const percentRow = ["", "Percentage"];
             classifications.forEach(c => {
                 const found = list.find(x => x.classification === c);
-                const val = found ? (found.count / total * 100) : 0;
-                percentRow.push(total > 0 ? `${val.toFixed(2)}%` : "0.00%");
+                const count = found ? found.count : 0;
+                const pct = grandTotal > 0 ? (count / grandTotal * 100) : 0;
+                percentRow.push(`${pct.toFixed(2)}%`);
             });
-            percentRow.push("100%");
+
+            // total percentage for that day
+            const dayPct = grandTotal > 0 ? (rowTotal / grandTotal * 100) : 0;
+            percentRow.push(`${dayPct.toFixed(2)}%`);
+
             rows.push(percentRow);
         }
 
-        // === TOTALS, AVERAGES, MAX ===
-        const totals = classifications.map(c =>
-            trafficData.filter(x => x.Classification === c).reduce((a, b) => a + (b.Count || 0), 0)
-        );
-        const grandTotal = totals.reduce((a, b) => a + b, 0);
+        // ADD FOOTER TOTALS
+        rows.push(["", "Total for the Period", ...totals, grandTotal]);
 
-        rows.push(["", "Total for the Month", ...totals, grandTotal]);
-        rows.push(["", "Average", ...totals.map(t => Math.round(t / Object.keys(grouped).length)), Math.round(grandTotal / Object.keys(grouped).length)]);
-        rows.push(["", "Maximum", ...classifications.map(c => {
-            const byDay = {};
-            trafficData.filter(x => x.Classification === c).forEach(x => {
-                const d = x.Date?.split("T")[0];
-                byDay[d] = (byDay[d] || 0) + (x.Count || 0);
-            });
-            return Math.max(...Object.values(byDay), 0);
-        }), ""]);
+        // PERCENTAGE FOOTER
+        const footerPct = ["", "Percentage for the Period"];
+        totals.forEach(t => {
+            const pct = grandTotal > 0 ? (t / grandTotal * 100) : 0;
+            footerPct.push(`${pct.toFixed(2)}%`);
+        });
+        footerPct.push("100%");
+        rows.push(footerPct);
 
-        // === TABLE RENDER ===
+        // AVERAGE
+        const daysCount = Object.keys(grouped).length || 1;
+        rows.push(["", "Average",
+            ...totals.map(t => Math.round(t / daysCount)),
+            Math.round(grandTotal / daysCount)
+        ]);
+
+        // MAXIMUM
+        rows.push(["", "Maximum",
+            ...classifications.map(c => {
+                const byDay = {};
+                trafficData.filter(x => x.Classification === c).forEach(x => {
+                    const d = x.Date?.split("T")[0];
+                    byDay[d] = (byDay[d] || 0) + (x.Count || 0);
+                });
+                return Math.max(...Object.values(byDay), 0);
+            }),
+            ""
+        ]);
+
+        // === RENDER TABLE ===
         doc.autoTable({
             head: [headers],
             body: rows,
@@ -294,28 +402,29 @@
             headStyles: { fillColor: [41, 128, 185], textColor: 255 },
             styles: { fontSize: 9, cellPadding: 4, overflow: 'linebreak' },
             columnStyles: { 0: { cellWidth: 70 }, 1: { cellWidth: 80 } },
-            didDrawPage: function (data) {
+            didDrawPage: function () {
                 const pageCount = doc.internal.getNumberOfPages();
                 const currentPage = doc.internal.getCurrentPageInfo().pageNumber;
-                const footerY = pageHeight - 50;
+                const footerY = pageHeight - 30;
 
                 doc.setFontSize(10);
                 doc.text("Daily Traffic Report", margin, footerY);
-                doc.text(`Date & Time: ${new Date().toLocaleString()}`, pageWidth / 2.3, footerY);
-                doc.text(`User ID: Lucky`, pageWidth / 1.6, footerY);
+                doc.text(`Date And Time: ${new Date().toLocaleString()}`, pageWidth / 2.5, footerY);
+                doc.text(`User ID: Lucky`, pageWidth / 1.4, footerY);
                 doc.text(`Page ${currentPage} of ${pageCount}`, pageWidth - margin, footerY, { align: 'right' });
                 doc.setFontSize(9);
-                doc.text("Reports Module Version Number: 1.0.0", margin, footerY + 14);
+                doc.text("Reports Module Version Number: 2.0.0.11", margin, footerY + 14);
             }
         });
 
-        // === SAVE ===
         doc.save(`Daily_Traffic_Report_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
     });
 </script>
 
+
 <script>
     document.getElementById("btnDownloadExcel").addEventListener("click", function () {
+
         const trafficData = @Html.Raw(JsonSerializer.Serialize(Model.Items ?? new List<MIS.Web.Models.Traffic.Daily.DailyTrafficModel>()));
         const classifications = @Html.Raw(JsonSerializer.Serialize(Model.Classifications ?? new List<string>()));
 
@@ -324,7 +433,7 @@
             return;
         }
 
-        // === Normalize PascalCase C# properties ===
+        // Group by day
         const grouped = {};
         trafficData.forEach(item => {
             const date = item.Date?.split("T")[0];
@@ -335,59 +444,81 @@
             });
         });
 
-        // === Prepare headers ===
-        const headers = ["Date", "Traffic / %", ...classifications, "Total"];
+        // Compute Grand Total
+        const totals = classifications.map(c =>
+            trafficData.filter(x => x.Classification === c).reduce((a, b) => a + (b.Count || 0), 0)
+        );
+        const grandTotal = totals.reduce((a, b) => a + b, 0);
+
+        const headers = ["Date", "", ...classifications, "Total"];
         const excelRows = [];
 
-        // === Build per-date rows ===
+        // Build rows per day
         for (const [date, list] of Object.entries(grouped)) {
-            const total = list.reduce((sum, i) => sum + (i.count || 0), 0);
 
-            // Traffic row
+            const rowTotal = list.reduce((sum, i) => sum + (i.count || 0), 0);
+
+            // Traffic
             const trafficRow = [date, "Traffic"];
             classifications.forEach(c => {
                 const found = list.find(x => x.classification === c);
                 trafficRow.push(found ? found.count : 0);
             });
-            trafficRow.push(total);
+            trafficRow.push(rowTotal);
             excelRows.push(trafficRow);
 
-            // Percentage row
+            // Percent Row (using GRAND TOTAL)
             const percentRow = ["", "Percentage"];
             classifications.forEach(c => {
                 const found = list.find(x => x.classification === c);
-                const val = found ? (found.count / total * 100) : 0;
-                percentRow.push(total > 0 ? `${val.toFixed(2)}%` : "0.00%");
+                const count = found ? found.count : 0;
+                const pct = grandTotal > 0 ? (count / grandTotal * 100) : 0;
+                percentRow.push(`${pct.toFixed(2)}%`);
             });
-            percentRow.push("100%");
+
+            const dayPct = grandTotal > 0 ? (rowTotal / grandTotal * 100) : 0;
+            percentRow.push(`${dayPct.toFixed(2)}%`);
+
             excelRows.push(percentRow);
         }
 
-        // === Totals / Averages / Maximums ===
-        const totals = classifications.map(c =>
-            trafficData.filter(x => x.Classification === c).reduce((a, b) => a + (b.Count || 0), 0)
-        );
-        const grandTotal = totals.reduce((a, b) => a + b, 0);
+        // Footer rows
+        excelRows.push(["", "Total for the Period", ...totals, grandTotal]);
+
+        // Percent Footer Row
+        const footerPct = ["", "Percentage for the Period"];
+        totals.forEach(t => {
+            const pct = grandTotal > 0 ? (t / grandTotal * 100) : 0;
+            footerPct.push(`${pct.toFixed(2)}%`);
+        });
+        footerPct.push("100%");
+        excelRows.push(footerPct);
+
         const daysCount = Object.keys(grouped).length || 1;
 
-        excelRows.push(["", "Total for the Month", ...totals, grandTotal]);
-        excelRows.push(["", "Average", ...totals.map(t => Math.round(t / daysCount)), Math.round(grandTotal / daysCount)]);
-        excelRows.push(["", "Maximum", ...classifications.map(c => {
-            const byDay = {};
-            trafficData.filter(x => x.Classification === c).forEach(x => {
-                const d = x.Date?.split("T")[0];
-                byDay[d] = (byDay[d] || 0) + (x.Count || 0);
-            });
-            return Math.max(...Object.values(byDay), 0);
-        }), ""]);
+        // Averages
+        excelRows.push(["", "Average",
+            ...totals.map(t => Math.round(t / daysCount)),
+            Math.round(grandTotal / daysCount)
+        ]);
 
-        // === Create Workbook and Export ===
+        // Maximum
+        excelRows.push(["", "Maximum",
+            ...classifications.map(c => {
+                const byDay = {};
+                trafficData.filter(x => x.Classification === c).forEach(x => {
+                    const d = x.Date?.split("T")[0];
+                    byDay[d] = (byDay[d] || 0) + (x.Count || 0);
+                });
+                return Math.max(...Object.values(byDay), 0);
+            }), ""
+        ]);
+
+        // === CREATE & DOWNLOAD EXCEL ===
         const wb = XLSX.utils.book_new();
         const ws = XLSX.utils.aoa_to_sheet([headers, ...excelRows]);
 
-        // Style width for better readability
-        const colWidths = headers.map(() => ({ wch: 15 }));
-        ws['!cols'] = colWidths;
+        ws['!cols'] = headers.map(() => ({ wch: 15 }));
 
         XLSX.utils.book_append_sheet(wb, ws, "Daily Traffic Report");
 
@@ -395,5 +526,6 @@
         XLSX.writeFile(wb, filename);
     });
 </script>
+
 
 

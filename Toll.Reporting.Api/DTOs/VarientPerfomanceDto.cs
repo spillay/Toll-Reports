@@ -9,6 +9,7 @@ namespace Toll.Reporting.Api.DTOs
         public string? TollOperator { get; set; } 
         public double? ActualAmount { get; set; }
         public double? NominalTariff { get; set; }
+        public double Difference { get; set; } 
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
     }

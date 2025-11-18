@@ -19,52 +19,63 @@ namespace Toll.Reporting.Api.Controllers
             _repo = repo;
         }
 
-      
+        /// <summary>
+        /// Retrieves the comprehensive report for the specified filters and date range.
+        /// </summary>
         [HttpGet("report")]
         public async Task<ActionResult<IEnumerable<ComprehensiveDto>>> GetComprehensiveReport(
             [FromQuery] DateTime startDate,
             [FromQuery] DateTime endDate,
             [FromQuery] string? operationalShift = null,
-            [FromQuery] string? tollOperators = null,
+            [FromQuery] string? tollOperators = null,      // maps to SystemUser.Username (Operator)
             [FromQuery] string? laneNames = null,
-            [FromQuery] string? paymentMethods = null,
-            [FromQuery] string? laneDiscountTypes = null,
+            [FromQuery] string? laneDiscountTypes = null,  // discount descriptions
             [FromQuery] string? classification = null,
+            [FromQuery] string? paymentMethods = null,
             [FromQuery] string? transactionTypes = null)
         {
             try
             {
-                // Convert comma-separated to lists (null-safe)
-                List<string>? ToList(string? csv) =>
+                // --- Utility: convert comma-separated values to list safely ---
+                static List<string>? ToList(string? csv) =>
                     string.IsNullOrWhiteSpace(csv)
                         ? null
-                        : csv.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToList();
+                        : csv.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                             .Select(s => s.Trim())
+                             .ToList();
 
+                // --- Parse incoming filters ---
                 var operationalShiftList = ToList(operationalShift);
                 var tollOperatorsList = ToList(tollOperators);
                 var laneNamesList = ToList(laneNames);
-                var paymentMethodsList = ToList(paymentMethods);
                 var laneDiscountTypesList = ToList(laneDiscountTypes);
                 var classificationList = ToList(classification);
+                var paymentMethodsList = ToList(paymentMethods);
                 var transactionTypesList = ToList(transactionTypes);
 
+                // --- Repository call (correct parameter order) ---
                 var data = await _repo.GetComprehensiveRepositoryAsync(
                     startDate,
                     endDate,
                     operationalShiftList,
-                    tollOperatorsList,
+                    tollOperatorsList,      
                     laneNamesList,
-                    laneDiscountTypesList,
+                    laneDiscountTypesList,  
                     classificationList,
                     paymentMethodsList,
                     transactionTypesList
                 );
 
+                // --- Return data ---
                 return Ok(data);
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"Error fetching comprehensive report: {ex.Message}");
+                return StatusCode(500, new
+                {
+                    Message = "Error fetching comprehensive report.",
+                    Details = ex.Message
+                });
             }
         }
     }

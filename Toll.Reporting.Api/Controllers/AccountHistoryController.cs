@@ -4,88 +4,104 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using TollReportingSystem.Data;
+using Toll.Reporting.Api.DTOs;
+using Toll.Reporting.Api.Repositories.Interfaces;
 
-[ApiController]
-[Route("api/[controller]")]
-public class AccountHistoryController : ControllerBase
+namespace Toll.Reporting.Api.Controllers
 {
-    private readonly IAccountHistoryRepository _repository;
-    private readonly ApplicationDbContext _context;
-
-    public AccountHistoryController(IAccountHistoryRepository repository, ApplicationDbContext context)
+    [ApiController]
+    [Route("api/[controller]")]
+    public class AccountHistoryController : ControllerBase
     {
-        _repository = repository;
-        _context = context;
-    }
+        private readonly IAccountHistoryRepository _repository;
+        private readonly ApplicationDbContext _context;
 
-    /// <summary>
-    /// ✅ Get full account history report (single account or all)
-    /// </summary>
-    [HttpGet("details")]
-    public async Task<IActionResult> GetAccountHistory([FromQuery] string? accountNumber = null)
-    {
-        try
+        public AccountHistoryController(
+            IAccountHistoryRepository repository,
+            ApplicationDbContext context)
         {
-            // 🔹 If no account is provided, return all accounts' history
-            var result = await _repository.GetAccountHistoryAsync(accountNumber);
+            _repository = repository;
+            _context = context;
+        }
 
-            // 🟡 Handle "no data" case gracefully
-            if ((result.AccountHeader == null) && (result.HistoryRecords == null || !result.HistoryRecords.Any()))
+        // ================================================================================
+        // ✅ ACCOUNT HISTORY REPORT (MAIN ENDPOINT)
+        // ================================================================================
+        [HttpGet("details")]
+        public async Task<IActionResult> GetAccountHistory(
+            [FromQuery] string? accountNumber = null,
+            [FromQuery] DateTime? startDate = null,
+            [FromQuery] DateTime? endDate = null)
+        {
+            try
             {
-                return NotFound(new { message = "No account history found." });
+                // Basic validation – ensure at least one filter is present
+                if (string.IsNullOrWhiteSpace(accountNumber)
+                    && !startDate.HasValue
+                    && !endDate.HasValue)
+                {
+                    return BadRequest("At least one filter (account number OR start/end date) must be provided.");
+                }
+
+                // Normalize dates
+                DateTime start = startDate ?? DateTime.MinValue;
+                DateTime end = endDate ?? DateTime.MaxValue;
+
+                var result = await _repository.GetAccountHistoryAsync(
+                    accountNumber,
+                    start,
+                    end
+                );
+
+                return Ok(new
+                {
+                    accountHeader = result.AccountHeader,
+                    historyRecords = result.HistoryRecords,
+                    totalTopUps = result.TotalTopUps,
+                    totalTransactions = result.TotalTransactions,
+                    netMovement = result.NetMovement
+                });
             }
-
-            // ✅ Return standard JSON response
-            return Ok(new
+            catch (Exception ex)
             {
-                accountHeader = result.AccountHeader,
-                historyRecords = result.HistoryRecords
-            });
+                return StatusCode(500, new
+                {
+                    message = "An error occurred while fetching the account history.",
+                    details = ex.Message
+                });
+            }
         }
-        catch (Exception ex)
+
+        // ================================================================================
+        // ✅ FETCH ACCOUNT LIST (USED FOR DROPDOWN)
+        // ================================================================================
+        [HttpGet("accounts")]
+        public async Task<IActionResult> GetAccounts()
         {
-            return StatusCode(500, new
+            try
             {
-                message = "An error occurred while fetching the account history report.",
-                details = ex.Message
-            });
-        }
-    }
+                var rawAccounts = await _context.RegisteredUsers
+                    .AsNoTracking()
+                    .Select(u => u.RegisterUserId.ToString())
+                    .ToListAsync();
 
-    /// <summary>
-    /// ✅ Fetch all registered account numbers for dropdown
-    /// </summary>
-    [HttpGet("accounts")]
-    public async Task<IActionResult> GetAccounts()
-    {
-        try
-        {
-            // Step 1️⃣ – Pull only raw account numbers (no DISTINCT / LTRIM / RTRIM in SQL)
-            var rawAccounts = await _context.RegisteredUsers
-                .AsNoTracking()
-                .Select(u => u.AccNr)
-                .Where(acc => acc != null && acc != "")
-                .ToListAsync();
+                var accounts = rawAccounts
+                    .Where(a => !string.IsNullOrWhiteSpace(a))
+                    .Select(a => a.Trim())
+                    .Distinct()
+                    .OrderBy(a => a)
+                    .ToList();
 
-            // Step 2️⃣ – Process in memory
-            var accounts = rawAccounts
-                .AsParallel()
-                .Where(a => !string.IsNullOrWhiteSpace(a))
-                .Select(a => a.Trim())
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(a => a)
-                .Take(5000)
-                .ToList();
-
-            return Ok(accounts);
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new
+                return Ok(accounts);
+            }
+            catch (Exception ex)
             {
-                message = "An error occurred while fetching the account list.",
-                details = ex.Message
-            });
+                return StatusCode(500, new
+                {
+                    message = "An error occurred while loading account numbers.",
+                    details = ex.Message
+                });
+            }
         }
     }
 }

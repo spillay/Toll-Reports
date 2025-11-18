@@ -1,5 +1,6 @@
 ﻿using MIS.Web.Models.Discrepancy;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
@@ -13,11 +14,16 @@ namespace MIS.Web.Services
     {
         private readonly HttpClient _httpClient;
         private readonly IConfiguration _configuration;
+        private readonly ILogger<DiscrepancyReportService> _logger;
 
-        public DiscrepancyReportService(HttpClient httpClient, IConfiguration configuration)
+        public DiscrepancyReportService(
+            HttpClient httpClient,
+            IConfiguration configuration,
+            ILogger<DiscrepancyReportService> logger)
         {
             _httpClient = httpClient;
             _configuration = configuration;
+            _logger = logger;
         }
 
         public async Task<PageDiscrepancyModel> GetDiscrepancyReportAsync(
@@ -31,109 +37,119 @@ namespace MIS.Web.Services
             int page = 1,
             int pageSize = 50)
         {
-            // IMPORTANT: include time (ISO sortable)
-            var q = new List<string>
-        {
-            $"startDate={Uri.EscapeDataString(startDate.ToString("s"))}", // yyyy-MM-ddTHH:mm:ss
-            $"endDate={Uri.EscapeDataString(endDate.ToString("s"))}",
-            $"page={page}",
-            $"pageSize={pageSize}"
-        };
-
-            void AddList(string key, List<string>? list)
+            try
             {
-                if (list?.Any() == true)
+                // -------------------------
+                // BUILD QUERY STRING
+                // -------------------------
+                var q = new List<string>
                 {
-                    foreach (var v in list)
-                        q.Add($"{key}={Uri.EscapeDataString(v)}");
-                }
-            }
-
-            AddList("operationalShift", operationalShift);
-            AddList("tollOperators", tollOperators);
-            AddList("laneNames", laneNames);
-            AddList("paymentMethods", paymentMethods);
-            AddList("takenAction", takenAction);
-
-            string baseUrl = _configuration["BaseApiUrl:Link"];
-            string endpoint = _configuration["ApiSettings:DiscrepancyReportEndpoint"];
-            string url = $"{baseUrl}{endpoint}?{string.Join("&", q)}";
-
-            var res = await _httpClient.GetAsync(url);
-            if (!res.IsSuccessStatusCode)
-            {
-                return new PageDiscrepancyModel
-                {
-                    Items = new List<DiscrepancyModel>(),
-                    Filters = new DiscrepancyInputModel { StartDate = startDate, EndDate = endDate },
-                    totalCount = 0,
-                    page = page,
-                    pageSize = pageSize,
-                    totalPages = 0
+                    $"startDate={Uri.EscapeDataString(startDate.ToString("s"))}",
+                    $"endDate={Uri.EscapeDataString(endDate.ToString("s"))}",
+                    $"page={page}",
+                    $"pageSize={pageSize}"
                 };
-            }
 
-            var body = await res.Content.ReadAsStringAsync();
-
-            // match your ApiPagedResult shape
-            var pagedDto = Newtonsoft.Json.JsonConvert.DeserializeObject<ApiPagedResult>(body) ?? new ApiPagedResult();
-
-            var items = (pagedDto.Items ?? new List<ApiDiscrepancyDto>())
-                .Select(d => new DiscrepancyModel
+                void AddList(string key, List<string>? list)
                 {
-                    lane_Nr = d.Lane_Nr.ToString(),
-                    trx_Sequence_Nr = int.TryParse(d.Trx_Sequence_Nr, out var seq) ? seq : 0,
-                    trx_Date = d.Trx_Date,
-                    trx_Time = d.Trx_Time,
-                    operational_Shift = d.Operational_Shift,
-                    toll_Operator_ID = d.Toll_Operator_ID,
-                    lane_Name = d.Lane_Name,
-                    method_of_Payment = d.Method_of_Payment,
-                    toll_Collector_Class = d.Toll_Collector_Class,
-                    avC_Class = d.AVC_Class,
-                    final_Class = d.Final_Class,
-                    tariff = d.Tariff ?? 0,
-                    updated_tariff = d.Updated_Tariff ?? 0,
-                    takenAction = d.TakenAction
-                })
-                .ToList();
+                    if (list?.Any() == true)
+                    {
+                        foreach (var v in list)
+                            q.Add($"{key}={Uri.EscapeDataString(v)}");
+                    }
+                }
 
+                AddList("operationalShift", operationalShift);
+                AddList("tollOperators", tollOperators);
+                AddList("laneNames", laneNames);
+                AddList("paymentMethods", paymentMethods);
+                AddList("takenAction", takenAction);
+
+                // -------------------------
+                // BUILD URL
+                // -------------------------
+                string baseUrl = _configuration["BaseApiUrl:Link"];
+                string endpoint = _configuration["ApiSettings:DiscrepancyReportEndpoint"];
+
+                string url = $"{baseUrl}{endpoint}?{string.Join("&", q)}";
+
+                _logger.LogInformation($"📡 Fetching Discrepancy Report from: {url}");
+
+                // -------------------------
+                // SEND REQUEST
+                // -------------------------
+                var response = await _httpClient.GetAsync(url);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning($"❌ Failed to fetch discrepancy report. Status: {response.StatusCode}");
+                    return EmptyResult(startDate, endDate, page, pageSize);
+                }
+
+                var body = await response.Content.ReadAsStringAsync();
+
+                // -------------------------
+                // JSON DESERIALIZATION FIX
+                // -------------------------
+                var pagedResult = JsonConvert.DeserializeObject<PageDiscrepancyModel>(
+                    body,
+                    new JsonSerializerSettings
+                    {
+                        MissingMemberHandling = MissingMemberHandling.Ignore,
+                        NullValueHandling = NullValueHandling.Ignore
+                    });
+
+                if (pagedResult == null)
+                {
+                    _logger.LogWarning("⚠️ API returned NULL or invalid JSON for Discrepancy Report");
+                    return EmptyResult(startDate, endDate, page, pageSize);
+                }
+
+                // -------------------------
+                // FILL FILTER INFO
+                // -------------------------
+                pagedResult.Filters = new DiscrepancyInputModel
+                {
+                    StartDate = startDate,
+                    EndDate = endDate,
+                    Shift = operationalShift?.FirstOrDefault(),
+                    toll_Operator_ID = tollOperators?.FirstOrDefault(),
+                    lane_Nr = laneNames?.FirstOrDefault(),
+                    PaymentMethod = paymentMethods?.FirstOrDefault(),
+                    TakenAction = takenAction?.FirstOrDefault(),
+                    Page = page,
+                    PageSize = pageSize
+                };
+
+                return pagedResult;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "💥 ERROR: Discrepancy service crashed.");
+                return EmptyResult(startDate, endDate, page, pageSize);
+            }
+        }
+
+        // -------------------------
+        // EMPTY RESULT FACTORY
+        // -------------------------
+        private PageDiscrepancyModel EmptyResult(DateTime start, DateTime end, int page, int pageSize)
+        {
             return new PageDiscrepancyModel
             {
-                Items = items,
-                Filters = new DiscrepancyInputModel { StartDate = startDate, EndDate = endDate },
-                totalCount = pagedDto.TotalCount,
-                page = pagedDto.Page == 0 ? page : pagedDto.Page,
-                pageSize = pagedDto.PageSize == 0 ? pageSize : pagedDto.PageSize,
-                totalPages = pagedDto.TotalPages
+                Items = new List<DiscrepancyModel>(),
+                totalCount = 0,
+                totalPages = 0,
+                page = page,
+                pageSize = pageSize,
+                Filters = new DiscrepancyInputModel
+                {
+                    StartDate = start,
+                    EndDate = end,
+                    Page = page,
+                    PageSize = pageSize
+                }
             };
-        }
-
-        private class ApiDiscrepancyDto
-        {
-            public int Lane_Nr { get; set; }
-            public string Trx_Sequence_Nr { get; set; } = "";
-            public string Trx_Date { get; set; } = "";
-            public string Trx_Time { get; set; } = "";
-            public string Operational_Shift { get; set; } = "";
-            public string Toll_Operator_ID { get; set; } = "";
-            public string Lane_Name { get; set; } = "";
-            public string Method_of_Payment { get; set; } = "";
-            public string Toll_Collector_Class { get; set; } = "";
-            public string AVC_Class { get; set; } = "";
-            public string Final_Class { get; set; } = "";
-            public decimal? Tariff { get; set; }
-            public decimal? Updated_Tariff { get; set; }
-            public string TakenAction { get; set; } = "";
-        }
-
-        private class ApiPagedResult
-        {
-            public List<ApiDiscrepancyDto> Items { get; set; } = new();
-            public int TotalCount { get; set; }
-            public int Page { get; set; }
-            public int PageSize { get; set; }
-            public int TotalPages { get; set; }
         }
     }
 }

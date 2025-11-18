@@ -7,6 +7,6 @@ namespace MIS.Web.Services
     public interface IReportService
     {
         Task<PageTransactionModel> GetTransactionDetailsAsync(TransactionInputModel model);
-        Task<FilterOptionsModel> GetTransactionFilterOptionsAsync(TransactionInputModel model);
+        Task<TransactionInputModel> GetTransactionFilterOptionsAsync(TransactionInputModel model);
     }
 }

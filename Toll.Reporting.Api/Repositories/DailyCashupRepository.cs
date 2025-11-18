@@ -18,7 +18,12 @@ namespace Toll.Reporting.Api.Repositories
         }
 
         /// <summary>
-        /// Fetch paginated daily cashup records (variance between system totals and declared cash)
+        /// Fetch paginated daily cashup records, grouped by Toll Operator + Shift,
+        /// with sums per operator per shift.
+        /// NettAmount  = sum of all NettAmount for the operator & shift (Lane Cash)
+        /// ActualAmount = sum of ActualAmount (can be used for Top-ups if mapped that way)
+        /// TotalDeclared = sum of Cash Declared from CollectorCashups
+        /// Difference = (NettAmount + ActualAmount) - TotalDeclared
         /// </summary>
         public async Task<PagedResult<DailyCashupDto>> GetDailyCashupAsync(
             DateTime startDate,
@@ -28,7 +33,8 @@ namespace Toll.Reporting.Api.Repositories
             int page = 1,
             int pageSize = 10)
         {
-            var query =
+            // base query (per transaction)
+            var baseQuery =
                 from su in _context.SystemUsers
                 join t in _context.Transactions
                     on su.SystemUserId equals t.SystemUserId into tGroup
@@ -39,7 +45,8 @@ namespace Toll.Reporting.Api.Repositories
                 from s in sGroup.DefaultIfEmpty()
 
                 join cc in _context.CollectorCashups
-                    on su.SystemUserId equals cc.SystemUserId into ccGroup
+                    on new { su.SystemUserId, t.ShiftId }
+                    equals new { cc.SystemUserId, cc.ShiftId } into ccGroup
                 from cc in ccGroup.DefaultIfEmpty()
 
                 where t.TransactionDateTime >= startDate && t.TransactionDateTime <= endDate
@@ -47,38 +54,49 @@ namespace Toll.Reporting.Api.Repositories
                 {
                     ShiftDescription = s.Description,
                     TollOperator = su.Username,
-                    NettAmount = (double?)t.NettAmount,
-                    ActualAmount = (double?)t.ActualAmount,
+                    NettAmount = (double?)t.NettAmount,      // system NettAmount
+                    ActualAmount = (double?)t.ActualAmount,  // system ActualAmount (can be Top-up)
                     TotalDeclared = (double?)cc.TotalDeclared,
                     TransactionDate = (DateTime?)t.TransactionDateTime
                 };
 
-
-            // Apply filters dynamically
+            // dynamic filters
             if (operationalShift != null && operationalShift.Any() && !operationalShift.Contains("-- All --"))
-                query = query.Where(x => operationalShift.Contains(x.ShiftDescription));
+                baseQuery = baseQuery.Where(x => operationalShift.Contains(x.ShiftDescription));
 
             if (tollOperators != null && tollOperators.Any() && !tollOperators.Contains("-- All --"))
-                query = query.Where(x => tollOperators.Contains(x.TollOperator));
+                baseQuery = baseQuery.Where(x => tollOperators.Contains(x.TollOperator));
 
-            // Count before pagination
-            var totalCount = await query.CountAsync();
+            // group BY Toll Operator + Shift
+            var groupedQuery = baseQuery
+                .GroupBy(x => new { x.TollOperator, x.ShiftDescription })
+                .Select(g => new DailyCashupDto
+                {
+                    ShiftDescription = g.Key.ShiftDescription ?? "-- None --",
+                    TollOperator = g.Key.TollOperator ?? "-- None --",
 
-            // Apply pagination
-            var pagedItems = await query
-                .OrderByDescending(x => x.TransactionDate)
+                    // sums per operator + shift
+                    NettAmount = g.Sum(x => x.NettAmount ?? 0d),        // Lane Cash total
+                    ActualAmount = g.Sum(x => x.ActualAmount ?? 0d),    // Top-ups total
+                    TotalDeclared = g.Sum(x => x.TotalDeclared ?? 0d),  // Declared total
+
+                    // Expected = LaneCash + Top-ups, Difference = Expected - Declared
+                    Difference = (g.Sum(x => x.NettAmount ?? 0d) + g.Sum(x => x.ActualAmount ?? 0d))
+                                 - g.Sum(x => x.TotalDeclared ?? 0d),
+
+                    // any date inside the group (min used as shift date)
+                    ShiftDate = g.Min(x => x.TransactionDate) ?? startDate.Date
+                });
+
+            // count groups (not raw rows)
+            var totalCount = await groupedQuery.CountAsync();
+
+            // apply pagination on grouped result
+            var pagedItems = await groupedQuery
+                .OrderBy(x => x.ShiftDescription)
+                .ThenBy(x => x.TollOperator)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
-                .Select(x => new DailyCashupDto
-                {
-                    ShiftDescription = x.ShiftDescription ?? "-- None --",
-                    TollOperator = x.TollOperator ?? "-- None --",
-                    NettAmount = x.NettAmount == null ? 0d : x.NettAmount.Value,
-                    ActualAmount = x.ActualAmount == null ? 0d : x.ActualAmount.Value,
-                    TotalDeclared = x.TotalDeclared == null ? 0d : x.TotalDeclared.Value,
-                    Difference = (x.NettAmount ?? 0d) - (x.TotalDeclared ?? 0d),
-                    ShiftDate = x.TransactionDate == null ? DateTime.MinValue : x.TransactionDate.Value.Date
-                })
                 .ToListAsync();
 
             var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
@@ -117,7 +135,6 @@ namespace Toll.Reporting.Api.Repositories
                     Operator = su.Username
                 };
 
-            // Apply filters dynamically (if pre-filtering required)
             if (operationalShift?.Any() == true && !operationalShift.Contains("-- All --"))
                 query = query.Where(x => operationalShift.Contains(x.Shift));
 

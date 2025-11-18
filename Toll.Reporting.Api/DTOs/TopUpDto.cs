@@ -11,7 +11,7 @@ namespace Toll.Reporting.Api.DTOs
         public string? Operator { get; set; }
         public string? AccountNumber { get; set; }
         public string? AccountName { get; set; }
-        public decimal AmountPaid { get; set; }
+        public double AmountPaid { get; set; }
         public string? MethodOfPayment { get; set; }
     }
 }

@@ -13,10 +13,10 @@ namespace MIS.Models
         public long? RegisteredUserLaneTransactionId { get; set; }
         public DateTime TransactionDateTime { get; set; }
         public string Description { get; set; }
-        public double OpeningBalance { get; set; }
+        public double? OpeningBalance { get; set; }
         public double? Debit { get; set; }
         public double? Credit { get; set; }
-        public double ClosingBalance { get; set; }
+        public double? ClosingBalance { get; set; }
 
         public virtual RegisteredUser RegisterUser { get; set; }
         public virtual RegisteredUserTopUp RegisteredUserTopUp { get; set; }

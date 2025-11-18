@@ -21,7 +21,7 @@ namespace MIS.Web.Controllers
 
         public async Task<IActionResult> Index([FromQuery] ComprehensiveInputModel input)
         {
-            // Ensure all filters default to "All" (empty string)
+            // ✅ Ensure all filters default to empty (meaning "All")
             input ??= new ComprehensiveInputModel();
             input.Shift ??= "";
             input.TransactionType ??= "";
@@ -29,7 +29,7 @@ namespace MIS.Web.Controllers
             input.MethodOfPayment ??= "";
             input.DiscountType ??= "";
             input.Classification ??= "";
-            input.TollOperatorID ??= "";
+            input.TollOperatorID ??= ""; // ✅ renamed from TollOperatorID
 
             var pageModel = await BuildPageModelAsync(input);
             return View("~/Views/Comprehensive/Index.cshtml", pageModel);
@@ -97,17 +97,18 @@ namespace MIS.Web.Controllers
             using var ms = new MemoryStream();
             wb.SaveAs(ms);
             ms.Position = 0;
+
             return File(ms.ToArray(),
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 $"ComprehensiveReport_{DateTime.Now:yyyyMMddHHmmss}.xlsx");
         }
 
-        // Build model + filters + dropdowns
+        // ✅ Build Model + Filters + Dropdowns
         private async Task<PageComprehensiveModel> BuildPageModelAsync(ComprehensiveInputModel input)
         {
             var data = await _reportService.GetComprehensiveDetailsAsync(input.StartDate, input.EndDate);
 
-            // Apply filters only if they’re NOT "All" or empty
+            // --- Apply filters ---
             if (!string.IsNullOrWhiteSpace(input.Shift))
                 data = data.Where(t => string.Equals(t.Shift, input.Shift, StringComparison.OrdinalIgnoreCase)).ToList();
 
@@ -123,33 +124,36 @@ namespace MIS.Web.Controllers
             if (!string.IsNullOrWhiteSpace(input.DiscountType))
                 data = data.Where(dt => string.Equals(dt.DiscountType, input.DiscountType, StringComparison.OrdinalIgnoreCase)).ToList();
 
+            if (!string.IsNullOrWhiteSpace(input.TollOperatorID))
+                data = data.Where(o => string.Equals(o.TollOperatorID, input.TollOperatorID, StringComparison.OrdinalIgnoreCase)).ToList();
+
             if (!string.IsNullOrEmpty(input.Classification))
             {
                 var normalized = input.Classification.Trim().ToLowerInvariant();
                 data = data.Where(t =>
                     (t.ManualTollClass ?? "").Trim().ToLowerInvariant() == normalized ||
-                    (t.ManualTollClass ?? "").Trim().ToLowerInvariant() == "motor cycle" && normalized == "class m"
+                    ((t.ManualTollClass ?? "").Trim().ToLowerInvariant() == "motor cycle" && normalized == "class m")
                 ).ToList();
             }
 
-
+            // --- Prepare Page Model ---
             var pageModel = new PageComprehensiveModel
             {
                 Input = input,
                 Items = data
             };
 
-            // 🧱 Dropdowns
+            // --- Dropdown Lists ---
             pageModel.TollClasses = data.Select(d => d.ManualTollClass).Where(c => !string.IsNullOrEmpty(c)).Distinct().OrderBy(c => c).ToList();
             pageModel.Shifts = data.Select(d => d.Shift).Where(s => !string.IsNullOrEmpty(s)).Distinct().OrderBy(s => s).ToList();
             pageModel.TransactionTypes = data.Select(d => d.TransactionType).Where(t => !string.IsNullOrEmpty(t)).Distinct().OrderBy(t => t).ToList();
-            pageModel.TollOperators = data.Select(d => d.TollOperatorID).Where(o => !string.IsNullOrEmpty(o)).Distinct().OrderBy(o => o).ToList();
+            pageModel.TollOperators = data.Select(d => d.TollOperatorID).Where(o => !string.IsNullOrEmpty(o)).Distinct().OrderBy(o => o).ToList(); // ✅ fixed
             pageModel.Lanes = data.Select(d => d.LaneName).Where(l => !string.IsNullOrEmpty(l)).Distinct().OrderBy(l => l).ToList();
             pageModel.PaymentMethods = data.Select(d => d.MethodOfPayment).Where(p => !string.IsNullOrEmpty(p)).Distinct().OrderBy(p => p).ToList();
             pageModel.DiscountTypes = data.Select(d => d.DiscountType).Where(r => !string.IsNullOrEmpty(r)).Distinct().OrderBy(r => r).ToList();
             pageModel.Classifications = pageModel.TollClasses;
 
-            // 🧮 Grouping logic
+            // --- Grouping ---
             Func<ComprehensiveModel, string> groupKeySelector =
                 input.GroupBy == "TransactionType"
                     ? (Func<ComprehensiveModel, string>)(t => t.TransactionType ?? "Unknown")
@@ -186,6 +190,7 @@ namespace MIS.Web.Controllers
                         TotalRevenue = totalRevenue
                     };
                 })
+                .OrderBy(r => r.Method, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
             return pageModel;

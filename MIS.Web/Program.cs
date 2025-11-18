@@ -18,7 +18,7 @@ builder.Services.AddControllers();
 
 // Register API services
 builder.Services.AddHttpClient<IReportService, ReportService>();
-builder.Services.AddScoped<IDiscrepancyReportService, DiscrepancyReportService>();
+builder.Services.AddHttpClient<IDiscrepancyReportService, DiscrepancyReportService>();
 builder.Services.AddScoped<IComprehensiveReportService, ComprehensiveReportService>();
 builder.Services.AddScoped<IVarientPerfomanceReportService, VarientPerfomanceReportService>();
 builder.Services.AddScoped<IHourlyTrafficReportService, HourlyTrafficReportService>();
@@ -28,6 +28,9 @@ builder.Services.AddHttpClient<MonthlyTrafficReportService>();
 builder.Services.AddHttpClient<IDailyCashupReportService, DailyCashupReportService>();
 builder.Services.AddHttpClient<ITopUpReportService, TopUpReportService>();
 builder.Services.AddHttpClient<IAccountHistoryService, AccountHistoryService>();
+builder.Services.AddScoped<IAccountUsageSummaryService, AccountUsageSummaryService>();
+builder.Services.AddHttpClient<IAccountUsageDetailsService, AccountUsageDetailsService>();
+
 
 
 builder.Services.AddWindowsService();

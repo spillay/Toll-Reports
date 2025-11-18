@@ -7,7 +7,7 @@
 <form method="get" asp-controller="Traffic" asp-action="HourlyReport" id="filterForm" class="mb-4">
     <div class="row g-3 align-items-end">
 
-        <!-- Start Date -->
+        @* <!-- Start Date -->
         <div class="col-md-3">
             <label class="form-label">Start Date</label>
             <input type="date" name="startDate" class="form-control"
@@ -19,11 +19,22 @@
             <label class="form-label">End Date</label>
             <input type="date" name="endDate" class="form-control"
                    value="@Model.EndDate.ToString("yyyy-MM-dd")" />
+        </div> *@
+
+        <div class="col-md-3">
+            <label class="form-label fw-semibold">Start Date And Time</label>
+            <input type="datetime-local" name="startDate" class="form-control"
+                   value="@Model.StartDate.ToString("yyyy-MM-ddTHH:mm")" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label fw-semibold">End Date And Time</label>
+            <input type="datetime-local" name="endDate" class="form-control"
+                   value="@Model.EndDate.ToString("yyyy-MM-ddTHH:mm")" />
         </div>
 
         <!-- Classification -->
         <div class="col-md-3">
-            <label class="form-label">Classification</label>
+            <label class="form-label">Class </label>
             <select name="classification" class="form-select">
                 <option value="">All</option>
                 @foreach (var cls in classes)
@@ -50,7 +61,7 @@
 
         <!-- Shifts -->
         <div class="col-12 mt-2">
-            <label class="form-label">Shifts</label>
+            <label class="form-label">Operational Shift</label>
             <div id="shiftsContainer" class="mb-3">
                 @for (int i = 1; i <= 3; i++)
                 {

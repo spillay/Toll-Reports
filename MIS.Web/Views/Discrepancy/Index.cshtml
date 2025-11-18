@@ -1,17 +1,20 @@
 ﻿@model MIS.Web.Models.Discrepancy.PageDiscrepancyModel
-@using System.Text.Json
+@using System.Linq
 @using Microsoft.AspNetCore.Http
+@using System.Text.Json
 @removeTagHelper "Microsoft.AspNetCore.Mvc.TagHelpers.OptionTagHelper, Microsoft.AspNetCore.Mvc.TagHelpers"
 
 @{
     ViewData["Title"] = "Discrepancy Report";
 
     var reportGeneratedAt = DateTime.Now;
-    var currentUser = User.Identity?.Name ?? "Lucky";
-    var reportVersion = "1.0.0";
+    var currentUser = User.Identity?.Name ?? "Unknown User";
+    var reportVersion = "2.0.0.11";
     var filters = Model.Filters;
 
-    // Pagination range (max 3 visible pages)
+    // ============================
+    // Pagination
+    // ============================
     int maxPagesToShow = 3;
     int startPage = Math.Max(1, Model.page - 1);
     int endPage = Math.Min(Model.totalPages, startPage + maxPagesToShow - 1);
@@ -19,7 +22,6 @@
     if (endPage - startPage + 1 < maxPagesToShow && startPage > 1)
         startPage = Math.Max(1, endPage - maxPagesToShow + 1);
 
-    // Pagination link generator
     Func<int, string> PageUrl = (p) =>
     {
         var q = new Dictionary<string, string?>
@@ -30,11 +32,32 @@
             ["Filters.Shift"] = filters.Shift,
             ["Filters.PaymentMethod"] = filters.PaymentMethod,
             ["Filters.TakenAction"] = filters.TakenAction,
+            ["Filters.lane_Nr"] = filters.lane_Nr,
             ["page"] = p.ToString(),
             ["pageSize"] = Model.pageSize.ToString()
         };
         return Url.Action("Index", "Discrepancy") + QueryString.Create(q);
     };
+
+    // ============================
+    // PAGE TOTALS (current grid page)
+    // ============================
+    var pageCount = Model.Items.Count;
+    var pageTariffSum = Model.Items.Sum(d => d.Tariff);
+    var pageUpdatedTariffSum = Model.Items.Sum(d => d.Updated_Tariff);
+    var pageDifferenceSum = Model.Items.Sum(d => d.Updated_Tariff - d.Tariff);
+
+    // ============================
+    // SUMMARY TOTALS (based on page data in this view)
+    // NOTE: exports will recompute these using the full export data set.
+    // ============================
+    var full = Model.Items;
+
+    int summaryCount = full.Count;
+    decimal summaryDiff = full.Sum(d => d.Updated_Tariff - d.Tariff);
+    int operatorCorrect = full.Count(d => d.TakenAction == "Operator Correct");
+    int avcCorrect = full.Count(d => d.TakenAction == "AVC Correct");
+    int bothIncorrect = full.Count(d => d.TakenAction == "Both Incorrect");
 }
 
 <div class="card shadow-lg mb-4">
@@ -42,7 +65,7 @@
 
         <!-- HEADER -->
         <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
-            <h2 class="mb-0 fw-bold text-primary">Discrepancy Report</h2>
+            <h2 class="mb-0 fw-bold text-primary text-center w-100">DISCREPANCY REPORT</h2>
         </div>
 
         <!-- EXPORT BUTTONS -->
@@ -61,23 +84,28 @@
 
         <!-- FILTER FORM -->
         <form method="get" asp-controller="Discrepancy" asp-action="Index" class="row g-3 mb-3">
+
             <div class="col-md-2">
-                <label class="form-label fw-semibold">Start Date</label>
-                <input type="datetime-local" class="form-control" name="Filters.StartDate"
+                <label class="form-label fw-semibold">Start Date And Time</label>
+                <input type="datetime-local"
+                       class="form-control"
+                       name="Filters.StartDate"
                        value="@filters.StartDate.ToString("yyyy-MM-ddTHH:mm")" />
             </div>
 
             <div class="col-md-2">
-                <label class="form-label fw-semibold">End Date</label>
-                <input type="datetime-local" class="form-control" name="Filters.EndDate"
+                <label class="form-label fw-semibold">End Date And Time</label>
+                <input type="datetime-local"
+                       class="form-control"
+                       name="Filters.EndDate"
                        value="@filters.EndDate.ToString("yyyy-MM-ddTHH:mm")" />
             </div>
 
             <div class="col-md-2">
-                <label class="form-label fw-semibold">Toll Operator</label>
+                <label class="form-label fw-semibold">Toll Operator ID</label>
                 <select class="form-select" name="Filters.toll_Operator_ID">
                     <option value="">All</option>
-                    @foreach (var op in ViewBag.TollOperators as List<string> ?? [])
+                    @foreach (var op in ViewBag.TollOperators as List<string> ?? new())
                     {
                         <option value="@op" @(filters.toll_Operator_ID == op ? "selected" : "")>@op</option>
                     }
@@ -85,10 +113,10 @@
             </div>
 
             <div class="col-md-2">
-                <label class="form-label fw-semibold">Shift</label>
+                <label class="form-label fw-semibold">Operational Shift</label>
                 <select class="form-select" name="Filters.Shift">
                     <option value="">All</option>
-                    @foreach (var s in ViewBag.Shifts as List<string> ?? [])
+                    @foreach (var s in ViewBag.Shifts as List<string> ?? new())
                     {
                         <option value="@s" @(filters.Shift == s ? "selected" : "")>@s</option>
                     }
@@ -96,21 +124,33 @@
             </div>
 
             <div class="col-md-2">
-                <label class="form-label fw-semibold">Payment Method</label>
+                <label class="form-label fw-semibold">Method of Payment</label>
                 <select class="form-select" name="Filters.PaymentMethod">
                     <option value="">All</option>
-                    @foreach (var p in ViewBag.PaymentMethods as List<string> ?? [])
+                    @foreach (var p in ViewBag.PaymentMethods as List<string> ?? new())
                     {
                         <option value="@p" @(filters.PaymentMethod == p ? "selected" : "")>@p</option>
                     }
                 </select>
             </div>
 
+            <!-- Lane Filter -->
             <div class="col-md-2">
-                <label class="form-label fw-semibold">Action</label>
+                <label class="form-label fw-semibold">Lane</label>
+                <select class="form-select" name="Filters.lane_Nr">
+                    <option value="">All</option>
+                    @foreach (var lane in ViewBag.Lanes as List<string> ?? new())
+                    {
+                        <option value="@lane" @(filters.lane_Nr == lane ? "selected" : "")>@lane</option>
+                    }
+                </select>
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label fw-semibold">Action Taken</label>
                 <select class="form-select" name="Filters.TakenAction">
                     <option value="">All</option>
-                    @foreach (var a in ViewBag.TakenActions as List<string> ?? [])
+                    @foreach (var a in ViewBag.TakenActions as List<string> ?? new())
                     {
                         <option value="@a" @(filters.TakenAction == a ? "selected" : "")>@a</option>
                     }
@@ -120,6 +160,7 @@
             <div class="col-12 text-end">
                 <button type="submit" class="btn btn-primary mt-3">Apply Filters</button>
             </div>
+
         </form>
 
         <!-- TABLE -->
@@ -129,89 +170,121 @@
                 <table class="table table-striped table-bordered text-center align-middle">
                     <thead class="table-light">
                         <tr>
-                            <th>Lane</th>
-                            <th>Sequence</th>
-                            <th>Date</th>
-                            <th>Time</th>
-                            <th>Shift</th>
-                            <th>Operator</th>
-                            <th>Lane Name</th>
-                            <th>Payment</th>
-                            <th>Collector Class</th>
+                            <th>Lane Number</th>
+                            <th>Transaction Sequence Number</th>
+                            <th>Transaction Date</th>
+                            <th>Transaction Time</th>
+                            <th>Operational Shift</th>
+                            <th>Toll Operator ID</th>
+                            <th>Method Of Payment</th>
+                            <th>Toll Collector Class</th>
                             <th>AVC Class</th>
                             <th>Final Class</th>
                             <th>Tariff</th>
                             <th>Updated Tariff</th>
-                            <th>Tariff Diff</th>
-                            <th>Action</th>
+                            <th>Tariff Difference</th>
+                            <th>Action Taken</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach (var d in Model.Items)
                         {
-                            var diff = d.updated_tariff - d.tariff;
+                            var diff = d.Updated_Tariff - d.Tariff;
+
                             <tr>
-                                <td>@d.lane_Nr</td>
-                                <td>@d.trx_Sequence_Nr</td>
-                                <td>@d.trx_Date</td>
-                                <td>@d.trx_Time</td>
-                                <td>@d.operational_Shift</td>
-                                <td>@d.toll_Operator_ID</td>
-                                <td>@d.lane_Name</td>
-                                <td>@d.method_of_Payment</td>
-                                <td>@d.toll_Collector_Class</td>
-                                <td>@d.avC_Class</td>
-                                <td>@d.final_Class</td>
-                                <td>@d.tariff</td>
-                                <td>@d.updated_tariff</td>
-                                <td>@diff</td>
-                                <td>@d.takenAction</td>
+                                <td>@d.Lane_Nr</td>
+                                <td>@d.Trx_Sequence_Nr</td>
+                                <td>@d.Trx_Date</td>
+                                <td>@d.Trx_Time</td>
+                                <td>@d.Operational_Shift</td>
+                                <td>@d.Toll_Operator_ID</td>
+                                <td>@d.Method_of_Payment</td>
+                                <td>@d.Toll_Collector_Class</td>
+                                <td>@d.AVC_Class</td>
+                                <td>@d.Final_Class</td>
+                                <td>@d.Tariff.ToString("N2")</td>
+                                <td>@d.Updated_Tariff.ToString("N2")</td>
+                                <td>@diff.ToString("N2")</td>
+                                <td>@d.TakenAction</td>
                             </tr>
                         }
+
+                        <!-- PAGE TOTAL ROW -->
+                        <tr class="fw-bold table-secondary">
+                            <td colspan="10" class="text-end">Page Totals:</td>
+                            <td>@pageTariffSum.ToString("N2")</td>
+                            <td>@pageUpdatedTariffSum.ToString("N2")</td>
+                            <td>@pageDifferenceSum.ToString("N2")</td>
+                            <td>@pageCount</td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
 
-            <!-- PAGINATION -->
-            <div class="mt-4 d-flex flex-column flex-md-row justify-content-between align-items-center border-top pt-3">
-                <div class="text-muted mb-2 mb-md-0">
-                    Showing page <strong>@Model.page</strong> of <strong>@Model.totalPages</strong> |
-                    Total records: <strong>@Model.TotalRecords</strong>
+            <!-- SIMPLE PAGINATION (STYLE B) -->
+            @if (Model.totalPages > 1)
+            {
+                <div class="d-flex justify-content-between align-items-center mt-3">
+                    <div>
+                        <span>Showing page <strong>@Model.page</strong> of <strong>@Model.totalPages</strong></span>
+                    </div>
+                    <div class="btn-group" role="group" aria-label="Pagination">
+                        <a class="btn btn-outline-secondary @(Model.page <= 1 ? "disabled" : "")"
+                           href="@(Model.page <= 1 ? "#" : PageUrl(Model.page - 1))">
+                            &laquo; Previous
+                        </a>
+                        <a class="btn btn-outline-secondary @(Model.page >= Model.totalPages ? "disabled" : "")"
+                           href="@(Model.page >= Model.totalPages ? "#" : PageUrl(Model.page + 1))">
+                            Next &raquo;
+                        </a>
+                    </div>
                 </div>
+            }
 
-                <nav aria-label="Discrepancy pagination">
-                    <ul class="pagination justify-content-center mb-0">
-                        <li class="page-item @(Model.page <= 1 ? "disabled" : "")">
-                            <a class="page-link" href="@PageUrl(Model.page - 1)">&laquo; Previous</a>
-                        </li>
-                        @for (int i = startPage; i <= endPage; i++)
-                        {
-                            <li class="page-item @(i == Model.page ? "active" : "")">
-                                <a class="page-link" href="@PageUrl(i)">@i</a>
-                            </li>
-                        }
-                        <li class="page-item @(Model.page >= Model.totalPages ? "disabled" : "")">
-                            <a class="page-link" href="@PageUrl(Model.page + 1)">Next &raquo;</a>
-                        </li>
-                    </ul>
-                </nav>
-            </div>
+            <!-- SUMMARY TOTALS TABLE (current view data) -->
+            <table class="table table-bordered w-25 mt-4">
+                <tbody>
+                    <tr>
+                        <td><strong>Total Discrepancy Count</strong></td>
+                        <td>@summaryCount</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Total Tariff Difference</strong></td>
+                        <td>@summaryDiff.ToString("N2")</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Operator Correct</strong></td>
+                        <td>@operatorCorrect</td>
+                    </tr>
+                    <tr>
+                        <td><strong>AVC Correct</strong></td>
+                        <td>@avcCorrect</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Both Incorrect</strong></td>
+                        <td>@bothIncorrect</td>
+                    </tr>
+                </tbody>
+            </table>
 
             <!-- FOOTER -->
-            <hr class="my-3" />
-            <div class="row text-muted small">
-                <div class="col-md-4">
-                    <p class="fw-bold mb-1 text-dark">Discrepancy Report</p>
-                    <p class="mb-0">Reports Module Version: <strong>@reportVersion</strong></p>
-                </div>
-                <div class="col-md-4 text-center">
-                    <p class="fw-bold mb-1 text-dark">Date and Time:</p>
-                    <p class="mb-0">@reportGeneratedAt.ToString("dd/MM/yyyy HH:mm:ss")</p>
-                </div>
-                <div class="col-md-4 text-end">
-                    <p class="fw-bold mb-1 text-dark">User ID:</p>
-                    <p class="mb-0">@currentUser</p>
-                </div>
+            <div class="mt-4 p-3 border-top">
+                <table class="table table-borderless w-100 mb-0 align-middle">
+                    <tr>
+                        <td class="fw-bold text-dark">@ViewData["Title"]</td>
+                        <td><strong>Date and Time:</strong> @reportGeneratedAt.ToString("dd/MM/yyyy HH:mm:ss")</td>
+                        <td><strong>User ID:</strong> @currentUser</td>
+                        <td class="text-end">Page <strong>@Model.page</strong> of <strong>@Model.totalPages</strong></td>
+                    </tr>
+                    <tr>
+                        <td colspan="4">
+                            <small class="text-muted">
+                                Reports Module Version:
+                                <strong>@reportVersion</strong>
+                            </small>
+                        </td>
+                    </tr>
+                </table>
             </div>
         }
         else
@@ -223,115 +296,246 @@
     </div>
 </div>
 
-<!-- SCRIPTS -->
+<!-- ====== PDF & Excel Export Scripts ====== -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 
 <script>
-    // ===== PDF EXPORT =====
-    document.getElementById("btnDownloadPdf").addEventListener("click", async function () {
+    document.addEventListener("DOMContentLoaded", () => {
+
+        // ============================================================
+        // 1. BUILD EXPORT URL (Dynamic BaseApiUrl - Multi-PC Safe)
+        // ============================================================
+        const baseApiUrl = '@ViewData["DiscrepancyApi"]';
+
+        const f = {
+            startDate: '@Model.Filters.StartDate.ToString("yyyy-MM-ddTHH:mm:ss")',
+            endDate: '@Model.Filters.EndDate.ToString("yyyy-MM-ddTHH:mm:ss")',
+            tollOp: '@(Model.Filters.toll_Operator_ID ?? "")',
+            shift: '@(Model.Filters.Shift ?? "")',
+            pay: '@(Model.Filters.PaymentMethod ?? "")',
+            lane: '@(Model.Filters.lane_Nr ?? "")',
+            action: '@(Model.Filters.TakenAction ?? "")'
+        };
+
+        const exportUrl =
+            `${baseApiUrl}?startDate=${encodeURIComponent(f.startDate)}` +
+            `&endDate=${encodeURIComponent(f.endDate)}` +
+            `${f.tollOp ? `&tollOperators=${encodeURIComponent(f.tollOp)}` : ""}` +
+            `${f.shift ? `&operationalShift=${encodeURIComponent(f.shift)}` : ""}` +
+            `${f.pay ? `&paymentMethods=${encodeURIComponent(f.pay)}` : ""}` +
+            `${f.lane ? `&laneNames=${encodeURIComponent(f.lane)}` : ""}` +
+            `${f.action ? `&takenAction=${encodeURIComponent(f.action)}` : ""}` +
+            `&exportAll=true`;
+
+        const reportGeneratedAt = '@DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")';
+        const currentUser = '@(User.Identity?.Name ?? "Lucky")';
+        const reportVersion = "2.0.0.11";
+
+
+        async function fetchData() {
+            try {
+                const res = await fetch(exportUrl);
+                if (!res.ok) return alert("API Error: " + res.status);
+                const json = await res.json();
+                return json.items || json.Items || [];
+            } catch (e) {
+                alert("Network Error: " + e);
+                return [];
+            }
+        }
+
+
+        // ============================================================
+        // 2. EXPORT PDF
+        // ============================================================
+            // ============================================================
+    // 2. EXPORT PDF  (FIXED FOOTER ON ALL PAGES)
+    // ============================================================
+    document.getElementById("btnDownloadPdf").addEventListener("click", async () => {
+
+        const data = await fetchData();
+        if (!data.length) return alert("No data for export.");
+
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
 
-        const pageWidth = doc.internal.pageSize.getWidth();
-        const pageHeight = doc.internal.pageSize.getHeight();
+        const pW = doc.internal.pageSize.getWidth();
+        const pH = doc.internal.pageSize.getHeight();
         const margin = 40;
 
-        const reportGeneratedAt = '@reportGeneratedAt.ToString("dd/MM/yyyy HH:mm:ss")';
-        const currentUser = '@currentUser';
-        const reportVersion = '@reportVersion';
-        const discrepancyData = @Html.Raw(JsonSerializer.Serialize((object)Model.Items ?? new object[0]));
-
-        // Load logos
-        const logoWidth = 90, logoHeight = 90, logoY = 25;
-        const leftLogo = '/images/lCC Logo.jpg';
-        const rightLogo = '/images/ICT-Works Logo.jpg';
-        const loadImage = src => new Promise(resolve => {
+        // Load Logos
+        const loadImg = (src) => new Promise((resolve) => {
             const img = new Image();
-            img.crossOrigin = 'Anonymous';
             img.onload = () => resolve(img);
             img.onerror = () => resolve(null);
             img.src = src;
         });
-        const [lLogo, rLogo] = await Promise.all([loadImage(leftLogo), loadImage(rightLogo)]);
-        if (lLogo) doc.addImage(lLogo, 'JPEG', margin, logoY, logoWidth, logoHeight);
-        if (rLogo) doc.addImage(rLogo, 'JPEG', pageWidth - margin - logoWidth, logoY, logoWidth, logoHeight);
 
-        // Title
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(16);
-        doc.text("Discrepancy Report", pageWidth / 2, logoY + 50, { align: "center" });
-
-        // Filters
-        let y = logoY + logoHeight + 10;
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(10);
-        const filters = {
-            "Start Date": '@filters.StartDate.ToString("dd/MM/yyyy HH:mm")',
-            "End Date": '@filters.EndDate.ToString("dd/MM/yyyy HH:mm")',
-            "Operator": '@(filters.toll_Operator_ID ?? "All")',
-            "Shift": '@(filters.Shift ?? "All")',
-            "Payment": '@(filters.PaymentMethod ?? "All")',
-            "Action": '@(filters.TakenAction ?? "All")'
-        };
-        doc.text("Filters Used:", margin, y);
-        y += 14;
-        for (const [k, v] of Object.entries(filters)) { doc.text(`${k}: ${v}`, margin, y); y += 14; }
-
-        // Table
-        const headers = ["Lane","Seq #","Date","Time","Shift","Operator","Payment","Tariff","Updated","Diff","Action"];
-        const rows = (discrepancyData || []).map(d => [
-            d.lane_Nr, d.trx_Sequence_Nr, d.trx_Date, d.trx_Time,
-            d.operational_Shift, d.toll_Operator_ID, d.method_of_Payment,
-            (Number(d.tariff || 0)).toFixed(2),
-            (Number(d.updated_tariff || 0)).toFixed(2),
-            (Number(d.updated_tariff - d.tariff || 0)).toFixed(2),
-            d.takenAction
+        const [lImg, rImg] = await Promise.all([
+            loadImg('/images/lCC Logo.jpg'),
+            loadImg('/images/ICT-Works Logo.jpg')
         ]);
 
+        if (lImg) doc.addImage(lImg, "JPEG", margin, 25, 80, 80);
+        if (rImg) doc.addImage(rImg, "JPEG", pW - margin - 80, 25, 80, 80);
+
+
+        // HEADER
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(16);
+        doc.text("LEKKI CONCESSION COMPANY LIMITED", pW / 2, 50, { align: "center" });
+        doc.text("CONSERVATION TOLL PLAZA", pW / 2, 70, { align: "center" });
+
+        doc.setFontSize(13);
+        doc.text("DISCREPANCY REPORT", pW / 2, 100, { align: "center" });
+
+        // FILTERS
+        let y = 130;
+        doc.setFontSize(10);
+        doc.text("Filters Used:", margin, y);
+        y += 14;
+
+        const filters = {
+            "Start Date": '@Model.Filters.StartDate.ToString("dd/MM/yyyy HH:mm")',
+            "End Date": '@Model.Filters.EndDate.ToString("dd/MM/yyyy HH:mm")',
+            "Toll Operator": '@(Model.Filters.toll_Operator_ID ?? "All")',
+            "Shift": '@(Model.Filters.Shift ?? "All")',
+            "Payment": '@(Model.Filters.PaymentMethod ?? "All")',
+            "Lane": '@(Model.Filters.lane_Nr ?? "All")',
+            "Action": '@(Model.Filters.TakenAction ?? "All")'
+        };
+
+        Object.entries(filters).forEach(([label, v]) => {
+            doc.text(`${label}: ${v}`, margin, y);
+            y += 12;
+        });
+
+        // Table headers
+        const headers = [
+            "Lane Number", "Transaction Sequence Number", "Transaction Date", "Transaction Time",
+            "Operational Shift", "Toll Operator ID", "Method Of Payment",
+            "Collector Class", "AVC Class", "Final Class",
+            "Tariff", "Updated Tariff", "Difference", "Taken Action"
+        ];
+
+        const rows = data.map(d => [
+            d.Lane_Nr ?? "",
+            d.Trx_Sequence_Nr ?? "",
+            d.Trx_Date ?? "",
+            d.Trx_Time ?? "",
+            d.Operational_Shift ?? "",
+            d.Toll_Operator_ID ?? "",
+            d.Method_of_Payment ?? "",
+            d.Toll_Collector_Class ?? "",
+            d.AVC_Class ?? "",
+            d.Final_Class ?? "",
+            (d.Tariff ?? 0).toFixed(2),
+            (d.Updated_Tariff ?? 0).toFixed(2),
+            ((d.Updated_Tariff ?? 0) - (d.Tariff ?? 0)).toFixed(2),
+            d.TakenAction ?? ""
+        ]);
+
+        // FIX: Always print footer
         doc.autoTable({
             head: [headers],
             body: rows,
             startY: y + 10,
-            theme: 'grid',
+            theme: "grid",
+            styles: { fontSize: 9, halign: "center" },
             headStyles: { fillColor: [41, 128, 185], textColor: 255 },
-            styles: { fontSize: 9, cellPadding: 4 },
             margin: { left: margin, right: margin },
-            didDrawPage: data => {
-                const pageCount = doc.internal.getNumberOfPages();
-                const currentPage = doc.internal.getCurrentPageInfo().pageNumber;
-                const footerY = pageHeight - 50;
 
-                doc.setFont("helvetica", "normal");
+            didDrawPage: function (data) {
+                const page = data.pageNumber;
+                const pageCount = doc.internal.getNumberOfPages();
+                const footerY = pH - 30;
+
+                // ALWAYS draw footer on every page
                 doc.setFontSize(10);
                 doc.text("Discrepancy Report", margin, footerY);
-                doc.text(`Date and Time: ${reportGeneratedAt}`, pageWidth / 2.5, footerY);
-                doc.text(`User ID: ${currentUser}`, pageWidth / 1.5, footerY);
-                doc.text(`Page ${currentPage} of ${pageCount}`, pageWidth - margin, footerY, { align: 'right' });
+                doc.text(`Date: ${reportGeneratedAt}`, pW / 2.5, footerY);
+                doc.text(`User: ${currentUser}`, pW / 1.5, footerY);
+                doc.text(`Page ${page} of ${pageCount}`, pW - margin, footerY, { align: "right" });
+
                 doc.setFontSize(9);
-                doc.text(`Reports Module Version Number: ${reportVersion}`, margin, footerY + 14);
+                doc.text(`Version: ${reportVersion}`, margin, footerY + 14);
             }
         });
 
-        doc.save(`Discrepancy_Report_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
+        // AFTER TABLE → SUMMARY + FINAL FOOTER
+        const lastY = doc.lastAutoTable.finalY + 50;
+
+        const summary = {
+            totalCount: data.length,
+            totalDiff: data.reduce((s, d) => s + ((d.Updated_Tariff ?? 0) - (d.Tariff ?? 0)), 0),
+            operatorCorrect: data.filter(d => d.TakenAction === "Operator Correct").length,
+            avcCorrect: data.filter(d => d.TakenAction === "AVC Correct").length,
+            bothIncorrect: data.filter(d => d.TakenAction === "Both Incorrect").length
+        };
+
+        doc.setFont("helvetica", "bold");
+        doc.text(`Total Discrepancy Count: ${summary.totalCount}`, margin, lastY);
+        doc.text(`Total Tariff Difference: ${summary.totalDiff.toFixed(2)}`, margin, lastY + 18);
+        doc.text(`Operator Correct: ${summary.operatorCorrect}`, margin, lastY + 36);
+        doc.text(`AVC Correct: ${summary.avcCorrect}`, margin, lastY + 54);
+        doc.text(`Both Incorrect: ${summary.bothIncorrect}`, margin, lastY + 72);
+
+        doc.save(`Discrepancy_Report_${new Date().toISOString().replace(/[:.]/g, "-")}.pdf`);
     });
 
-    // EXCEL EXPORT
-    document.getElementById("btnDownloadExcel").addEventListener("click", function () {
-        const discrepancyData = @Html.Raw(JsonSerializer.Serialize((object)Model.Items ?? new object[0]));
-        if (!discrepancyData.length) { alert("No data to export."); return; }
 
-        const wb = XLSX.utils.book_new();
-        const headers = [["Lane","Seq #","Date","Time","Shift","Operator","Payment","Tariff","Updated","Diff","Action"]];
-        const rows = discrepancyData.map(d => [
-            d.lane_Nr, d.trx_Sequence_Nr, d.trx_Date, d.trx_Time,
-            d.operational_Shift, d.toll_Operator_ID, d.method_of_Payment,
-            d.tariff, d.updated_tariff, d.updated_tariff - d.tariff, d.takenAction
-        ]);
 
-        const ws = XLSX.utils.aoa_to_sheet([...headers, ...rows]);
-        XLSX.utils.book_append_sheet(wb, ws, "Discrepancy Report");
-        XLSX.writeFile(wb, `Discrepancy_Report_${new Date().toISOString().replace(/[:.]/g, '-')}.xlsx`);
+        // ============================================================
+        // 3. EXPORT EXCEL
+        // ============================================================
+        document.getElementById("btnDownloadExcel").addEventListener("click", async () => {
+
+            const data = await fetchData();
+            if (!data.length) return alert("No data for export.");
+
+            const rows = data.map(d => [
+                d.Lane_Nr ?? "",
+                d.Trx_Sequence_Nr ?? "",
+                d.Trx_Date ?? "",
+                d.Trx_Time ?? "",
+                d.Operational_Shift ?? "",
+                d.Toll_Operator_ID ?? "",
+                d.Method_of_Payment ?? "",
+                d.Toll_Collector_Class ?? "",
+                d.AVC_Class ?? "",
+                d.Final_Class ?? "",
+                d.Tariff ?? 0,
+                d.Updated_Tariff ?? 0,
+                (d.Updated_Tariff ?? 0) - (d.Tariff ?? 0),
+                d.TakenAction ?? ""
+            ]);
+
+            const summary = [
+                [],
+                ["Total Discrepancy Count", data.length],
+                ["Total Tariff Difference", data.reduce((s, d) =>
+                    s + ((d.Updated_Tariff ?? 0) - (d.Tariff ?? 0)), 0)],
+                ["Operator Correct", data.filter(x => x.TakenAction === "Operator Correct").length],
+                ["AVC Correct", data.filter(x => x.TakenAction === "AVC Correct").length],
+                ["Both Incorrect", data.filter(x => x.TakenAction === "Both Incorrect").length]
+            ];
+
+            const headers = [
+                "Lane Number", "Transaction Sequence Number", "Transaction Date", "Transaction Time", "Operational Shift", "Toll Operator ID",
+                "Method of Payment", "Collector Class", "AVC Class", "Final Class",
+                "Tariff", "Updated Tariff", "Difference", "Action Taken"
+            ];
+
+            const sheet = XLSX.utils.aoa_to_sheet([headers, ...rows, ...summary]);
+            sheet["!cols"] = Array(14).fill({ wch: 18 });
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, sheet, "Discrepancy Report");
+
+            XLSX.writeFile(wb, `Discrepancy_Report_${new Date().toISOString().replace(/[:.]/g, "-")}.xlsx`);
+        });
+
     });
 </script>

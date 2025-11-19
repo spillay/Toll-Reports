@@ -305,7 +305,7 @@
     document.addEventListener("DOMContentLoaded", () => {
 
         // ============================================================
-        // 1. BUILD EXPORT URL (Dynamic BaseApiUrl - Multi-PC Safe)
+        // 1. BUILD EXPORT URL
         // ============================================================
         const baseApiUrl = '@ViewData["DiscrepancyApi"]';
 
@@ -350,9 +350,7 @@
         // ============================================================
         // 2. EXPORT PDF
         // ============================================================
-            // ============================================================
-    // 2. EXPORT PDF  (FIXED FOOTER ON ALL PAGES)
-    // ============================================================
+            
     document.getElementById("btnDownloadPdf").addEventListener("click", async () => {
 
         const data = await fetchData();

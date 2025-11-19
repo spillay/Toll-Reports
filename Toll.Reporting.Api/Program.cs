@@ -89,6 +89,6 @@ app.MapControllers();
 // ====================
 // Run
 // ====================
-//app.Run($"http://{host}:{port}");
-app.Run("http://0.0.0.0:4567");
+app.Run($"http://{host}:{port}");
+//app.Run("http://192.168.1.103:4567");
 

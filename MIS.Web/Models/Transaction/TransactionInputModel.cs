@@ -16,6 +16,9 @@ namespace MIS.Web.Models
         public List<string> TollOperators { get; set; } = new();
         public List<string> Lanes { get; set; } = new();
         public double TotalTariff { get; set; }
+        public List<TransactionModel> ExportItems { get; set; }
+        public bool ExportAll { get; set; }
+
 
     }
 }

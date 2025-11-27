@@ -1,0 +1,134 @@
+﻿@model MIS.Web.Models.EndOfDay.PageEndOfDayModel
+
+@{
+    ViewData["Title"] = "End Of Day Report";
+    var reportGeneratedAt = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
+    var currentUserId = User.Identity?.Name ?? "Lucky";
+    var reportVersion = "2.0.0.11";
+
+    var rows = Model.Rows ?? new List<MIS.Web.Models.EndOfDay.EndOfDayRowModel>();
+
+    Func<string, MIS.Web.Models.EndOfDay.EndOfDayRowModel?> find = key =>
+        rows.FirstOrDefault(r =>
+            string.Equals(r.Col1?.Trim(), key.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    var traffic = find("Traffic");
+    var nominal = find("Nominal Tariff");
+    var trafficXNominal = find("Traffic x Nominal Tariff");
+    var penalty = find("Cash Penalty");
+    var totalTheoretical = find("TOTAL THEORETICAL INCOME");
+
+    var classHeader = rows.FirstOrDefault(r => r.Col8?.Trim() == "Total");
+}
+
+<div class="card shadow-lg p-4 mb-4">
+
+    <!-- PAGE HEADER -->
+    <div class="position-relative border-bottom pb-2 mb-3">
+        <h2 class="fw-bold text-primary text-center mb-0">END OF DAY REPORT</h2>
+
+        <div class="position-absolute top-0 end-0 d-flex gap-2">
+            <button id="btnDownloadPdf" class="btn btn-outline-danger btn-sm">
+                <i class="fa fa-file-pdf"></i> Export PDF
+            </button>
+            <button id="btnDownloadExcel" class="btn btn-outline-success btn-sm">
+                <i class="fa fa-file-excel"></i> Export Excel
+            </button>
+        </div>
+    </div>
+
+    <!-- FILTERS -->
+    <form method="get" asp-action="Index" class="row g-3 mb-4">
+        <div class="col-md-3">
+            <label class="form-label fw-semibold">Report Date</label>
+            <input type="date"
+                   name="reportDate"
+                   class="form-control"
+                   value="@(Model.ReportDate?.ToString("yyyy-MM-dd") ?? DateTime.Now.ToString("yyyy-MM-dd"))"
+                   required />
+        </div>
+
+        <div class="col-md-3 d-flex align-items-end">
+            <button type="submit" class="btn btn-primary w-100 shadow-sm">
+                <i class="bi bi-search"></i> Apply Filter
+            </button>
+        </div>
+    </form>
+
+    <h5 class="fw-bold text-secondary mt-4 mb-2">THEORETICAL INCOME</h5>
+
+    <div class="table-responsive">
+        <table class="table table-bordered align-middle">
+            <thead class="table-light">
+                <tr class="text-center">
+                    <th></th>
+                    <th>@classHeader?.Col2 </th>
+                    <th>@classHeader?.Col4</th>
+                    <th>@classHeader?.Col5</th>
+                    <th>@classHeader?.Col6</th>
+                    <th>Total</th>
+                </tr>
+            </thead>
+
+            <tbody>
+
+                <tr>
+                    <td><strong>Traffic</strong></td>
+                    <td>@traffic?.Col2</td>
+                    <td>@traffic?.Col4</td>
+                    <td>@traffic?.Col5</td>
+                    <td>@traffic?.Col6</td>
+                    <td>@traffic?.Col8</td>
+                </tr>
+
+                <tr>
+                    <td><strong>Nominal Tariff</strong></td>
+                    <td>@nominal?.Col2</td>
+                    <td>@nominal?.Col4</td>
+                    <td>@nominal?.Col5</td>
+                    <td>@nominal?.Col6</td>
+                    <td></td>
+                </tr>
+
+                <tr class="fw-bold">
+                    <td><em>Traffic x Nominal Tariff</em></td>
+                    <td>@trafficXNominal?.Col2</td>
+                    <td>@trafficXNominal?.Col4</td>
+                    <td>@trafficXNominal?.Col5</td>
+                    <td>@trafficXNominal?.Col6</td>
+                    <td>@trafficXNominal?.Col8</td>
+                </tr>
+
+                <tr>
+                    <td><strong>Cash Penalty</strong></td>
+                    <td>@penalty?.Col2</td>
+                    <td>@penalty?.Col3</td>
+                    <td>@penalty?.Col4</td>
+                    <td>@penalty?.Col5</td>
+                    <td>@penalty?.Col8</td>
+                </tr>
+
+                <tr class="fw-bold table-light">
+                    <td><strong>TOTAL THEORETICAL INCOME</strong></td>
+                    <td colspan="4"></td>
+                    <td>@totalTheoretical?.Col8</td>
+                </tr>
+
+            </tbody>
+        </table>
+    </div>
+
+    <!-- FOOTER -->
+    <div class="mt-4 p-3 border-top bg-light small">
+        <div><strong>Report Generated At:</strong> @reportGeneratedAt</div>
+        <div><strong>User ID:</strong> @currentUserId</div>
+        <div><strong>Report Version:</strong> @reportVersion</div>
+    </div>
+
+</div>
+
+@section Scripts {
+    <script>
+        console.log("End Of Day Report Loaded");
+    </script>
+}

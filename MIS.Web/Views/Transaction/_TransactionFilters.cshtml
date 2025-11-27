@@ -7,13 +7,12 @@
       id="filterForm"
       class="mb-4">
 
-    <div class="row g-3 align-items-end">
+    <div class="row g-3">
 
         <!-- Start Date -->
         <div class="col-md-3">
-            <label for="StartDate" class="form-label">Start Date And Time</label>
+            <label class="form-label fw-semibold">Start Date & Time</label>
             <input type="datetime-local"
-                   id="StartDate"
                    name="StartDate"
                    class="form-control"
                    value="@(Model?.StartDate.ToString("yyyy-MM-ddTHH:mm") ?? "")" />
@@ -21,9 +20,8 @@
 
         <!-- End Date -->
         <div class="col-md-3">
-            <label for="EndDate" class="form-label">End Date And Time</label>
+            <label class="form-label fw-semibold">End Date & Time</label>
             <input type="datetime-local"
-                   id="EndDate"
                    name="EndDate"
                    class="form-control"
                    value="@(Model?.EndDate.ToString("yyyy-MM-ddTHH:mm") ?? "")" />
@@ -31,55 +29,58 @@
 
         <!-- Shift -->
         <div class="col-md-3">
-            <label for="Shift" class="form-label">Operational Shift</label>
-            <select name="Shift" id="Shift" class="form-select">
+            <label class="form-label fw-semibold">Operational Shift</label>
+            <select name="Shift" class="form-select">
                 <option value="">-- All --</option>
                 @foreach (var shift in Model.Shifts ?? new List<string>())
                 {
-                    <option value="@shift" @(Model?.Shift == shift ? "selected" : "")>@shift</option>
+                    <option value="@shift" @(Model.Shift == shift ? "selected" : "")>@shift</option>
                 }
             </select>
         </div>
 
         <!-- Toll Operator -->
         <div class="col-md-3">
-            <label for="TollOperatorID" class="form-label">Toll Operator ID</label>
-            <select name="TollOperatorID" id="TollOperatorID" class="form-select">
+            <label class="form-label fw-semibold">Toll Operator ID</label>
+            <select name="TollOperatorID" class="form-select">
                 <option value="">-- All --</option>
                 @foreach (var op in Model.TollOperators ?? new List<string>())
                 {
-                    <option value="@op" @(Model?.TollOperatorID == op ? "selected" : "")>@op</option>
+                    <option value="@op" @(Model.TollOperatorID == op ? "selected" : "")>@op</option>
                 }
             </select>
         </div>
 
         <!-- Lane -->
         <div class="col-md-3">
-            <label for="lane_Nr" class="form-label">Lane</label>
-            <select name="lane_Nr" id="lane_Nr" class="form-select">
+            <label class="form-label fw-semibold">Lane</label>
+            <select name="lane_Nr" class="form-select">
                 <option value="">-- All --</option>
                 @foreach (var lane in Model.Lanes ?? new List<string>())
                 {
-                    <option value="@lane" @(Model?.lane_Nr == lane ? "selected" : "")>@lane</option>
+                    <option value="@lane" @(Model.lane_Nr == lane ? "selected" : "")>@lane</option>
                 }
             </select>
         </div>
 
         <!-- Payment Method -->
         <div class="col-md-3">
-            <label for="PaymentMethod" class="form-label">Method of Payment</label>
-            <select name="PaymentMethod" id="PaymentMethod" class="form-select">
+            <label class="form-label fw-semibold">Method of Payment</label>
+            <select name="PaymentMethod" class="form-select">
                 <option value="">-- All --</option>
                 @foreach (var pm in Model.PaymentMethods ?? new List<string>())
                 {
-                    <option value="@pm" @(Model?.PaymentMethod == pm ? "selected" : "")>@pm</option>
+                    <option value="@pm" @(Model.PaymentMethod == pm ? "selected" : "")>@pm</option>
                 }
             </select>
         </div>
 
-        <!-- Buttons -->
-        <div class="col-md-3 d-flex">
-            <button type="submit" class="btn btn-primary me-2 w-100">Apply Filters</button>
+        <!-- Filter Button -->
+        <div class="col-md-3 d-flex align-items-end">
+            <button type="submit" class="btn btn-primary w-100">
+                Apply Filters
+            </button>
         </div>
+
     </div>
 </form>

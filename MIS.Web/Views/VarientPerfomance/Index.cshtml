@@ -14,10 +14,21 @@
     if (endPage - startPage + 1 < maxPagesToShow && startPage > 1)
         startPage = Math.Max(1, endPage - maxPagesToShow + 1);
 
-    // --- Totals ---
-    var grandExpected = Model.items.Sum(i => i.NominalTariff);
-    var grandDeclared = Model.items.Sum(i => i.NettAmount);
-    var grandDiff = Model.items.Sum(i => i.Difference);
+    // Compute Grand Total ONLY from valid operator rows ---
+    var coreItems = Model.items
+        .Where(x =>
+            !(x.TollOperator == "—" ||                    
+              (x.ShiftDescription ?? "")
+                   .StartsWith("TOTAL", StringComparison.OrdinalIgnoreCase))) // ignore API subtotal rows
+        .ToList();
+
+    // GRAND TOTALS
+    var grandExpected = coreItems.Sum(i => i.NominalTariff);
+    var grandDeclared = coreItems.Sum(i => i.NettAmount);
+
+    // Always compute Difference from Expected - Declared
+    var grandDiff = grandExpected - grandDeclared;
+
 
 }
 
@@ -143,6 +154,7 @@
                             <td>@grandDeclared</td>
                             <td>@grandDiff</td>
                         </tr>
+
                     }
                     else
                     {
@@ -221,28 +233,81 @@
 <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 
 <script>
-    document.addEventListener("DOMContentLoaded", async () => {
-        const data = @Html.Raw(JsonSerializer.Serialize(Model.items ?? new List<MIS.Web.Models.VarientPerfomance.VarientPerfomanceModel>()));
-        const reportGeneratedAt = '@reportGeneratedAt.ToString("dd/MM/yyyy HH:mm:ss")';
-        const currentUser = '@currentUser';
-        const reportVersion = '@reportVersion';
+    document.addEventListener("DOMContentLoaded", () => {
 
-        // === EXCEL EXPORT (with shift totals) ===
-        document.getElementById("btnDownloadExcel").addEventListener("click", () => {
-            if (!data.length) return alert("No data to export.");
+        // ================================
+        // 1. DYNAMIC BASE API URL (ALL PCs)
+        // ================================
+        const baseApiUrl = '@ViewData["VarientPerformanceApi"]';
 
-            const grouped = data.reduce((acc, x) => {
+        function buildExportUrl() {
+            const params = new URLSearchParams({
+                startDate: '@Model.StartDate.ToString("yyyy-MM-ddTHH:mm:ss")',
+                endDate: '@Model.EndDate.ToString("yyyy-MM-ddTHH:mm:ss")',
+                shift: '@Model.Shift',
+                tollOperatorID: '@Model.TollOperatorID',
+                exportAll: true,
+                page: 1,
+                pageSize: 999999
+            });
+
+            return `${baseApiUrl}?${params.toString()}`;
+        }
+
+        // Utility: clean and filter core operator rows
+        function getCoreRows(data) {
+            return data.filter(x =>
+                !(x.TollOperator === "—" ||
+                  (x.ShiftDescription || "").toUpperCase().startsWith("TOTAL"))
+            );
+        }
+
+        // Compute Grand Totals
+        function computeGrandTotals(rows) {
+            const expected = rows.reduce((a, b) => a + (b.NominalTariff || 0), 0);
+            const declared = rows.reduce((a, b) => a + (b.NettAmount || 0), 0);
+            const diff = expected - declared;
+
+            return { expected, declared, diff };
+        }
+
+        // =========================================================
+        // 2. EXCEL EXPORT (Clean, Styled, Shift Subtotals + Grand)
+        // =========================================================
+        document.getElementById("btnDownloadExcel").addEventListener("click", async () => {
+            const allUrl = buildExportUrl();
+
+            const fullResult = await fetch(allUrl).then(r => r.json());
+            const data = fullResult.Items ?? fullResult.items ?? [];
+
+            if (!data.length) {
+                alert("No data to export.");
+                return;
+            }
+
+            const operatorRows = getCoreRows(data);
+            const { expected, declared, diff } = computeGrandTotals(operatorRows);
+
+            const ws_data = [];
+            ws_data.push([
+                "Operational Shift Date",
+                "Operational Shift",
+                "Toll Operator ID",
+                "Cash Expected",
+                "Cash Declared",
+                "Cash Declared Difference"
+            ]);
+
+            // Group by shift
+            const grouped = operatorRows.reduce((acc, x) => {
                 if (!acc[x.ShiftDescription]) acc[x.ShiftDescription] = [];
                 acc[x.ShiftDescription].push(x);
                 return acc;
             }, {});
 
-            const ws_data = [];
-            const headers = ["Operational Shift Date", "Operational Shift", "Toll Operator ID", "Cash Expected", "Cash Declared", "Cash Declared Difference"];
-            ws_data.push(headers);
-
+            // Build data rows
             Object.keys(grouped).forEach(shift => {
-                let totalExpected = 0, totalDeclared = 0, totalDiff = 0;
+                let e = 0, d = 0, df = 0;
 
                 grouped[shift].forEach(row => {
                     ws_data.push([
@@ -253,97 +318,210 @@
                         (row.NettAmount ?? 0).toFixed(2),
                         (row.Difference ?? 0).toFixed(2)
                     ]);
-                    totalExpected += row.NominalTariff || 0;
-                    totalDeclared += row.NettAmount || 0;
-                    totalDiff += row.Difference || 0;
+
+                    e += row.NominalTariff || 0;
+                    d += row.NettAmount || 0;
+                    df += row.Difference || 0;
                 });
 
-                ws_data.push(["", "", `Total for ${shift}`, totalExpected.toFixed(2), totalDeclared.toFixed(2), totalDiff.toFixed(2)]);
+                ws_data.push(["", "", `Total for ${shift}`, e.toFixed(2), d.toFixed(2), df.toFixed(2)]);
                 ws_data.push([]);
             });
 
-            const grandExpected = data.reduce((a, b) => a + (b.NominalTariff || 0), 0);
-            const grandDeclared = data.reduce((a, b) => a + (b.NettAmount || 0), 0);
-            const grandDiff = data.reduce((a, b) => a + (b.Difference || 0), 0);
-            ws_data.push(["", "", "GRAND TOTAL", grandExpected.toFixed(2), grandDeclared.toFixed(2), grandDiff.toFixed(2)]);
+            // GRAND TOTAL
+            ws_data.push([
+                "",
+                "",
+                "GRAND TOTAL",
+                expected.toFixed(2),
+                declared.toFixed(2),
+                diff.toFixed(2)
+            ]);
 
+            // Write Excel
             const ws = XLSX.utils.aoa_to_sheet(ws_data);
-            ws['!cols'] = Array(6).fill({ wch: 20 });
+            ws["!cols"] = Array(6).fill({ wch: 22 });
+
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Variant Performance");
-            XLSX.writeFile(wb, `Variant_Performance_Report_${new Date().toISOString().replace(/[:.]/g, '-')}.xlsx`);
+
+            XLSX.writeFile(
+                wb,
+                `Variant_Performance_Report_${new Date().toISOString().replace(/[:.]/g, "-")}.xlsx`
+            );
         });
 
-        // === PDF EXPORT ===
-        document.getElementById("btnDownloadPdf").addEventListener("click", async () => {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
-            const pageWidth = doc.internal.pageSize.getWidth();
-            const pageHeight = doc.internal.pageSize.getHeight();
-            const margin = 40;
+           // =========================================================
+    // 3. PDF EXPORT (Styled like Razor, includes grand total row)
+    // =========================================================
+    document.getElementById("btnDownloadPdf").addEventListener("click", async () => {
 
-            // Logos
-            const loadImage = src => new Promise(res => {
-                const img = new Image(); img.crossOrigin = 'Anonymous';
-                img.onload = () => res(img); img.onerror = () => res(null); img.src = src;
-            });
-            const [leftLogo, rightLogo] = await Promise.all([
-                loadImage('/images/lCC Logo.jpg'),
-                loadImage('/images/ICT-Works Logo.jpg')
-            ]);
-            if (leftLogo) doc.addImage(leftLogo, 'JPEG', margin, 25, 80, 80);
-            if (rightLogo) doc.addImage(rightLogo, 'JPEG', pageWidth - margin - 80, 25, 80, 80);
+        const allUrl = buildExportUrl();
 
-            // Title
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(16);
-            doc.text("LEKKI CONCESSION COMPANY LIMITED", pageWidth / 2, 50, { align: "center" });
-            doc.text("VARIANT PERFORMANCE REPORT", pageWidth / 2, 80, { align: "center" });
+        const fullResult = await fetch(allUrl).then(r => r.json());
+        const data = fullResult.Items ?? fullResult.items ?? [];
 
-            let y = 130;
-            doc.setFontSize(10);
-            doc.text("Filters Used:", margin, y);
-            y += 14;
-            const filters = {
-                "Start Date And Time": '@Model.StartDate.ToString("dd/MM/yyyy HH:mm")',
-                "End Date And Time": '@Model.EndDate.ToString("dd/MM/yyyy HH:mm")',
-                "Operational Shift": '@(string.IsNullOrEmpty(Model.Shift) ? "All" : Model.Shift)',
-                "Toll Operator ID": '@(string.IsNullOrEmpty(Model.TollOperatorID) ? "All" : Model.TollOperatorID)'
-            };
-            for (const [key, val] of Object.entries(filters)) {
-                doc.text(`${key}: ${val}`, margin, y);
-                y += 12;
-            }
+        if (!data.length) {
+            alert("No data to export.");
+            return;
+        }
 
-            const headers = ["Operational Shift Date", "Operational Shift", "Toll Operator ID", "Cash Expected", "Cash Declared", "Cash Declared Difference"];
-            const rows = data.map(d => [
-                d.ShiftDate, d.ShiftDescription, d.TollOperator,
-                (d.NominalTariff ?? 0).toFixed(2),
-                (d.NettAmount ?? 0).toFixed(2),
-                (d.Difference ?? 0).toFixed(2)
-            ]);
+        const operatorRows = getCoreRows(data);
+        const { expected, declared, diff } = computeGrandTotals(operatorRows);
 
-            doc.autoTable({
-                head: [headers],
-                body: rows,
-                startY: y + 10,
-                theme: 'grid',
-                headStyles: { fillColor: [41, 128, 185], textColor: 255 },
-                styles: { fontSize: 9, cellPadding: 4, halign: 'center' },
-                didDrawPage: data => {
-                    const pageCount = doc.internal.getNumberOfPages();
-                    const currentPage = data.pageNumber;
-                    const footerY = pageHeight - 40;
-                    doc.setFontSize(10);
-                    doc.text("Staff Performance Report", margin, footerY);
-                    doc.text(`Date: ${reportGeneratedAt}`, pageWidth / 2.5, footerY);
-                    doc.text(`User: ${currentUser}`, pageWidth / 1.6, footerY);
-                    doc.text(`Page ${currentPage} of ${pageCount}`, pageWidth - margin, footerY, { align: 'right' });
-                    doc.text(`Version: ${reportVersion}`, margin, footerY + 12);
-                }
-            });
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
 
-            doc.save(`Staff_Performance_Report_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const margin = 40;
+
+        // ====================================================
+        // LOGOS (same as other reports)
+        // ====================================================
+        const loadImage = src => new Promise(res => {
+            const img = new Image(); img.crossOrigin = 'Anonymous';
+            img.onload = () => res(img);
+            img.onerror = () => res(null);
+            img.src = src;
         });
+
+        const [leftLogo, rightLogo] = await Promise.all([
+            loadImage('/images/lCC Logo.jpg'),
+            loadImage('/images/ICT-Works Logo.jpg')
+        ]);
+
+        if (leftLogo) doc.addImage(leftLogo, 'JPEG', margin, 25, 80, 80);
+        if (rightLogo) doc.addImage(rightLogo, 'JPEG', pageWidth - margin - 80, 25, 80, 80);
+
+        // ====================================================
+        // TITLE
+        // ====================================================
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(16);
+        doc.text("LEKKI CONCESSION COMPANY LIMITED", pageWidth / 2, 50, { align: "center" });
+        doc.text("VARIANT PERFORMANCE REPORT", pageWidth / 2, 80, { align: "center" });
+
+        // ====================================================
+        // FILTERS
+        // ====================================================
+        let y = 130;
+        doc.setFontSize(10);
+        doc.text("Filters Used:", margin, y);
+        y += 14;
+
+        const filters = {
+            "Start Date And Time": '@Model.StartDate.ToString("dd/MM/yyyy HH:mm")',
+            "End Date And Time": '@Model.EndDate.ToString("dd/MM/yyyy HH:mm")',
+            "Operational Shift": '@(string.IsNullOrEmpty(Model.Shift) ? "All" : Model.Shift)',
+            "Toll Operator ID": '@(string.IsNullOrEmpty(Model.TollOperatorID) ? "All" : Model.TollOperatorID)'
+        };
+
+        Object.entries(filters).forEach(([key, val]) => {
+            doc.text(`${key}: ${val}`, margin, y);
+            y += 12;
+        });
+
+        // ====================================================
+        // BUILD TABLE BODY EXACTLY LIKE RAZOR
+        // ====================================================
+        const tableBody = [];
+
+        // 1. Group by shift
+        const grouped = operatorRows.reduce((acc, x) => {
+            if (!acc[x.ShiftDescription]) acc[x.ShiftDescription] = [];
+            acc[x.ShiftDescription].push(x);
+            return acc;
+        }, {});
+
+        // 2. Add operator rows + subtotal rows
+        Object.keys(grouped).forEach(shift => {
+
+            let shiftExpected = 0;
+            let shiftDeclared = 0;
+            let shiftDiff = 0;
+
+            grouped[shift].forEach(row => {
+                tableBody.push([
+                    new Date(row.ShiftDate).toLocaleDateString(),
+                    row.ShiftDescription,
+                    row.TollOperator,
+                    (row.NominalTariff ?? 0).toFixed(2),
+                    (row.NettAmount ?? 0).toFixed(2),
+                    (row.Difference ?? 0).toFixed(2)
+                ]);
+
+                shiftExpected += row.NominalTariff || 0;
+                shiftDeclared += row.NettAmount || 0;
+                shiftDiff += row.Difference || 0;
+            });
+
+            // === SUBTOTAL ROW ===
+            tableBody.push([
+                "",
+                `Total for ${shift}`,
+                "",
+                shiftExpected.toFixed(2),
+                shiftDeclared.toFixed(2),
+                shiftDiff.toFixed(2)
+            ]);
+
+            tableBody.push(["", "", "", "", "", ""]); // spacing row
+        });
+
+        // 3. === GRAND TOTAL ROW (MATCHES RAZOR) ===
+        tableBody.push([
+            "",
+            "GRAND TOTAL",
+            "",
+            expected.toFixed(2),
+            declared.toFixed(2),
+            diff.toFixed(2)
+        ]);
+
+        // ====================================================
+        // AUTO TABLE (exact same layout as Razor)
+        // ====================================================
+        const headers = [
+            "Operational Shift Date",
+            "Operational Shift",
+            "Toll Operator ID",
+            "Cash Expected",
+            "Cash Declared",
+            "Cash Declared Difference"
+        ];
+
+        doc.autoTable({
+            head: [headers],
+            body: tableBody,
+            startY: y + 10,
+            theme: "grid",
+            headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+            styles: { fontSize: 9, halign: "center", cellPadding: 4 },
+            margin: { left: margin, right: margin }
+        });
+
+        // ====================================================
+        // FOOTER (matches Transaction/Discrepancy)
+        // ====================================================
+        const footerY = pageHeight - 40;
+
+        doc.setFontSize(10);
+        doc.text("Variant Performance Report", margin, footerY);
+        doc.text(`Date: @reportGeneratedAt.ToString("dd/MM/yyyy HH:mm:ss")`, pageWidth / 2.5, footerY);
+        doc.text(`User: @currentUser`, pageWidth / 1.6, footerY);
+
+        const pageCount = doc.internal.getNumberOfPages();
+        doc.text(`Page 1 of ${pageCount}`, pageWidth - margin, footerY, { align: "right" });
+
+        doc.text(`Version: @reportVersion`, margin, footerY + 12);
+
+        // ====================================================
+        // SAVE FILE
+        // ====================================================
+        doc.save(`Variant_Performance_Report_${new Date().toISOString().replace(/[:.]/g, "-")}.pdf`);
+    });
+
+
     });
 </script>

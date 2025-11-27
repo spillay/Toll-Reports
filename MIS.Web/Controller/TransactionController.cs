@@ -1,5 +1,4 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
 using MIS.Web.Models;
 using MIS.Web.Models.Transaction;
 using MIS.Web.Services;
@@ -12,12 +11,10 @@ namespace MIS.Web.Controllers
     public class TransactionController : Controller
     {
         private readonly IReportService _reportService;
-        private readonly IConfiguration _config;
 
-        public TransactionController(IReportService reportService, IConfiguration config)
+        public TransactionController(IReportService reportService)
         {
             _reportService = reportService;
-            _config = config;
         }
 
         [HttpGet]
@@ -25,7 +22,9 @@ namespace MIS.Web.Controllers
         {
             try
             {
-                // === DEFAULT FILTERS ===
+                /* ============================================
+                   1. DEFAULT FILTERS (IF USER ENTERED NONE)
+                =============================================*/
                 if (model.StartDate == default)
                     model.StartDate = DateTime.Today.AddDays(-30).Date.AddHours(5).AddMinutes(30);
 
@@ -35,39 +34,68 @@ namespace MIS.Web.Controllers
                 model.page = model.page <= 0 ? 1 : model.page;
                 model.pageSize = model.pageSize <= 0 ? 50 : model.pageSize;
 
-                // === API CALL FOR DATA ===
+                /* ============================================
+                   2. LOAD PAGINATED DATA FOR TABLE
+                =============================================*/
                 var data = await _reportService.GetTransactionDetailsAsync(model);
-                var filters = await _reportService.GetTransactionFilterOptionsAsync(model);
 
-                // === Binder for dropdowns ===
-                model.Shifts = filters.Shifts;
-                model.TollOperators = filters.TollOperators;
-                model.Lanes = filters.Lanes;
-                model.PaymentMethods = filters.PaymentMethods;
-
-                // === Assign main dataset ===
                 model.items = data.items ?? new List<TransactionModel>();
                 model.totalCount = data.totalCount;
                 model.page = data.page;
                 model.pageSize = data.pageSize;
                 model.totalPages = data.totalPages;
 
-                // === Compute Total Tariff ===
+
+                /* ============================================
+                   3. LOAD FULL UNPAGINATED DATA FOR EXPORT
+                =============================================*/
+                var exportModel = new TransactionInputModel
+                {
+                    StartDate = model.StartDate,
+                    EndDate = model.EndDate,
+                    Shift = model.Shift,
+                    TollOperatorID = model.TollOperatorID,
+                    lane_Nr = model.lane_Nr,
+                    PaymentMethod = model.PaymentMethod,
+                    page = 1,
+                    pageSize = 999999, // All data
+                    ExportAll = true
+                };
+
+                var exportData = await _reportService.GetTransactionExportAsync(exportModel);
+                model.ExportItems = exportData.items ?? new List<TransactionModel>();
+
+
+                /* ============================================
+                   4. LOAD FILTER OPTIONS FOR DROPDOWNS
+                =============================================*/
+                var filters = await _reportService.GetTransactionFilterOptionsAsync(model);
+
+                model.Shifts = filters.Shifts;
+                model.TollOperators = filters.TollOperators;
+                model.Lanes = filters.Lanes;
+                model.PaymentMethods = filters.PaymentMethods;
+
+
+                /* ============================================
+                   5. COMPUTE TOTALS
+                =============================================*/
                 model.TotalTariff = (double)(model.items?.Sum(x => (decimal?)x.tariff ?? 0) ?? 0);
 
-                // === IMPORTANT: BUILD EXPORT URL FOR THIS VIEW ===
-                string baseUrl = _config["BaseApiUrl:Link"];
-                string endpoint = _config["ApiSettings:TransactionEndpoint"];
-                ViewData["TransactionApi"] = $"{baseUrl}{endpoint}";
 
+                /* ============================================
+                   6. RETURN VIEW
+                =============================================*/
                 return View("~/Views/Transaction/Index.cshtml", model);
             }
             catch (Exception ex)
             {
                 Console.WriteLine("❌ ERROR in TransactionController: " + ex.Message);
+
                 return View("~/Views/Transaction/Index.cshtml", new TransactionInputModel
                 {
-                    items = new List<TransactionModel>()
+                    items = new List<TransactionModel>(),
+                    ExportItems = new List<TransactionModel>()
                 });
             }
         }

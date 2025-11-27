@@ -5,11 +5,9 @@ namespace MIS.Web.Models.Discrepancy
 {
     public class PageDiscrepancyModel : PageModel
     {
-        // API: items (paged)
         [JsonProperty("items")]
         public List<DiscrepancyModel> Items { get; set; } = new();
 
-        // API: fullItems (for exportAll=true)
         [JsonProperty("fullItems")]
         public List<DiscrepancyModel>? FullItems { get; set; }
 
@@ -26,6 +24,7 @@ namespace MIS.Web.Models.Discrepancy
         public int totalPages { get; set; }
 
         public DiscrepancyInputModel Filters { get; set; } = new();
+        public List<DiscrepancyModel> ExportItems { get; set; }
 
         public int TotalRecords => totalCount;
     }

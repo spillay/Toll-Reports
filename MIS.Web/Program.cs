@@ -1,5 +1,6 @@
 ﻿
 using MIS.Web.Services;
+using MIS.Web.Services.Interfaces;
 using OfficeOpenXml;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -30,6 +31,7 @@ builder.Services.AddHttpClient<ITopUpReportService, TopUpReportService>();
 builder.Services.AddHttpClient<IAccountHistoryService, AccountHistoryService>();
 builder.Services.AddScoped<IAccountUsageSummaryService, AccountUsageSummaryService>();
 builder.Services.AddHttpClient<IAccountUsageDetailsService, AccountUsageDetailsService>();
+builder.Services.AddHttpClient<IEndOfDayReportService, EndOfDayReportService>();
 
 
 

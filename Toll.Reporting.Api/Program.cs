@@ -11,13 +11,11 @@ var builder = WebApplication.CreateBuilder(args);
 // ====================
 builder.Services.AddWindowsService();
 
-// ====================
-// Controllers + JSON FIX
-// ====================
+
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
-        // ⭐ MOST IMPORTANT FIX — return PascalCase for MVC frontend
+        // return PascalCase for MVC frontend
         options.JsonSerializerOptions.PropertyNamingPolicy = null;
     });
 
@@ -67,6 +65,8 @@ builder.Services.AddScoped<ITopUpRepository, TopUpRepository>();
 builder.Services.AddScoped<IAccountHistoryRepository, AccountHistoryRepository>();
 builder.Services.AddScoped<IAccountUsageSummaryRepository, AccountUsageSummaryRepository>();
 builder.Services.AddScoped<IAccountUsageDetailsRepository, AccountUsageDetailsRepository>();
+builder.Services.AddScoped<IEndOfDayReportRepository, EndOfDayReportRepository>();
+
 
 builder.Services.AddHttpClient();
 

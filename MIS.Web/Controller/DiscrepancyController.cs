@@ -13,7 +13,9 @@ namespace MIS.Web.Controllers
         private readonly IDiscrepancyReportService _service;
         private readonly IConfiguration _configuration;
 
-        public DiscrepancyController(IDiscrepancyReportService service, IConfiguration configuration)
+        public DiscrepancyController(
+            IDiscrepancyReportService service,
+            IConfiguration configuration)
         {
             _service = service;
             _configuration = configuration;
@@ -21,9 +23,9 @@ namespace MIS.Web.Controllers
 
         public async Task<IActionResult> Index([FromQuery] PageDiscrepancyModel model)
         {
-            // -------------------------------
-            // 1. ENSURE FILTER MODEL EXISTS
-            // -------------------------------
+            /* ======================================
+             * 1. INITIALIZE FILTER OBJECT + DEFAULTS
+             * ====================================== */
             model ??= new PageDiscrepancyModel();
             model.Filters ??= new DiscrepancyInputModel();
 
@@ -36,14 +38,15 @@ namespace MIS.Web.Controllers
             model.page = model.page <= 0 ? 1 : model.page;
             model.pageSize = model.pageSize <= 0 ? 50 : model.pageSize;
 
-            // Helper: convert string to list<string>
+            // Helper: convert string → List<string>
             static List<string>? ToList(string? v)
                 => string.IsNullOrWhiteSpace(v) ? null : new List<string> { v };
 
-            // -------------------------------
-            // 2. API CALL (MAIN REQUEST)
-            // -------------------------------
-            var data = await _service.GetDiscrepancyReportAsync(
+
+            /* ======================================
+             * 2. LOAD PAGINATED DATA FOR GRID
+             * ====================================== */
+            var gridData = await _service.GetDiscrepancyReportAsync(
                 model.Filters.StartDate,
                 model.Filters.EndDate,
                 ToList(model.Filters.Shift),
@@ -55,13 +58,32 @@ namespace MIS.Web.Controllers
                 model.pageSize
             );
 
-            data ??= new PageDiscrepancyModel();
-            data.Items ??= new List<DiscrepancyModel>();
+            gridData ??= new PageDiscrepancyModel();
+            gridData.Items ??= new List<DiscrepancyModel>();
 
-            // -------------------------------
-            // 3. BUILD DROPDOWNS FROM RESULTS
-            // -------------------------------
-            var source = data.Items;
+
+            /* ======================================
+             * 3. LOAD FULL EXPORT DATA (NO PAGING)
+             * ====================================== */
+            var exportData = await _service.GetDiscrepancyReportAsync(
+                model.Filters.StartDate,
+                model.Filters.EndDate,
+                ToList(model.Filters.Shift),
+                ToList(model.Filters.toll_Operator_ID),
+                ToList(model.Filters.lane_Nr),
+                ToList(model.Filters.PaymentMethod),
+                ToList(model.Filters.TakenAction),
+                1,          // Always page 1
+                999999      // Load ALL records
+            );
+
+            gridData.ExportItems = exportData?.Items ?? new List<DiscrepancyModel>();
+
+
+            /* ======================================
+             * 4. BUILD DROPDOWNS FROM GRID DATA
+             * ====================================== */
+            var source = gridData.Items;
 
             ViewBag.TollOperators = source
                 .Select(x => x.Toll_Operator_ID)
@@ -88,23 +110,26 @@ namespace MIS.Web.Controllers
                 .Where(x => !string.IsNullOrWhiteSpace(x))
                 .Distinct().OrderBy(x => x).ToList();
 
-            // -------------------------------
-            // 4. PRESERVE FILTERS
-            // -------------------------------
-            data.Filters = model.Filters;
-            data.page = model.page;
-            data.pageSize = model.pageSize;
 
-            // -------------------------------
-            // 5. PROVIDE EXPORT API ENDPOINT
-            // -------------------------------
+            /* ======================================
+             * 5. PRESERVE FILTERS + PAGINATION STATE
+             * ====================================== */
+            gridData.Filters = model.Filters;
+            gridData.page = model.page;
+            gridData.pageSize = model.pageSize;
+
+
+            /* ======================================
+             * 6. EXPORT API URL (NOT USED NOW, BUT KEPT)
+             * ====================================== */
             ViewData["DiscrepancyApi"] =
                 $"{_configuration["BaseApiUrl:Link"]}{_configuration["ApiSettings:DiscrepancyReportEndpoint"]}";
 
-            // -------------------------------
-            // 6. RETURN VIEW
-            // -------------------------------
-            return View("~/Views/Discrepancy/Index.cshtml", data);
+
+            /* ======================================
+             * 7. RETURN THE FULL MODEL TO VIEW
+             * ====================================== */
+            return View("~/Views/Discrepancy/Index.cshtml", gridData);
         }
     }
 }

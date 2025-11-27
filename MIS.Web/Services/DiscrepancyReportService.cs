@@ -130,6 +130,47 @@ namespace MIS.Web.Services
             }
         }
 
+        public async Task<PageDiscrepancyModel> GetFullExportAsync(DiscrepancyInputModel f)
+        {
+            // Build URL for full export (NO pagination!)
+            var q = new List<string>
+    {
+        $"startDate={Uri.EscapeDataString(f.StartDate.ToString("s"))}",
+        $"endDate={Uri.EscapeDataString(f.EndDate.ToString("s"))}",
+        $"page=1",
+        $"pageSize=999999",
+        $"exportAll=true"
+    };
+
+            if (!string.IsNullOrEmpty(f.Shift))
+                q.Add($"operationalShift={Uri.EscapeDataString(f.Shift)}");
+            if (!string.IsNullOrEmpty(f.toll_Operator_ID))
+                q.Add($"tollOperators={Uri.EscapeDataString(f.toll_Operator_ID)}");
+            if (!string.IsNullOrEmpty(f.lane_Nr))
+                q.Add($"laneNames={Uri.EscapeDataString(f.lane_Nr)}");
+            if (!string.IsNullOrEmpty(f.PaymentMethod))
+                q.Add($"paymentMethods={Uri.EscapeDataString(f.PaymentMethod)}");
+            if (!string.IsNullOrEmpty(f.TakenAction))
+                q.Add($"takenAction={Uri.EscapeDataString(f.TakenAction)}");
+
+            string baseUrl = _configuration["BaseApiUrl:Link"];
+            string endpoint = _configuration["ApiSettings:DiscrepancyReportEndpoint"];
+            string url = $"{baseUrl}{endpoint}?{string.Join("&", q)}";
+
+            var response = await _httpClient.GetAsync(url);
+
+            if (!response.IsSuccessStatusCode)
+                return new PageDiscrepancyModel { ExportItems = new List<DiscrepancyModel>() };
+
+            var json = await response.Content.ReadAsStringAsync();
+
+            var full = JsonConvert.DeserializeObject<PageDiscrepancyModel>(json);
+            full.ExportItems = full.Items; // ensure not null
+
+            return full;
+        }
+
+
         // -------------------------
         // EMPTY RESULT FACTORY
         // -------------------------

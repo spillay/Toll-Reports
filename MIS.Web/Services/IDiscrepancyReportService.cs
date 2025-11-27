@@ -17,5 +17,7 @@ namespace MIS.Web.Services
             List<string>? takenAction = null,
             int page = 1,
             int pageSize = 50);
+        Task<PageDiscrepancyModel> GetFullExportAsync(DiscrepancyInputModel filters);
+
     }
 }

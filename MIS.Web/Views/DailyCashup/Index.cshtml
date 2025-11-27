@@ -2,20 +2,21 @@
 @removeTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{
-    // Query values
+    // Query values (for retaining filters)
     var startQuery = Context.Request.Query["StartDate"].ToString();
     var endQuery = Context.Request.Query["EndDate"].ToString();
     var shiftQuery = Context.Request.Query["OperationalShift"].ToString();
     var operatorQuery = Context.Request.Query["TollOperators"].ToString();
-   // Common footer + PDF meta
+
+    // Footer meta
     var reportGeneratedAt = DateTime.Now;
     var currentUser = User.Identity?.Name ?? "Lucky";
     var reportVersion = "2.0.0.11";
 
-    // Safe items
+    // Items (safe fallback)
     var items = Model?.Items ?? new List<MIS.Web.Models.DailyCashup.DailyCashupModel>();
 
-    // Group by shift for layout
+    // Group by shift
     var grouped = items
         .OrderBy(x => x.ShiftDescription ?? "")
         .ThenBy(x => x.TollOperator ?? "")
@@ -26,41 +27,48 @@
 <div class="card shadow-lg mb-4">
     <div class="card-body">
 
-        <!-- Header -->
+        <!-- HEADER -->
         <div class="position-relative border-bottom pb-2 mb-3">
-            <h2 class="fw-bold text-primary text-center mb-0">
-                DAILY CASH REPORT
-            </h2>
+            <h2 class="fw-bold text-primary text-center mb-0">DAILY CASH REPORT</h2>
+        </div>
 
-            <div class="position-absolute top-0 end-0 d-flex gap-2">
-                <button id="btnExportPDF" class="btn btn-danger btn-sm">
+        <!-- EXPORT BUTTONS -->
+        <div class="row mb-3">
+            <div class="col-md-2 me-2">
+                <button id="btnExportPDF" class="btn btn-danger w-100 shadow-sm">
                     <i class="bi bi-file-earmark-pdf"></i> Export PDF
                 </button>
-                <button id="btnExportExcel" class="btn btn-success btn-sm">
+            </div>
+
+            <div class="col-md-2">
+                <button id="btnExportExcel" class="btn btn-success w-100 shadow-sm">
                     <i class="bi bi-file-earmark-excel"></i> Export Excel
                 </button>
             </div>
         </div>
 
-        <!-- FILTERS -->
+        <!-- FILTERS (transaction-style layout) -->
         <form method="get" asp-controller="DailyCashup" asp-action="Index" class="row g-3 mb-4">
 
+            <!-- Start Date -->
             <div class="col-md-3">
-                <label class="form-label fw-semibold">Start Date And Time</label>
+                <label class="form-label fw-semibold">Start Date & Time</label>
                 <input type="datetime-local" name="StartDate" class="form-control"
                        value="@(!string.IsNullOrEmpty(startQuery)
                                 ? startQuery
                                 : Model?.StartDate.ToString("yyyy-MM-ddTHH:mm"))" />
             </div>
 
+            <!-- End Date -->
             <div class="col-md-3">
-                <label class="form-label fw-semibold">End Date And Time</label>
+                <label class="form-label fw-semibold">End Date & Time</label>
                 <input type="datetime-local" name="EndDate" class="form-control"
                        value="@(!string.IsNullOrEmpty(endQuery)
                                 ? endQuery
                                 : Model?.EndDate.ToString("yyyy-MM-ddTHH:mm"))" />
             </div>
 
+            <!-- Shift -->
             <div class="col-md-3">
                 <label class="form-label fw-semibold">Operational Shift</label>
                 <select name="OperationalShift" class="form-select">
@@ -72,6 +80,7 @@
                 </select>
             </div>
 
+            <!-- Toll Operator -->
             <div class="col-md-3">
                 <label class="form-label fw-semibold">Toll Operator ID</label>
                 <select name="TollOperators" class="form-select">
@@ -83,8 +92,9 @@
                 </select>
             </div>
 
-            <div class="col-md-12 text-end">
-                <button class="btn btn-primary px-4">Filter</button>
+            <!-- Filter Button -->
+            <div class="col-md-3 d-flex align-items-end">
+                <button class="btn btn-primary w-100 px-4">Apply Filters</button>
             </div>
         </form>
 
@@ -107,39 +117,31 @@
 
                 <tbody>
                     @{
-                        double grandLane = 0;
-                        double grandTop = 0;
-                        double grandExpected = 0;
-                        double grandDeclared = 0;
-                        double grandBanked = 0;
+                        double grandLane = 0, grandTop = 0, grandExpected = 0, grandDeclared = 0, grandBanked = 0;
                     }
 
                     @foreach (var shift in grouped)
                     {
-                      
-
-                        double shiftLane = 0;
-                        double shiftTop = 0;
-                        double shiftExpected = 0;
-                        double shiftDeclared = 0;
-                        double shiftBanked = 0;
+                        double shiftLane = 0, shiftTop = 0, shiftExpected = 0, shiftDeclared = 0, shiftBanked = 0;
 
                         foreach (var item in shift)
                         {
                             var expected = item.NettAmount + item.ActualAmount;
-                            var surplus = expected - item.TotalDeclared;
-                            var banked = item.TotalDeclared;
+                            var declared = item.TotalDeclared;
+                            var surplus = expected - declared;
+                            var surplusDisplay = Math.Abs(surplus);
+                            var banked = declared;
 
                             shiftLane += item.NettAmount;
                             shiftTop += item.ActualAmount;
                             shiftExpected += expected;
-                            shiftDeclared += item.TotalDeclared;
+                            shiftDeclared += declared;
                             shiftBanked += banked;
 
                             grandLane += item.NettAmount;
                             grandTop += item.ActualAmount;
                             grandExpected += expected;
-                            grandDeclared += item.TotalDeclared;
+                            grandDeclared += declared;
                             grandBanked += banked;
 
                             <tr>
@@ -150,38 +152,35 @@
                                 <td class="text-end">@item.NettAmount.ToString("N2")</td>
                                 <td class="text-end">@item.ActualAmount.ToString("N2")</td>
                                 <td class="text-end">@expected.ToString("N2")</td>
-                                <td class="text-end">@item.TotalDeclared.ToString("N2")</td>
+                                <td class="text-end">@declared.ToString("N2")</td>
 
+                                <!-- NEW Surplus logic -->
                                 <td class="text-end @(surplus > 0 ? "text-danger fw-bold" : surplus < 0 ? "text-success fw-bold" : "text-muted fw-bold")">
-                                    @surplus.ToString("N2")
+                                    @surplusDisplay.ToString("N2")
                                 </td>
 
                                 <td class="text-end fw-bold">@banked.ToString("N2")</td>
                             </tr>
                         }
 
-                        var shiftSurplus = shiftExpected - shiftDeclared;
+                        var shiftSurplus = Math.Abs(shiftExpected - shiftDeclared);
 
-                        <!-- SHIFT TOTAL: ONLY TOTAL SURPLUS IN LAST COLUMN -->
                         <tr class="fw-bold table-light">
                             <td colspan="7" class="text-end">Total Shift @shift.Key</td>
                             <td class="text-end">@shiftSurplus.ToString("N2")</td>
                         </tr>
 
-                        <!-- Spacer row like Excel -->
-                        <tr>
-                            <td colspan="9" style="border-top: none; border-bottom: none;"></td>
-                        </tr>
+                        <tr><td colspan="9" style="border-top:none;border-bottom:none;"></td></tr>
                     }
 
-                    <!-- OPERATIONAL DAY TOTAL (full totals) -->
+                    <!-- GRAND TOTAL -->
                     <tr class="fw-bold text-white" style="background-color:#1b4b72;">
                         <td colspan="3" class="text-end">Operational Day Total</td>
                         <td class="text-end">@grandLane.ToString("N2")</td>
                         <td class="text-end">@grandTop.ToString("N2")</td>
                         <td class="text-end">@grandExpected.ToString("N2")</td>
                         <td class="text-end">@grandDeclared.ToString("N2")</td>
-                        <td class="text-end">@((grandExpected - grandDeclared).ToString("N2"))</td>
+                        <td class="text-end">@Math.Abs(grandExpected - grandDeclared).ToString("N2")</td>
                         <td class="text-end">@grandBanked.ToString("N2")</td>
                     </tr>
 
@@ -246,26 +245,14 @@
         <!-- FOOTER -->
         <div class="mt-4 p-3 border-top bg-light">
             <table class="table table-borderless w-100 mb-0">
-                <tr class="align-top">
-                    <td style="width: 35%;">
-                        <strong>Daily Cah Report</strong><br />
-                    </td>
-                    <td style="width: 30%;">
-                        <strong>Date and Time:</strong><br />
-                        <em>@reportGeneratedAt.ToString("dd/MM/yyyy HH:mm:ss")</em>
-                    </td>
-                    <td style="width: 25%;">
-                        <strong>User ID:</strong><br />
-                        <em>@currentUser</em>
-                    </td>
-                    <td style="width: 10%;" class="text-end">
-                        Page 1 of 1
-                    </td>
+                <tr>
+                    <td style="width:35%;"><strong>Daily Cash Report</strong></td>
+                    <td style="width:30%;"><strong>Date and Time:</strong><br /><em>@reportGeneratedAt.ToString("dd/MM/yyyy HH:mm:ss")</em></td>
+                    <td style="width:25%;"><strong>User ID:</strong><br /><em>@currentUser</em></td>
+                    <td style="width:10%;" class="text-end">Page 1 of 1</td>
                 </tr>
                 <tr>
-                    <td colspan="4">
-                        <strong>Reports Module Version Number:</strong> @reportVersion
-                    </td>
+                    <td colspan="4"><strong>Reports Module Version Number:</strong> @reportVersion</td>
                 </tr>
             </table>
         </div>
@@ -274,262 +261,266 @@
 </div>
 
 @section Scripts {
-    <!-- Libraries -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
-    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 
-    <script>
-        // ----------------------------
-        // EXPORT PDF
-        // ----------------------------
-        document.getElementById("btnExportPDF").addEventListener("click", async function () {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+<script>
 
-            const pageWidth = doc.internal.pageSize.getWidth();
-            const pageHeight = doc.internal.pageSize.getHeight();
-            const margin = 40;
+document.getElementById("btnExportPDF").addEventListener("click", async function () {
 
-            const reportGeneratedAt = new Date().toLocaleString();
-            const currentUser = '@(User?.Identity?.Name ?? "Lucky")';
-            const reportVersion = "2.0.0.11";
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
 
-            // Logos
-            const logoWidth = 90, logoHeight = 90, logoY = 25;
-            const leftLogo = '/images/LCC Logo.jpg';
-            const rightLogo = '/images/ICT-Works Logo.jpg';
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 40;
 
-            const loadImage = src => new Promise(resolve => {
-                const img = new Image();
-                img.crossOrigin = 'Anonymous';
-                img.onload = () => resolve(img);
-                img.onerror = () => resolve(null);
-                img.src = src;
-            });
+    const reportGeneratedAt = new Date().toLocaleString();
+    const currentUser = "@currentUser";
+    const reportVersion = "2.0.0.11";
 
-            const [lLogo, rLogo] = await Promise.all([loadImage(leftLogo), loadImage(rightLogo)]);
-            if (lLogo) doc.addImage(lLogo, 'JPEG', margin, logoY, logoWidth, logoHeight);
-            if (rLogo) doc.addImage(rLogo, 'JPEG', pageWidth - margin - logoWidth, logoY, logoWidth, logoHeight);
+    // Logos
+    const leftLogo = "/images/LCC Logo.jpg";
+    const rightLogo = "/images/ICT-Works Logo.jpg";
+    const loadImage = src => new Promise(resolve => {
+        const img = new Image();
+        img.src = src;
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null);
+    });
 
-            // Title
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(17);
-            doc.text("Daily Cashup Report", pageWidth / 2, logoY + 50, { align: "center" });
+    const [lLogo, rLogo] = await Promise.all([loadImage(leftLogo), loadImage(rightLogo)]);
 
-            // Filters
-            const filters = {
-                "Start Date": "@(Model?.StartDate.ToString("dd/MM/yyyy HH:mm") ?? "-")",
-                "End Date": "@(Model?.EndDate.ToString("dd/MM/yyyy HH:mm") ?? "-")",
-                "Shift": "@(shiftQuery ?? "All")",
-                "Operator": "@(operatorQuery ?? "All")"
-            };
+    if (lLogo) doc.addImage(lLogo, "JPEG", margin, 25, 90, 90);
+    if (rLogo) doc.addImage(rLogo, "JPEG", pageWidth - margin - 90, 25, 90, 90);
 
-            let y = logoY + logoHeight + 10;
-            doc.setFont("helvetica", "normal");
-            doc.setFontSize(10);
-            doc.text("Filters Used:", margin, y);
-            y += 14;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(17);
+    doc.text("Daily Cashup Report", pageWidth / 2, 70, { align: "center" });
 
-            for (const [key, value] of Object.entries(filters)) {
-                doc.text(`${key}: ${value}`, margin, y);
-                y += 14;
-            }
+    // Filters
+    const filters = {
+        "Start Date": "@(Model?.StartDate.ToString("dd/MM/yyyy HH:mm") ?? "-")",
+        "End Date": "@(Model?.EndDate.ToString("dd/MM/yyyy HH:mm") ?? "-")",
+        "Shift": "@(!string.IsNullOrEmpty(shiftQuery) 
+                ? shiftQuery 
+                : "All")",
 
-            // Build data
-            const raw = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Items ?? new List<MIS.Web.Models.DailyCashup.DailyCashupModel>()));
+    "Operator": "@(!string.IsNullOrEmpty(operatorQuery) 
+                 ? operatorQuery 
+                 : "All")"
+    };
 
-            let table = [];
-            let groups = {};
-            let dayTotals = { lane: 0, top: 0, expected: 0, declared: 0, banked: 0 };
+    let y = 130;
+    doc.setFontSize(10);
+    doc.text("Filters Used:", margin, y);
 
-            (raw || []).forEach(d => {
-                const key = d.ShiftDescription || "-- Unknown Shift --";
-                if (!groups[key]) groups[key] = [];
-                groups[key].push(d);
-            });
+    y += 14;
+    for (const [key, value] of Object.entries(filters)) {
+        doc.text(`${key}: ${value}`, margin, y);
+        y += 14;
+    }
 
-            for (const shift in groups) {
-                // Shift header
-                table.push([{ content: `SHIFT: ${shift}`, colSpan: 9, styles: { halign: "left", fillColor: [230, 230, 230] } }]);
+    // Prepare table body
+    const raw = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Items ?? new List<MIS.Web.Models.DailyCashup.DailyCashupModel>()));
 
-                let shiftTotals = { lane: 0, top: 0, expected: 0, declared: 0, banked: 0 };
+    let table = [];
+    let groups = {};
+    let dayTotals = { lane: 0, top: 0, expected: 0, declared: 0, banked: 0 };
 
-                groups[shift].forEach(d => {
-                    const expected = d.NettAmount + d.ActualAmount;
-                    const surplus = expected - d.TotalDeclared;
-                    const banked = d.TotalDeclared;
+    (raw || []).forEach(d => {
+        const key = d.ShiftDescription || "-- Unknown Shift --";
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(d);
+    });
 
-                    shiftTotals.lane += d.NettAmount;
-                    shiftTotals.top += d.ActualAmount;
-                    shiftTotals.expected += expected;
-                    shiftTotals.declared += d.TotalDeclared;
-                    shiftTotals.banked += banked;
+    for (const shift in groups) {
+        table.push([{ content: `SHIFT: ${shift}`, colSpan: 9, styles: { halign: "left", fillColor: [230, 230, 230] } }]);
 
-                    dayTotals.lane += d.NettAmount;
-                    dayTotals.top += d.ActualAmount;
-                    dayTotals.expected += expected;
-                    dayTotals.declared += d.TotalDeclared;
-                    dayTotals.banked += banked;
+        let shiftTotals = { lane: 0, top: 0, expected: 0, declared: 0, banked: 0 };
 
-                    table.push([
-                        d.ShiftDate ? new Date(d.ShiftDate).toLocaleDateString() : "",
-                        (d.ShiftDescription || "").replace("Shift ", ""),
-                        d.TollOperator,
-                        (d.NettAmount || 0).toFixed(2),
-                        (d.ActualAmount || 0).toFixed(2),
-                        expected.toFixed(2),
-                        (d.TotalDeclared || 0).toFixed(2),
-                        surplus.toFixed(2),
-                        banked.toFixed(2)
-                    ]);
-                });
+        groups[shift].forEach(d => {
+            const expected = d.NettAmount + d.ActualAmount;
+            const declared = d.TotalDeclared;
+            const surplus = Math.abs(expected - declared);
+            const banked = declared;
 
-                const shiftSurplus = shiftTotals.expected - shiftTotals.declared;
+            shiftTotals.lane += d.NettAmount;
+            shiftTotals.top += d.ActualAmount;
+            shiftTotals.expected += expected;
+            shiftTotals.declared += declared;
+            shiftTotals.banked += banked;
 
-                // SHIFT TOTAL ROW: ONLY SURPLUS
-                table.push([
-                    { content: `Total ${shift}`, colSpan: 8, styles: { halign: "right", fillColor: [245, 245, 245] } },
-                    shiftSurplus.toFixed(2)
-                ]);
+            dayTotals.lane += d.NettAmount;
+            dayTotals.top += d.ActualAmount;
+            dayTotals.expected += expected;
+            dayTotals.declared += declared;
+            dayTotals.banked += banked;
 
-                // Spacer row
-                table.push([
-                    { content: "", colSpan: 9, styles: { cellPadding: { top: 2, bottom: 2 }, lineWidth: 0 } }
-                ]);
-            }
-
-            // Day totals
             table.push([
-                { content: "OPERATIONAL DAY TOTAL", colSpan: 3, styles: { halign: "right", fillColor: [27, 75, 114], textColor: 255 } },
-                { content: dayTotals.lane.toFixed(2), styles: { textColor: 255 } },
-                { content: dayTotals.top.toFixed(2), styles: { textColor: 255 } },
-                { content: dayTotals.expected.toFixed(2), styles: { textColor: 255 } },
-                { content: dayTotals.declared.toFixed(2), styles: { textColor: 255 } },
-                { content: (dayTotals.expected - dayTotals.declared).toFixed(2), styles: { textColor: 255 } },
-                { content: dayTotals.banked.toFixed(2), styles: { textColor: 255 } }
+                new Date(d.ShiftDate).toLocaleDateString(),
+                (d.ShiftDescription || "").replace("Shift ", ""),
+                d.TollOperator,
+                d.NettAmount.toFixed(2),
+                d.ActualAmount.toFixed(2),
+                expected.toFixed(2),
+                declared.toFixed(2),
+                surplus.toFixed(2),
+                banked.toFixed(2)
             ]);
-
-            doc.autoTable({
-                head: [[
-                    "Operational Day", "Operational Shift", "Toll Operator ID",
-                    "Lane Cash", "Top-ups", "Total Cash Expected",
-                    "Cash Declared", "Surplus / Shortage", "Total Banked"
-                ]],
-                body: table,
-                startY: y + 10,
-                theme: "grid",
-                styles: { fontSize: 9, cellPadding: 4 },
-                headStyles: { fillColor: [41, 128, 185], textColor: 255 },
-                margin: { left: margin, right: margin },
-                didDrawPage: function (data) {
-                    const currentPage = doc.internal.getCurrentPageInfo().pageNumber;
-                    const pageCount = doc.internal.getNumberOfPages();
-                    const footerY = pageHeight - 50;
-
-                    doc.setFontSize(10);
-                    doc.text("Daily Cashup Report", margin, footerY);
-                    doc.text(`Date and Time: ${reportGeneratedAt}`, pageWidth / 2.5, footerY);
-                    doc.text(`User ID: ${currentUser}`, pageWidth / 1.5, footerY);
-                    doc.text(`Page ${currentPage} of ${pageCount}`, pageWidth - margin, footerY, { align: "right" });
-
-                    doc.setFontSize(9);
-                    doc.text(`Reports Module Version Number: ${reportVersion}`, margin, footerY + 14);
-                }
-            });
-
-            doc.save(`Daily_Cashup_Report_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
         });
 
-        // ----------------------------
-        // EXPORT EXCEL
-        // ----------------------------
-        document.getElementById("btnExportExcel").addEventListener("click", function () {
-            const raw = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Items ?? new List<MIS.Web.Models.DailyCashup.DailyCashupModel>()));
-            if (!raw || !raw.length) {
-                alert("No data to export.");
-                return;
-            }
+        const shiftSurplus = Math.abs(shiftTotals.expected - shiftTotals.declared);
 
-            let rows = [];
-            let groups = {};
-            let dayTotals = { lane: 0, top: 0, expected: 0, declared: 0, banked: 0 };
+        table.push([
+            { content: `Total ${shift}`, colSpan: 8, styles: { halign: "right", fillColor: [245, 245, 245] } },
+            shiftSurplus.toFixed(2)
+        ]);
 
-            rows.push(["Operational Day", "Operational Shift", "Toll Operator ID",
-                       "Lane Cash", "Top-ups", "Total Cash Expected",
-                       "Cash Declared", "Surplus / Shortage", "Total Banked"]);
+        table.push([{ content: "", colSpan: 9, styles: { lineWidth: 0 } }]);
+    }
 
-            (raw || []).forEach(d => {
-                const key = d.ShiftDescription || "-- Unknown Shift --";
-                if (!groups[key]) groups[key] = [];
-                groups[key].push(d);
-            });
+    // Day totals row
+    table.push([
+        { content: "OPERATIONAL DAY TOTAL", colSpan: 3, styles: { halign: "right", fillColor: [27, 75, 114], textColor: 255 } },
+        dayTotals.lane.toFixed(2),
+        dayTotals.top.toFixed(2),
+        dayTotals.expected.toFixed(2),
+        dayTotals.declared.toFixed(2),
+        Math.abs(dayTotals.expected - dayTotals.declared).toFixed(2),
+        dayTotals.banked.toFixed(2)
+    ]);
 
-            for (const shift in groups) {
+    doc.autoTable({
+        head: [[
+            "Operational Day", "Operational Shift", "Toll Operator ID",
+            "Lane Cash", "Top-ups", "Total Cash Expected",
+            "Cash Declared", "Surplus / Shortage", "Total Banked"
+        ]],
+        body: table,
+        startY: y + 10,
+        theme: "grid",
+        styles: { fontSize: 9, cellPadding: 4 },
+        headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+        margin: { left: margin, right: margin },
+        didDrawPage: function (data) {
+        const currentPage = doc.internal.getCurrentPageInfo().pageNumber;
+        const pageCount = doc.internal.getNumberOfPages();
 
-                // Shift header row
-                rows.push([`SHIFT: ${shift}`, "", "", "", "", "", "", "", ""]);
+        // Main footer line (safe above the table)
+        const footerY = pageHeight - 35;
 
-                let shiftTotals = { lane: 0, top: 0, expected: 0, declared: 0, banked: 0 };
+        doc.setFontSize(9);
+        doc.text("Daily Cashup Report", margin, footerY);
+        doc.text(`Date and Time: ${reportGeneratedAt}`, pageWidth / 2.5, footerY);
+        doc.text(`User ID: ${currentUser}`, pageWidth / 1.5, footerY);
+        doc.text(`Page ${currentPage} of ${pageCount}`,
+            pageWidth - margin,
+            footerY,
+            { align: "right" }
+        );
 
-                groups[shift].forEach(d => {
-                    const expected = d.NettAmount + d.ActualAmount;
-                    const surplus = expected - d.TotalDeclared;
-                    const banked = d.TotalDeclared;
+        doc.setFontSize(9);
+        doc.text(
+            `Reports Module Version Number: ${reportVersion}`,
+            margin,
+            pageHeight - 18 
+        );
+    }
 
-                    shiftTotals.lane += d.NettAmount;
-                    shiftTotals.top += d.ActualAmount;
-                    shiftTotals.expected += expected;
-                    shiftTotals.declared += d.TotalDeclared;
-                    shiftTotals.banked += banked;
+    });
 
-                    dayTotals.lane += d.NettAmount;
-                    dayTotals.top += d.ActualAmount;
-                    dayTotals.expected += expected;
-                    dayTotals.declared += d.TotalDeclared;
-                    dayTotals.banked += banked;
+    doc.save(`Daily_Cashup_Report_${new Date().toISOString().replace(/[:.]/g, "-")}.pdf`);
+});
 
-                    rows.push([
-                        d.ShiftDate ? new Date(d.ShiftDate).toLocaleDateString() : "",
-                        (d.ShiftDescription || "").replace("Shift ", ""),
-                        d.TollOperator,
-                        (d.NettAmount || 0).toFixed(2),
-                        (d.ActualAmount || 0).toFixed(2),
-                        expected.toFixed(2),
-                        (d.TotalDeclared || 0).toFixed(2),
-                        surplus.toFixed(2),
-                        banked.toFixed(2)
-                    ]);
-                });
+/* =========================================================
+   ===================== EXCEL EXPORT =======================
+   ========================================================= */
+document.getElementById("btnExportExcel").addEventListener("click", function () {
 
-                const shiftSurplus = shiftTotals.expected - shiftTotals.declared;
+    const raw = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Items ?? new List<MIS.Web.Models.DailyCashup.DailyCashupModel>()));
 
-                // SHIFT TOTAL ROW: ONLY SURPLUS IN LAST COLUMN
-                rows.push([
-                    "", "", "", "", "", "", "",
-                    `Total ${shift}`,
-                    shiftSurplus.toFixed(2)
-                ]);
+    if (!raw || !raw.length) {
+        alert("No data to export.");
+        return;
+    }
 
-                // Spacer row
-                rows.push(["", "", "", "", "", "", "", "", ""]);
-            }
+    let rows = [];
+    let groups = {};
+    let dayTotals = { lane: 0, top: 0, expected: 0, declared: 0, banked: 0 };
+
+    rows.push([
+        "Operational Day", "Operational Shift", "Toll Operator ID",
+        "Lane Cash", "Top-ups", "Total Cash Expected",
+        "Cash Declared", "Surplus / Shortage", "Total Banked"
+    ]);
+
+    raw.forEach(d => {
+        const key = d.ShiftDescription || "-- Unknown Shift --";
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(d);
+    });
+
+    for (const shift in groups) {
+
+        rows.push([`SHIFT: ${shift}`, "", "", "", "", "", "", "", ""]);
+
+        let shiftTotals = { lane: 0, top: 0, expected: 0, declared: 0, banked: 0 };
+
+        groups[shift].forEach(d => {
+            const expected = d.NettAmount + d.ActualAmount;
+            const declared = d.TotalDeclared;
+            const surplus = Math.abs(expected - declared);
+            const banked = declared;
+
+            shiftTotals.lane += d.NettAmount;
+            shiftTotals.top += d.ActualAmount;
+            shiftTotals.expected += expected;
+            shiftTotals.declared += declared;
+            shiftTotals.banked += banked;
+
+            dayTotals.lane += d.NettAmount;
+            dayTotals.top += d.ActualAmount;
+            dayTotals.expected += expected;
+            dayTotals.declared += declared;
+            dayTotals.banked += banked;
 
             rows.push([
-                "OPERATIONAL DAY TOTAL", "", "",
-                dayTotals.lane.toFixed(2),
-                dayTotals.top.toFixed(2),
-                dayTotals.expected.toFixed(2),
-                dayTotals.declared.toFixed(2),
-                (dayTotals.expected - dayTotals.declared).toFixed(2),
-                dayTotals.banked.toFixed(2)
+                new Date(d.ShiftDate).toLocaleDateString(),
+                (d.ShiftDescription || "").replace("Shift ", ""),
+                d.TollOperator,
+                d.NettAmount.toFixed(2),
+                d.ActualAmount.toFixed(2),
+                expected.toFixed(2),
+                declared.toFixed(2),
+                surplus.toFixed(2),
+                banked.toFixed(2)
             ]);
-
-            const wb = XLSX.utils.book_new();
-            const ws = XLSX.utils.aoa_to_sheet(rows);
-            XLSX.utils.book_append_sheet(wb, ws, "Daily Cashup Report");
-            XLSX.writeFile(wb, `Daily_Cashup_Report_${new Date().toISOString().replace(/[:.]/g, '-')}.xlsx`);
         });
 
-    </script>
+        const shiftSurplus = Math.abs(shiftTotals.expected - shiftTotals.declared);
+
+        rows.push(["", "", "", "", "", "", "", `Total ${shift}`, shiftSurplus.toFixed(2)]);
+        rows.push(["", "", "", "", "", "", "", "", ""]);
+    }
+
+    rows.push([
+        "OPERATIONAL DAY TOTAL", "", "",
+        dayTotals.lane.toFixed(2),
+        dayTotals.top.toFixed(2),
+        dayTotals.expected.toFixed(2),
+        dayTotals.declared.toFixed(2),
+        Math.abs(dayTotals.expected - dayTotals.declared).toFixed(2),
+        dayTotals.banked.toFixed(2)
+    ]);
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, "Daily Cashup Report");
+
+    XLSX.writeFile(wb, `Daily_Cashup_Report_${new Date().toISOString().replace(/[:.]/g, "-")}.xlsx`);
+});
+
+</script>
 }

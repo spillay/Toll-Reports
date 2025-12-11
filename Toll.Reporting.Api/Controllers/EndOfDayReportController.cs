@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Toll.Reporting.Api.Repositories;
+using Toll.Reporting.Api.DTOs.EndOfDay;
 
 namespace Toll.Reporting.Api.Controllers
 {
@@ -10,19 +11,37 @@ namespace Toll.Reporting.Api.Controllers
         private readonly IEndOfDayReportRepository _repo;
         private readonly ILogger<EndOfDayReportController> _logger;
 
-        public EndOfDayReportController(IEndOfDayReportRepository repo,
-                                        ILogger<EndOfDayReportController> logger)
+        public EndOfDayReportController(
+            IEndOfDayReportRepository repo,
+            ILogger<EndOfDayReportController> logger)
         {
             _repo = repo;
             _logger = logger;
         }
 
-        [HttpGet("Get")]
-        public async Task<IActionResult> Get(DateTime reportDate)
+        [HttpGet]
+        public async Task<IActionResult> Get([FromQuery] DateTime startDate, [FromQuery] DateTime endDate)
         {
-            var data = await _repo.GetEndOfDayReportAsync(reportDate);
-            return Ok(data);
+            if (startDate == default || endDate == default)
+                return BadRequest("StartDate and EndDate are required.");
+
+            if (endDate < startDate)
+                return BadRequest("EndDate cannot be earlier than StartDate.");
+
+            try
+            {
+                var report = await _repo.GetEndOfDayAsync(startDate, endDate);
+
+                if (report == null)
+                    return NotFound("No End Of Day data found for the given date range.");
+
+                return Ok(report);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to generate End Of Day Report.");
+                return StatusCode(500, "Internal server error occurred.");
+            }
         }
     }
-
 }

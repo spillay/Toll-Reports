@@ -4,6 +4,6 @@ namespace MIS.Web.Services.Interfaces
 {
     public interface IEndOfDayReportService
     {
-        Task<List<EndOfDayRowModel>> GetEndOfDayAsync(DateTime reportDate);
+        Task<EndOfDayReportViewModel?> GetEndOfDayAsync(DateTime startDate, DateTime endDate);
     }
 }

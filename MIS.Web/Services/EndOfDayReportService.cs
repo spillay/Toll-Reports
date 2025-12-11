@@ -8,54 +8,45 @@ namespace MIS.Web.Services
     {
         private readonly HttpClient _http;
         private readonly IConfiguration _config;
-        private readonly string _baseUrl;
-        private readonly string _endpoint;
+        private readonly ILogger<EndOfDayReportService> _logger;
 
-        public EndOfDayReportService(HttpClient http, IConfiguration config)
+        public EndOfDayReportService(
+            HttpClient http,
+            IConfiguration config,
+            ILogger<EndOfDayReportService> logger)
         {
             _http = http;
             _config = config;
-
-            _baseUrl = _config["BaseApiUrl:Link"]?.TrimEnd('/') + "/";
-            _endpoint = _config["ApiSettings:EndOfDayEndpoint"] ?? "api/EndOfDayReport/Get";
+            _logger = logger;
         }
 
-        public async Task<List<EndOfDayRowModel>> GetEndOfDayAsync(DateTime reportDate)
+        public async Task<EndOfDayReportViewModel?> GetEndOfDayAsync(DateTime startDate, DateTime endDate)
         {
-            string formatted = reportDate.ToString("yyyy-MM-dd");
-            string url = $"{_baseUrl}{_endpoint}?reportDate={formatted}";
-
-            // fetch JSON safely
-            var rows = await _http.GetFromJsonAsync<List<EndOfDayRowModel>>(url)
-                       ?? new List<EndOfDayRowModel>();
-
-            // normalize each row (trim all columns)
-            foreach (var r in rows)
+            try
             {
-                r.Col1 = r.Col1?.Trim() ?? "";
-                r.Col2 = r.Col2?.Trim() ?? "";
-                r.Col3 = r.Col3?.Trim() ?? "";
-                r.Col4 = r.Col4?.Trim() ?? "";
-                r.Col5 = r.Col5?.Trim() ?? "";
-                r.Col6 = r.Col6?.Trim() ?? "";
-                r.Col7 = r.Col7?.Trim() ?? "";
-                r.Col8 = r.Col8?.Trim() ?? "";
+                string baseUrl = _config["BaseApiUrl:Link"]?.TrimEnd('/')
+                                 ?? throw new Exception("BaseApiUrl:Link is missing in appsettings.json");
+
+                // string url = $"{baseUrl}/api/EndOfDayReport?startDate={startDate:yyyy-MM-dd}&endDate={endDate:yyyy-MM-dd}";
+                string url = $"{baseUrl}/api/EndOfDayReport?startDate={startDate:yyyy-MM-ddTHH:mm:ss}&endDate={endDate:yyyy-MM-ddTHH:mm:ss}";
+
+
+                _logger.LogInformation("Fetching End Of Day report from: {URL}", url);
+
+                var result = await _http.GetFromJsonAsync<EndOfDayReportViewModel>(url);
+
+                if (result == null)
+                {
+                    _logger.LogWarning("End Of Day API returned NULL data.");
+                }
+
+                return result;
             }
-
-            // remove known headers
-            string[] headersToRemove =
+            catch (Exception ex)
             {
-                "LEKKI CONCESSION COMPANY LIMITED",
-                "LEKKI-IKOYI LINK BRIDGE",
-                "END OF DAY REPORT"
-            };
-
-            rows = rows
-                .Where(r => !headersToRemove.Any(h =>
-                        r.Col1.Equals(h, StringComparison.OrdinalIgnoreCase)))
-                .ToList();
-
-            return rows;
+                _logger.LogError(ex, "Failed to fetch End Of Day report.");
+                return null;
+            }
         }
     }
 }

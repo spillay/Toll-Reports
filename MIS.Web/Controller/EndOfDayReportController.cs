@@ -16,17 +16,22 @@ namespace MIS.Web.Controllers
         [HttpGet]
         public async Task<IActionResult> Index(DateTime? reportDate)
         {
+            // default to today
+            DateTime date = reportDate ?? DateTime.Today;
+
+            // Operational day boundaries
+            DateTime startDate = date.Date.AddHours(5).AddMinutes(30);        // 05:30 AM same day
+            DateTime endDate = date.Date.AddDays(1).AddHours(5).AddMinutes(29); // 05:29 AM next day
+
             var model = new PageEndOfDayModel
             {
-                ReportDate = reportDate
+                StartDate = startDate,
+                EndDate = endDate,
+                Report = await _service.GetEndOfDayAsync(startDate, endDate)
             };
-
-            if (reportDate.HasValue)
-            {
-                model.Rows = await _service.GetEndOfDayAsync(reportDate.Value);
-            }
 
             return View(model);
         }
+
     }
 }

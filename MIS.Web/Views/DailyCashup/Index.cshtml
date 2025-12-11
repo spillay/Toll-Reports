@@ -154,8 +154,7 @@
                                 <td class="text-end">@expected.ToString("N2")</td>
                                 <td class="text-end">@declared.ToString("N2")</td>
 
-                                <!-- NEW Surplus logic -->
-                                <td class="text-end @(surplus > 0 ? "text-danger fw-bold" : surplus < 0 ? "text-success fw-bold" : "text-muted fw-bold")">
+                                <td class="text-end @(surplus > 0 ? "text-success fw-bold" : surplus < 0 ? "text-danger fw-bold" : "text-muted fw-bold")">
                                     @surplusDisplay.ToString("N2")
                                 </td>
 

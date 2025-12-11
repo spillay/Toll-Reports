@@ -5,6 +5,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using MIS.Models;
 //using MIS.DAL;
+using TollReportingSystem.Data.Entities.Star;
+
 
 namespace TollReportingSystem.Data
 {
@@ -106,9 +108,14 @@ namespace TollReportingSystem.Data
             public virtual DbSet<Ufdmessage> Ufdmessages { get; set; }
             public virtual DbSet<VehicleType> VehicleTypes { get; set; }
             public virtual DbSet<VirtualPlaza> VirtualPlazas { get; set; }
-           
+        public DbSet<StarTheoreticalIncome> TheoreticalIncome { get; set; }
+        public DbSet<StarDiscounts> Discounts { get; set; }
+        public DbSet<StarExempts> Exempts { get; set; }
+        public DbSet<StarOtherIncome> OtherIncome { get; set; }
+        public DbSet<StarReconciliation> Reconciliation { get; set; }
 
-            protected override void OnModelCreating(ModelBuilder modelBuilder)
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
             {
                 modelBuilder.HasAnnotation("Relational:Collation", "SQL_Latin1_General_CP1_CI_AS");
 

@@ -1,24 +1,72 @@
 ﻿@model MIS.Web.Models.EndOfDay.PageEndOfDayModel
+@using MIS.Web.Models.EndOfDay
 
 @{
     ViewData["Title"] = "End Of Day Report";
-    var reportGeneratedAt = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
-    var currentUserId = User.Identity?.Name ?? "Lucky";
-    var reportVersion = "2.0.0.11";
 
-    var rows = Model.Rows ?? new List<MIS.Web.Models.EndOfDay.EndOfDayRowModel>();
+    string generatedAt = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
+    string userId = User.Identity?.Name ?? "Lucky";
+    string version = "2.0.0.11";
 
-    Func<string, MIS.Web.Models.EndOfDay.EndOfDayRowModel?> find = key =>
-        rows.FirstOrDefault(r =>
-            string.Equals(r.Col1?.Trim(), key.Trim(), StringComparison.OrdinalIgnoreCase));
+    // Safe loading
+    var report = Model.Report ?? new EndOfDayReportViewModel();
+    var theoretical = report.TheoreticalIncome ?? new List<TheoreticalIncomeRowViewModel>();
+    var discounts = report.Discounts ?? new DiscountsViewModel();
+    var exempts = report.Exempts ?? new ExemptsViewModel();
+    var other = report.OtherIncome ?? new OtherIncomeViewModel();
+    var recon = report.Reconciliation ?? new ReconciliationViewModel();
+    var totals = report.Totals ?? new EndOfDayTotalsViewModel();
 
-    var traffic = find("Traffic");
-    var nominal = find("Nominal Tariff");
-    var trafficXNominal = find("Traffic x Nominal Tariff");
-    var penalty = find("Cash Penalty");
-    var totalTheoretical = find("TOTAL THEORETICAL INCOME");
+    // Metric lookup
+    var map = theoretical.ToDictionary(
+        x => x.Metric.Trim().ToLower(),
+        x => x
+    );
 
-    var classHeader = rows.FirstOrDefault(r => r.Col8?.Trim() == "Total");
+    TheoreticalIncomeRowViewModel? Get(string key)
+        => map.GetValueOrDefault(key.Trim().ToLower());
+
+    var traffic = Get("traffic");
+    var nominal = Get("nominal tariff");
+    var trafficNominal = Get("traffic x nominal tariff");
+    var penalty = Get("cash penalty");
+    var totalTheoRow = Get("total theoretical income");
+
+    decimal totalTheo = totalTheoRow?.Total ?? ((trafficNominal?.Total ?? 0) + (penalty?.Total ?? 0));
+
+    decimal exemptsTotal = exempts.TotalExemptAmount;
+
+    decimal anonTotal =
+        discounts.ClassM_AnonymousAmount +
+        discounts.ClassI_AnonymousAmount +
+        discounts.ClassII_AnonymousAmount +
+        discounts.ClassIII_AnonymousAmount;
+
+    decimal indivTotal =
+        discounts.ClassM_IndividualAmount +
+        discounts.ClassI_IndividualAmount +
+        discounts.ClassII_IndividualAmount +
+        discounts.ClassIII_IndividualAmount;
+
+    decimal corpTotal =
+        discounts.ClassM_CorporateAmount +
+        discounts.ClassI_CorporateAmount +
+        discounts.ClassII_CorporateAmount +
+        discounts.ClassIII_CorporateAmount;
+
+    decimal staffTotal =
+        discounts.ClassM_StaffAmount +
+        discounts.ClassI_StaffAmount +
+        discounts.ClassII_StaffAmount +
+        discounts.ClassIII_StaffAmount;
+
+    decimal providedTotal = discounts.TotalDiscountAmount;
+
+    decimal totalDiscountedIncome = totalTheo - exemptsTotal - providedTotal;
+
+    decimal totalIncomeA = totals.TotalIncomeA;
+    decimal totalAccountedB = totals.TotalAccountedB;
+    decimal unreconciled = totals.UnreconciledDiscrepancy;
 }
 
 <div class="card shadow-lg p-4 mb-4">
@@ -28,90 +76,327 @@
         <h2 class="fw-bold text-primary text-center mb-0">END OF DAY REPORT</h2>
 
         <div class="position-absolute top-0 end-0 d-flex gap-2">
-            <button id="btnDownloadPdf" class="btn btn-outline-danger btn-sm">
-                <i class="fa fa-file-pdf"></i> Export PDF
-            </button>
-            <button id="btnDownloadExcel" class="btn btn-outline-success btn-sm">
-                <i class="fa fa-file-excel"></i> Export Excel
-            </button>
+            <button id="btnDownloadPdf" class="btn btn-outline-danger btn-sm">PDF</button>
+            <button id="btnDownloadExcel" class="btn btn-outline-success btn-sm">Excel</button>
         </div>
     </div>
 
-    <!-- FILTERS -->
+    <!-- FILTER -->
     <form method="get" asp-action="Index" class="row g-3 mb-4">
         <div class="col-md-3">
-            <label class="form-label fw-semibold">Report Date</label>
+            <label class="form-label fw-semibold">Select Date</label>
             <input type="date"
                    name="reportDate"
                    class="form-control"
-                   value="@(Model.ReportDate?.ToString("yyyy-MM-dd") ?? DateTime.Now.ToString("yyyy-MM-dd"))"
+                   value="@Model.StartDate.ToString("yyyy-MM-dd")"
                    required />
         </div>
 
         <div class="col-md-3 d-flex align-items-end">
-            <button type="submit" class="btn btn-primary w-100 shadow-sm">
-                <i class="bi bi-search"></i> Apply Filter
-            </button>
+            <button class="btn btn-primary w-100 shadow-sm">Apply Filter</button>
         </div>
     </form>
 
+    <!-- DATE SUMMARY -->
+    <div class="mb-4 small">
+        <div><strong>Start Date and Time:</strong> @Model.StartDate.ToString("dd/MM/yyyy hh:mm tt")</div>
+        <div><strong>End Date and Time:</strong> @Model.EndDate.ToString("dd/MM/yyyy hh:mm tt")</div>
+        <div><strong>Operational Day:</strong> @Model.StartDate.ToString("dd MMMM yyyy")</div>
+        <div><strong>Operational Shift:</strong> -All-</div>
+    </div>
+
+    <!-- =========================== -->
+    <!--      THEORETICAL INCOME     -->
+    <!-- =========================== -->
     <h5 class="fw-bold text-secondary mt-4 mb-2">THEORETICAL INCOME</h5>
 
     <div class="table-responsive">
-        <table class="table table-bordered align-middle">
-            <thead class="table-light">
-                <tr class="text-center">
-                    <th></th>
-                    <th>@classHeader?.Col2 </th>
-                    <th>@classHeader?.Col4</th>
-                    <th>@classHeader?.Col5</th>
-                    <th>@classHeader?.Col6</th>
+        <table class="table table-bordered align-middle text-end">
+
+            <thead class="table-light text-center">
+                <tr>
+                    <th class="text-start">Metric</th>
+                    <th>Class M</th>
+                    <th>Class I</th>
+                    <th>Class II</th>
+                    <th>Class III</th>
                     <th>Total</th>
                 </tr>
             </thead>
 
             <tbody>
 
+                <!-- TRAFFIC -->
                 <tr>
-                    <td><strong>Traffic</strong></td>
-                    <td>@traffic?.Col2</td>
-                    <td>@traffic?.Col4</td>
-                    <td>@traffic?.Col5</td>
-                    <td>@traffic?.Col6</td>
-                    <td>@traffic?.Col8</td>
+                    <td class="fw-semibold text-start">Traffic</td>
+                    <td>@traffic?.ClassM.ToString("N0")</td>
+                    <td>@traffic?.ClassI.ToString("N0")</td>
+                    <td>@traffic?.ClassII.ToString("N0")</td>
+                    <td>@traffic?.ClassIII.ToString("N0")</td>
+                    <td>@traffic?.Total.ToString("N0")</td>
                 </tr>
 
+                <!-- NOMINAL TARIFF -->
                 <tr>
-                    <td><strong>Nominal Tariff</strong></td>
-                    <td>@nominal?.Col2</td>
-                    <td>@nominal?.Col4</td>
-                    <td>@nominal?.Col5</td>
-                    <td>@nominal?.Col6</td>
+                    <td class="fw-semibold text-start">Nominal Tariff</td>
+                    <td>@nominal?.ClassM.ToString("N2")</td>
+                    <td>@nominal?.ClassI.ToString("N2")</td>
+                    <td>@nominal?.ClassII.ToString("N2")</td>
+                    <td>@nominal?.ClassIII.ToString("N2")</td>
                     <td></td>
                 </tr>
 
+                <!-- TRAFFIC x NOMINAL -->
                 <tr class="fw-bold">
-                    <td><em>Traffic x Nominal Tariff</em></td>
-                    <td>@trafficXNominal?.Col2</td>
-                    <td>@trafficXNominal?.Col4</td>
-                    <td>@trafficXNominal?.Col5</td>
-                    <td>@trafficXNominal?.Col6</td>
-                    <td>@trafficXNominal?.Col8</td>
+                    <td class="text-start"><em>Traffic × Nominal Tariff</em></td>
+                    <td>@trafficNominal?.ClassM.ToString("N2")</td>
+                    <td>@trafficNominal?.ClassI.ToString("N2")</td>
+                    <td>@trafficNominal?.ClassII.ToString("N2")</td>
+                    <td>@trafficNominal?.ClassIII.ToString("N2")</td>
+                    <td>@trafficNominal?.Total.ToString("N2")</td>
+                </tr>
+
+                <!-- CASH PENALTY -->
+                <tr>
+                    <td class="fw-semibold text-start">Cash Penalty</td>
+                    <td>@penalty?.ClassM.ToString("N2")</td>
+                    <td>@penalty?.ClassI.ToString("N2")</td>
+                    <td>@penalty?.ClassII.ToString("N2")</td>
+                    <td>@penalty?.ClassIII.ToString("N2")</td>
+                    <td>@penalty?.Total.ToString("N2")</td>
+                </tr>
+
+                <!-- TOTAL THEORETICAL -->
+                <tr class="fw-bold table-light">
+                    <td class="text-start">TOTAL THEORETICAL INCOME</td>
+                    <td colspan="4"></td>
+                    <td>@totalTheo.ToString("N2")</td>
+                </tr>
+
+                <!-- LESS EXEMPTS -->
+                <tr>
+                    <td class="fw-semibold text-start">LESS: EXEMPTS</td>
+                    <td>@exempts.ClassM_ExemptAmount.ToString("N2")</td>
+                    <td>@exempts.ClassI_ExemptAmount.ToString("N2")</td>
+                    <td>@exempts.ClassII_ExemptAmount.ToString("N2")</td>
+                    <td>@exempts.ClassIII_ExemptAmount.ToString("N2")</td>
+                    <td>@exemptsTotal.ToString("N2")</td>
+                </tr>
+
+                <!-- DISCOUNT HEADER -->
+                <tr class="table-light fw-bold">
+                    <td colspan="6" class="text-start">LESS: DISCOUNT</td>
+                </tr>
+
+                <!-- Discounts -->
+                <tr>
+                    <td class="text-start">Anonymous 5%</td>
+                    <td>@discounts.ClassM_AnonymousAmount.ToString("N2")</td>
+                    <td>@discounts.ClassI_AnonymousAmount.ToString("N2")</td>
+                    <td>@discounts.ClassII_AnonymousAmount.ToString("N2")</td>
+                    <td>@discounts.ClassIII_AnonymousAmount.ToString("N2")</td>
+                    <td>@(-anonTotal)</td>
                 </tr>
 
                 <tr>
-                    <td><strong>Cash Penalty</strong></td>
-                    <td>@penalty?.Col2</td>
-                    <td>@penalty?.Col3</td>
-                    <td>@penalty?.Col4</td>
-                    <td>@penalty?.Col5</td>
-                    <td>@penalty?.Col8</td>
+                    <td class="text-start">Individual 10%</td>
+                    <td>@discounts.ClassM_IndividualAmount.ToString("N2")</td>
+                    <td>@discounts.ClassI_IndividualAmount.ToString("N2")</td>
+                    <td>@discounts.ClassII_IndividualAmount.ToString("N2")</td>
+                    <td>@discounts.ClassIII_IndividualAmount.ToString("N2")</td>
+                    <td>@(-indivTotal)</td>
+                </tr>
+
+                <tr>
+                    <td class="text-start">Corporate 10%</td>
+                    <td>@discounts.ClassM_CorporateAmount.ToString("N2")</td>
+                    <td>@discounts.ClassI_CorporateAmount.ToString("N2")</td>
+                    <td>@discounts.ClassII_CorporateAmount.ToString("N2")</td>
+                    <td>@discounts.ClassIII_CorporateAmount.ToString("N2")</td>
+                    <td>@(-corpTotal)</td>
+                </tr>
+
+                <tr>
+                    <td class="text-start">Staff 100%</td>
+                    <td>@discounts.ClassM_StaffAmount.ToString("N2")</td>
+                    <td>@discounts.ClassI_StaffAmount.ToString("N2")</td>
+                    <td>@discounts.ClassII_StaffAmount.ToString("N2")</td>
+                    <td>@discounts.ClassIII_StaffAmount.ToString("N2")</td>
+                    <td>@(-staffTotal)</td>
+                </tr>
+
+                <tr class="fw-bold">
+                    <td class="text-start">Discount Provided</td>
+                    <td colspan="4"></td>
+                    <td>@(-providedTotal)</td>
                 </tr>
 
                 <tr class="fw-bold table-light">
-                    <td><strong>TOTAL THEORETICAL INCOME</strong></td>
+                    <td class="text-start">TOTAL DISCOUNTED INCOME</td>
                     <td colspan="4"></td>
-                    <td>@totalTheoretical?.Col8</td>
+                    <td>@totalDiscountedIncome</td>
+                </tr>
+
+            </tbody>
+        </table>
+    </div>
+
+    <!-- ======================= -->
+    <!--       OTHER INCOME      -->
+    <!-- ======================= -->
+    <h5 class="fw-bold text-secondary mt-4 mb-2">OTHER INCOME</h5>
+
+    <div class="table-responsive">
+        <table class="table table-bordered align-middle text-end">
+
+            <tbody>
+
+                <tr class="fw-bold table-light">
+                    <td class="text-start">OTHER INCOME</td>
+                    <td colspan="4"></td>
+                    <td>@other.TotalOtherIncome.ToString("N2")</td>
+                </tr>
+
+                <tr>
+                    <td class="text-start">Account Payments (Top-up)</td>
+                    <td colspan="4"></td>
+                    <td>@other.TotalTopupAmount.ToString("N2")</td>
+                </tr>
+
+                <tr>
+                    <td class="text-start ps-4">Cash</td>
+                    <td colspan="4"></td>
+                    <td>@other.CashTopupAmount.ToString("N2")</td>
+                </tr>
+
+                <tr>
+                    <td class="text-start ps-4">Switch</td>
+                    <td colspan="4"></td>
+                    <td>@other.SwitchTopupAmount.ToString("N2")</td>
+                </tr>
+
+                <tr>
+                    <td class="text-start ps-4">Digital (Electronic Fund Transfer)</td>
+                    <td colspan="4"></td>
+                    <td>@other.DigitalTopupAmount.ToString("N2")</td>
+                </tr>
+
+                <tr>
+                    <td class="text-start">Cash Declared Surplus</td>
+                    <td colspan="4"></td>
+                    <td>@other.CashSurplusShortage.ToString("N2")</td>
+                </tr>
+
+                <tr class="fw-bold table-light">
+                    <td class="text-start">(A) TOTAL INCOME (Toll Income + Other Income)</td>
+                    <td colspan="4"></td>
+                    <td>@totalIncomeA.ToString("N2")</td>
+                </tr>
+
+            </tbody>
+        </table>
+    </div>
+
+    <!-- ======================= -->
+    <!--   ACCOUNTED FOR SECTION -->
+    <!-- ======================= -->
+    <h5 class="fw-bold text-secondary mt-4 mb-2">Accounted for as follows:</h5>
+
+    <div class="table-responsive">
+        <table class="table table-bordered align-middle text-end">
+
+            <tbody>
+
+                <tr>
+                    <td class="text-start">Cash Declared</td>
+                    <td colspan="4"></td>
+                    <td>@recon.CashDeclared.ToString("N2")</td>
+                </tr>
+
+                <tr>
+                    <td class="text-start">Cash Banked</td>
+                    <td colspan="4"></td>
+                    <td>@recon.CashBanked.ToString("N2")</td>
+                </tr>
+
+                <tr>
+                    <td class="text-start">Cash Banked (Surplus) Shortage</td>
+                    <td colspan="4"></td>
+                    <td>@recon.CashSurplusShortage.ToString("N2")</td>
+                </tr>
+
+                <tr>
+                    <td class="text-start">Switch</td>
+                    <td colspan="4"></td>
+                    <td>@recon.SwitchAmount.ToString("N2")</td>
+                </tr>
+
+                <tr>
+                    <td class="text-start">Digital</td>
+                    <td colspan="4"></td>
+                    <td>@recon.DigitalAmount.ToString("N2")</td>
+                </tr>
+
+                <!-- PREPAID SECTION -->
+                <tr class="fw-bold table-light">
+                    <td class="text-start">Pre-Paid Account Transactions</td>
+                    <td colspan="4"></td>
+                    <td>@recon.PrePaidTotal.ToString("N2")</td>
+                </tr>
+
+                <tr>
+                    <td class="text-start ps-4">Smart Card</td>
+                    <td colspan="4"></td>
+                    <td>@recon.SmartCardAmount.ToString("N2")</td>
+                </tr>
+
+                <tr>
+                    <td class="text-start ps-4">ETC TAG</td>
+                    <td colspan="4"></td>
+                    <td>@recon.ETCTagAmount.ToString("N2")</td>
+                </tr>
+
+                <!-- OTHER LANE SECTION -->
+                <tr class="fw-bold table-light">
+                    <td class="text-start">Other Lane Transactions</td>
+                    <td colspan="4"></td>
+                    <td>@recon.OtherLaneTotal.ToString("N2")</td>
+                </tr>
+
+                <tr>
+                    <td class="text-start ps-4">Violation</td>
+                    <td colspan="4"></td>
+                    <td>@recon.ViolationAmount.ToString("N2")</td>
+                </tr>
+
+                <tr>
+                    <td class="text-start ps-4">Exemptions</td>
+                    <td colspan="4"></td>
+                    <td>@recon.ExemptionsAmount.ToString("N2")</td>
+                </tr>
+
+                <tr>
+                    <td class="text-start">Collector Debt</td>
+                    <td colspan="4"></td>
+                    <td>@recon.CollectorDebt.ToString("N2")</td>
+                </tr>
+
+                <tr>
+                    <td class="text-start">Cash Declared Shortages</td>
+                    <td colspan="4"></td>
+                    <td>@recon.CashShortages.ToString("N2")</td>
+                </tr>
+
+                <tr class="fw-bold table-light">
+                    <td class="text-start">(B) TOTAL INCOME AND RECEIPTS ACCOUNTED FOR</td>
+                    <td colspan="4"></td>
+                    <td>@totalAccountedB.ToString("N2")</td>
+                </tr>
+
+                <tr class="fw-bold">
+                    <td class="text-start">UN-RECONCILED DISCREPANCY </td>
+                    <td colspan="4"></td>
+                    <td>@unreconciled.ToString("N2")</td>
                 </tr>
 
             </tbody>
@@ -120,9 +405,12 @@
 
     <!-- FOOTER -->
     <div class="mt-4 p-3 border-top bg-light small">
-        <div><strong>Report Generated At:</strong> @reportGeneratedAt</div>
-        <div><strong>User ID:</strong> @currentUserId</div>
-        <div><strong>Report Version:</strong> @reportVersion</div>
+        <div class="row">
+            <div class="col-md-4"><strong>Date and Time:</strong> @generatedAt</div>
+            <div class="col-md-4"><strong>User ID:</strong> @userId</div>
+            <div class="col-md-4 text-end">Page 1 of 1</div>
+        </div>
+        <div class="mt-2"><strong>Reports Module Version Number:</strong> @version</div>
     </div>
 
 </div>
@@ -130,5 +418,8 @@
 @section Scripts {
     <script>
         console.log("End Of Day Report Loaded");
+
+        document.getElementById("btnDownloadPdf").onclick = () => alert("PDF coming soon");
+        document.getElementById("btnDownloadExcel").onclick = () => alert("Excel coming soon");
     </script>
 }

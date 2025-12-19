@@ -6,7 +6,7 @@
 
     var reportGeneratedAt = DateTime.Now;
     var currentUser = User.Identity?.Name ?? "Lucky";
-    var reportVersion = "2.0.0.11";
+    var reportVersion = "3.0.0.0";
 
     var input = Model.Filters ?? new MIS.Web.Models.Traffic.Daily.DailyTrafficInputModel();
     var classifications = Model.Classifications ?? new List<string>();

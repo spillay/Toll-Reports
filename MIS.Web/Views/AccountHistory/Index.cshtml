@@ -7,7 +7,7 @@
 
     var reportGeneratedAt = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
     var currentUserId = User.Identity?.Name ?? "Lucky";
-    var reportVersion = "2.0.0.11";
+    var reportVersion = "3.0.0.0";
 
     decimal totalAdd = Model?.PageData?.Items?.Sum(i => i.TopUpAmount) ?? 0;
     decimal totalDeduct = Model?.PageData?.Items?.Sum(i => i.TransactionAmount) ?? 0;

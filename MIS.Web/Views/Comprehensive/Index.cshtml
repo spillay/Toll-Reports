@@ -7,7 +7,7 @@
 
     var reportGeneratedAt = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
     var currentUserId = User.Identity?.Name ?? "Unknown User";
-    var reportVersion = "2.0.0.11";
+    var reportVersion = "3.0.0.0";
 
     var grandTotalCount = Model.Items.Count();
     var grandTotalRevenue = Model.Items.Sum(x => x.AmountInclusive);

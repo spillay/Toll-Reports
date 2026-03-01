@@ -1,18 +1,21 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using MIS.Web.Models;
 using MIS.Web.Models.VarientPerfomance;
 using MIS.Web.Services;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace MIS.Web.Controllers
 {
+    [Authorize]
     public class VarientPerfomanceController : Controller
     {
         private readonly IVarientPerfomanceReportService _reportService;
-        private readonly IConfiguration _config;   // 🔥 Needed for dynamic API URL
+        private readonly IConfiguration _config;
 
         public VarientPerfomanceController(
             IVarientPerfomanceReportService reportService,
@@ -23,40 +26,42 @@ namespace MIS.Web.Controllers
         }
 
         public async Task<IActionResult> VarientPerfomances(
-            int page = 1, int pageSize = 10,
-            string? shift = null, string? tollOperatorID = null,
-            DateTime? startDate = null, DateTime? endDate = null)
+     int page = 1, int pageSize = 10,
+     List<string>? operationalShift = null,
+     List<string>? tollOperators = null,
+     DateTime? startDate = null, DateTime? endDate = null)
         {
-            // Default ranges
             startDate ??= DateTime.Today.AddDays(-90);
             endDate ??= DateTime.Today;
 
-            // Convert filters to lists
-            var shifts = string.IsNullOrEmpty(shift) ? null : new List<string> { shift };
-            var operators = string.IsNullOrEmpty(tollOperatorID) ? null : new List<string> { tollOperatorID };
+            // All options (system-wide)
+            ViewBag.AllShifts = await _reportService.GetAllShiftsAsync();
+            ViewBag.AllOperators = await _reportService.GetAllTollOperatorsAsync();
 
-            // Fetch paginated data
+            // Selected (for re-render + export)
+            operationalShift ??= new List<string>();
+            tollOperators ??= new List<string>();
+
+            ViewBag.SelectedShifts = operationalShift;
+            ViewBag.SelectedOperators = tollOperators;
+
+            ViewBag.StartDate = startDate.Value;
+            ViewBag.EndDate = endDate.Value;
+
             var data = await _reportService.GetVarientPerfomanceDetailsAsync(
-                page, pageSize, startDate.Value, endDate.Value, shifts, operators);
+                page, pageSize, startDate.Value, endDate.Value,
+                operationalShift.Any() ? operationalShift : null,
+                tollOperators.Any() ? tollOperators : null);
 
-            // TEMP: Hardcoded (will be replaced with API later)
-            ViewBag.Shifts = new List<string> { "Shift One", "Shift Two", "Shift Three" };
-            ViewBag.TollOperators = new List<string> { "0001", "0002", "0003", "0004", "0005" };
+            var exportData = await _reportService.GetVarientPerfomanceDetailsAsync(
+                1, int.MaxValue, startDate.Value, endDate.Value,
+                operationalShift.Any() ? operationalShift : null,
+                tollOperators.Any() ? tollOperators : null);
 
-            // Pagination
             int totalPages = data.totalCount > 0
                 ? (int)Math.Ceiling((double)data.totalCount / pageSize)
                 : 0;
 
-            // =============================================
-            //  Build dynamic API URL (this fixes all PCs)
-            // =============================================
-            string baseUrl = _config["BaseApiUrl:Link"]; // e.g. http://localhost:4567/
-            string endpoint = _config["ApiSettings:VarientPerformanceEndpoint"]; // e.g. api/VarientPerformance/details
-
-            ViewData["VarientPerformanceApi"] = $"{baseUrl}{endpoint}";
-
-            // Build Razor model
             var model = new VarientPerfomanceInputModel
             {
                 items = data.items ?? new List<VarientPerfomanceModel>(),
@@ -64,10 +69,14 @@ namespace MIS.Web.Controllers
                 page = page,
                 pageSize = pageSize,
                 totalPages = totalPages,
+
                 StartDate = startDate.Value,
                 EndDate = endDate.Value,
-                Shift = shift,
-                TollOperatorID = tollOperatorID
+                OperationalShift = operationalShift,
+                TollOperators = tollOperators,
+
+                // ✅ for exports
+                ExportItems = exportData.items ?? new List<VarientPerfomanceModel>()
             };
 
             return View("Views/VarientPerfomance/Index.cshtml", model);

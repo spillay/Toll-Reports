@@ -5,7 +5,7 @@
     ViewData["Title"] = "Daily Traffic Report";
 
     var reportGeneratedAt = DateTime.Now;
-    var currentUser = User.Identity?.Name ?? "Lucky";
+    var currentUser = @User.FindFirst("firstName")?.Value ?? "Unknown User";
     var reportVersion = "3.0.0.0";
 
     var input = Model.Filters ?? new MIS.Web.Models.Traffic.Daily.DailyTrafficInputModel();
@@ -35,7 +35,7 @@
         </div>
 
         <!-- Filter Form -->
-        @Html.Partial("_DailyTrafficFilters.cshtml", Model.Filters)
+        @await Html.PartialAsync("~/Views/Traffic/Daily/_DailyTrafficFilters.cshtml", Model)
 
         <!-- Data Table -->
         <div class="table-responsive mt-3">
@@ -225,7 +225,7 @@
                         <em>@currentUser</em>
                     </td>
 
-                    <!-- Page X of X -->
+                    <!-- Page 1 of X -->
                     <td style="width: 10%; white-space: nowrap;" class="text-end">
                         Page 1 of 1
                     </td>
@@ -281,20 +281,31 @@
         if (leftLogo) doc.addImage(leftLogo, 'JPEG', margin, logoY, logoWidth, logoHeight);
         if (rightLogo) doc.addImage(rightLogo, 'JPEG', pageWidth - margin - logoWidth, logoY, logoWidth, logoHeight);
 
-        // === TITLE ===
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(16);
-        doc.text("Daily Traffic Report", pageWidth / 2, logoY + 50, { align: "center" });
+             // === TITLE SECTION (Corporate Standard Layout) ===
+            doc.setFont("helvetica", "bold");
+
+            // Main Organisation
+            doc.setFontSize(18);
+            doc.text("LEKKI CONCESSION COMPANY LIMITED", pageWidth / 2, logoY + 35, { align: "center" });
+
+            // Bridge Name
+            doc.setFontSize(14);
+            doc.text("LEKKI-IKOYI LINK BRIDGE", pageWidth / 2, logoY + 55, { align: "center" });
+
+            // Report Name
+            doc.setFontSize(13);
+            doc.text("DAILY TRAFFIC REPORT", pageWidth / 2, logoY + 75, { align: "center" });
+       
 
         // === FILTERS ===
-        const startY = logoY + logoHeight + 20;
+        const startY = logoY + logoHeight + 50;
         doc.setFont("helvetica", "normal");
         doc.setFontSize(10);
 
         const filters = {
             "Start Date": '@Model.Filters.StartDate.ToString("dd/MM/yyyy")',
             "End Date": '@Model.Filters.EndDate.ToString("dd/MM/yyyy")',
-            "Classification": '@(Model.Filters.Classification ?? "All")',
+            "Classification": '@(Model.Filters.ClassificationList != null && Model.Filters.ClassificationList.Any()  ? string.Join(", ", Model.Filters.ClassificationList) : "All")',
             "Operational Day": '@(Model.Filters.OperationalDay ? "Yes" : "No")'
         };
 
@@ -403,18 +414,20 @@
             styles: { fontSize: 9, cellPadding: 4, overflow: 'linebreak' },
             columnStyles: { 0: { cellWidth: 70 }, 1: { cellWidth: 80 } },
             didDrawPage: function () {
-                const pageCount = doc.internal.getNumberOfPages();
-                const currentPage = doc.internal.getCurrentPageInfo().pageNumber;
-                const footerY = pageHeight - 30;
+            const pageCount = doc.internal.getNumberOfPages();
+            const currentPage = doc.internal.getCurrentPageInfo().pageNumber;
+            const footerY = pageHeight - 30;
 
-                doc.setFontSize(10);
-                doc.text("Daily Traffic Report", margin, footerY);
-                doc.text(`Date And Time: ${new Date().toLocaleString()}`, pageWidth / 2.5, footerY);
-                doc.text(`User ID: Lucky`, pageWidth / 1.4, footerY);
-                doc.text(`Page ${currentPage} of ${pageCount}`, pageWidth - margin, footerY, { align: 'right' });
-                doc.setFontSize(9);
-                doc.text("Reports Module Version Number: 2.0.0.11", margin, footerY + 14);
-            }
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(9);
+
+            doc.text("LEKKI CONCESSION COMPANY LIMITED", margin, footerY);
+            doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth / 2.5, footerY);
+            doc.text(`User ID: Lucky`, pageWidth - margin - 120, footerY);
+            doc.text(`Page ${currentPage} of ${pageCount}`, pageWidth - margin, footerY, { align: "right" });
+
+            doc.text("Reports Module Version: 2.0.0.11", margin, footerY + 12);
+        }
         });
 
         doc.save(`Daily_Traffic_Report_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);

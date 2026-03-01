@@ -24,7 +24,7 @@ namespace MIS.Web.Models.Discrepancy
         public int totalPages { get; set; }
 
         public DiscrepancyInputModel Filters { get; set; } = new();
-        public List<DiscrepancyModel> ExportItems { get; set; }
+        public List<DiscrepancyModel> ExportItems { get; set; } = new();
 
         public int TotalRecords => totalCount;
     }

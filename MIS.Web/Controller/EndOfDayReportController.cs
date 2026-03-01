@@ -1,9 +1,11 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using MIS.Web.Models.EndOfDay;
 using MIS.Web.Services.Interfaces;
 
 namespace MIS.Web.Controllers
 {
+    [Authorize]
     public class EndOfDayReportController : Controller
     {
         private readonly IEndOfDayReportService _service;

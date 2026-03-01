@@ -67,7 +67,7 @@ namespace MIS.Web.Services
             // BUILD QUERY PARAMETERS
             var query = new Dictionary<string, string>();
 
-            // 🔥 Only include accountNumber if operational = true
+            // Only include accountNumber if operational = true
             if (operational == true && !string.IsNullOrWhiteSpace(accountNumber))
                 query["accountNumber"] = accountNumber;
 

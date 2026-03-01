@@ -19,7 +19,7 @@ namespace Toll.Reporting.Api.Controllers
         public async Task<IActionResult> GetHourlyTrafficByDate(
          DateTime startDate,
          DateTime endDate,
-         [FromQuery] bool operationalDay = false,  // <-- new filter
+         [FromQuery] bool operationalDay = false, 
          [FromQuery] string? classification = null,
          [FromQuery] string? shifts = null)
         {
@@ -58,6 +58,13 @@ namespace Toll.Reporting.Api.Controllers
             );
 
             return Ok(result);
+        }
+
+        [HttpGet("GetAllClassifications")]
+        public async Task<IActionResult> GetAllClassifications()
+        {
+            var classifications = await _repo.GetAllClassificationsAsync();
+            return Ok(classifications);
         }
 
     }

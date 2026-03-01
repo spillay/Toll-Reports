@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using MIS.Web.Models.AccountUsageSummary;
 using MIS.Web.Services;
 using System;
@@ -6,6 +7,7 @@ using System.Threading.Tasks;
 
 namespace MIS.Web.Controllers
 {
+    [Authorize]
     public class AccountUsageSummaryController : Controller
     {
         private readonly IAccountUsageSummaryService _service;

@@ -1,18 +1,21 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using MIS.Web.Models;
 using MIS.Web.Models.Transaction;
 using MIS.Web.Services;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace MIS.Web.Controllers
 {
+    [Authorize]
     public class TransactionController : Controller
     {
-        private readonly IReportService _reportService;
+        private readonly ITransactionService _reportService;
 
-        public TransactionController(IReportService reportService)
+        public TransactionController(ITransactionService reportService)
         {
             _reportService = reportService;
         }
@@ -22,82 +25,120 @@ namespace MIS.Web.Controllers
         {
             try
             {
-                /* ============================================
-                   1. DEFAULT FILTERS (IF USER ENTERED NONE)
-                =============================================*/
-                if (model.StartDate == default)
-                    model.StartDate = DateTime.Today.AddDays(-30).Date.AddHours(5).AddMinutes(30);
+                ApplyDefaults(model);
+                NormalizeSelections(model);
 
-                if (model.EndDate == default)
-                    model.EndDate = DateTime.Today.Date.AddHours(5).AddMinutes(29);
+                // 1) Load filter options (ALL values in system)
+                await PopulateFilterOptions(model);
 
-                model.page = model.page <= 0 ? 1 : model.page;
-                model.pageSize = model.pageSize <= 0 ? 50 : model.pageSize;
+                // 2) Load paged table data
+                await PopulatePagedData(model);
 
-                /* ============================================
-                   2. LOAD PAGINATED DATA FOR TABLE
-                =============================================*/
-                var data = await _reportService.GetTransactionDetailsAsync(model);
+                // 3) Load full dataset for export (same filters)
+                await PopulateExportData(model);
 
-                model.items = data.items ?? new List<TransactionModel>();
-                model.totalCount = data.totalCount;
-                model.page = data.page;
-                model.pageSize = data.pageSize;
-                model.totalPages = data.totalPages;
+                // 4) Totals based on FULL filtered set (export items)
+                model.TotalTariff = (double)model.ExportItems.Sum(x => x.tariff ?? 0m);
 
-
-                /* ============================================
-                   3. LOAD FULL UNPAGINATED DATA FOR EXPORT
-                =============================================*/
-                var exportModel = new TransactionInputModel
-                {
-                    StartDate = model.StartDate,
-                    EndDate = model.EndDate,
-                    Shift = model.Shift,
-                    TollOperatorID = model.TollOperatorID,
-                    lane_Nr = model.lane_Nr,
-                    PaymentMethod = model.PaymentMethod,
-                    page = 1,
-                    pageSize = 999999, // All data
-                    ExportAll = true
-                };
-
-                var exportData = await _reportService.GetTransactionExportAsync(exportModel);
-                model.ExportItems = exportData.items ?? new List<TransactionModel>();
-
-
-                /* ============================================
-                   4. LOAD FILTER OPTIONS FOR DROPDOWNS
-                =============================================*/
-                var filters = await _reportService.GetTransactionFilterOptionsAsync(model);
-
-                model.Shifts = filters.Shifts;
-                model.TollOperators = filters.TollOperators;
-                model.Lanes = filters.Lanes;
-                model.PaymentMethods = filters.PaymentMethods;
-
-
-                /* ============================================
-                   5. COMPUTE TOTALS
-                =============================================*/
-                model.TotalTariff = (double)(model.items?.Sum(x => (decimal?)x.tariff ?? 0) ?? 0);
-
-
-                /* ============================================
-                   6. RETURN VIEW
-                =============================================*/
                 return View("~/Views/Transaction/Index.cshtml", model);
             }
             catch (Exception ex)
             {
                 Console.WriteLine("❌ ERROR in TransactionController: " + ex.Message);
-
-                return View("~/Views/Transaction/Index.cshtml", new TransactionInputModel
-                {
-                    items = new List<TransactionModel>(),
-                    ExportItems = new List<TransactionModel>()
-                });
+                return View("~/Views/Transaction/Index.cshtml", CreateEmptyModel());
             }
+        }
+
+        private static void ApplyDefaults(TransactionInputModel model)
+        {
+            // Operational day defaults 
+            if (model.StartDate == default)
+                model.StartDate = DateTime.Today.AddDays(-30).Date.AddHours(5).AddMinutes(30);
+
+            if (model.EndDate == default)
+                model.EndDate = DateTime.Today.Date.AddHours(5).AddMinutes(29);
+
+            if (model.EndDate < model.StartDate)
+                model.EndDate = model.StartDate.AddHours(1);
+
+            model.page = model.page <= 0 ? 1 : model.page;
+            model.pageSize = model.pageSize <= 0 ? 50 : model.pageSize;
+        }
+
+        private static void NormalizeSelections(TransactionInputModel model)
+        {
+            model.SelectedShifts = NormalizeList(model.SelectedShifts);
+            model.SelectedTollOperators = NormalizeList(model.SelectedTollOperators);
+            model.SelectedLanes = NormalizeList(model.SelectedLanes);
+            model.SelectedPaymentMethods = NormalizeList(model.SelectedPaymentMethods);
+        }
+
+        private static List<string> NormalizeList(List<string>? list)
+        {
+            return (list ?? new List<string>())
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(x => x.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        private async Task PopulateFilterOptions(TransactionInputModel model)
+        {
+            var filters = await _reportService.GetTransactionFilterOptionsAsync(model);
+
+            model.Shifts = filters.Shifts ?? new List<string>();
+            model.TollOperators = filters.TollOperators ?? new List<string>();
+            model.Lanes = filters.Lanes ?? new List<string>();
+            model.PaymentMethods = filters.PaymentMethods ?? new List<string>();
+        }
+
+        private async Task PopulatePagedData(TransactionInputModel model)
+        {
+            var paged = await _reportService.GetTransactionDetailsAsync(model);
+
+            model.items = paged.items ?? new List<TransactionModel>();
+            model.totalCount = paged.totalCount;
+            model.page = paged.page;
+            model.pageSize = paged.pageSize;
+            model.totalPages = paged.totalPages;
+        }
+
+        private async Task PopulateExportData(TransactionInputModel model)
+        {
+            var exportModel = new TransactionInputModel
+            {
+                StartDate = model.StartDate,
+                EndDate = model.EndDate,
+
+                SelectedShifts = model.SelectedShifts,
+                SelectedTollOperators = model.SelectedTollOperators,
+                SelectedLanes = model.SelectedLanes,
+                SelectedPaymentMethods = model.SelectedPaymentMethods,
+
+                ExportAll = true,
+                page = 1,
+                pageSize = int.MaxValue
+            };
+
+            var export = await _reportService.GetTransactionExportAsync(exportModel);
+            model.ExportItems = export.items ?? new List<TransactionModel>();
+        }
+
+        private static TransactionInputModel CreateEmptyModel()
+        {
+            return new TransactionInputModel
+            {
+                items = new List<TransactionModel>(),
+                ExportItems = new List<TransactionModel>(),
+                Shifts = new List<string>(),
+                TollOperators = new List<string>(),
+                Lanes = new List<string>(),
+                PaymentMethods = new List<string>(),
+                SelectedShifts = new List<string>(),
+                SelectedTollOperators = new List<string>(),
+                SelectedLanes = new List<string>(),
+                SelectedPaymentMethods = new List<string>()
+            };
         }
     }
 }

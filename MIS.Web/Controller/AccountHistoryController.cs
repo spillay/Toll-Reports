@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using MIS.Web.Models.AccountHistory;
 using MIS.Web.Services;
@@ -7,6 +8,7 @@ using System.Threading.Tasks;
 
 namespace MIS.Web.Controllers
 {
+    [Authorize]
     public class AccountHistoryController : Controller
     {
         private readonly IAccountHistoryService _service;

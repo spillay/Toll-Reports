@@ -16,6 +16,20 @@ namespace MIS.Web.Services
             _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         }
 
+        public async Task<List<string>> GetAllClassificationsAsync()
+        {
+            var baseUrl = _configuration["BaseApiUrl:Link"] ?? "";
+            baseUrl = baseUrl.TrimEnd('/'); 
+
+            var url = $"{baseUrl}/api/HourlyTraffic/GetAllClassifications";
+
+            var response = await _httpClient.GetAsync(url);
+            if (!response.IsSuccessStatusCode) return new List<string>();
+
+            var json = await response.Content.ReadAsStringAsync();
+            return JsonConvert.DeserializeObject<List<string>>(json) ?? new List<string>();
+        }
+
         public async Task<PageHourlyTrafficModel> GetTrafficReportAsync(
             DateTime startDate,
             DateTime endDate,
@@ -23,10 +37,6 @@ namespace MIS.Web.Services
             List<int>? shifts = null,
             bool operationalDay = false)
         {
-            // Read API URL from appsettings.json
-           // string baseUrl = _configuration["ApiSettings:HourlyTrafficApiUrl"];
-
-            // Build query parameters
             var queryParams = new List<string>
             {
                 $"startDate={Uri.EscapeDataString(startDate.ToString("MM/dd/yyyy"))}",
@@ -34,17 +44,11 @@ namespace MIS.Web.Services
                 $"operationalDay={operationalDay.ToString().ToLower()}"
             };
 
-
             if (classifications?.Any() == true)
-            {
                 queryParams.Add($"classification={Uri.EscapeDataString(string.Join(",", classifications))}");
-            }
 
             if (shifts?.Any() == true)
-            {
-                // Pass shifts as comma-separated string instead of multiple &shifts=
                 queryParams.Add($"shifts={Uri.EscapeDataString(string.Join(",", shifts))}");
-            }
 
             string baseUrl = _configuration["BaseApiUrl:Link"];
             string endpoint = _configuration["ApiSettings:HourlyTrafficEndpoint"];
@@ -54,7 +58,7 @@ namespace MIS.Web.Services
             {
                 var response = await _httpClient.GetAsync(url);
                 if (!response.IsSuccessStatusCode)
-                    return new PageHourlyTrafficModel(); // empty model if API fails
+                    return new PageHourlyTrafficModel();
 
                 var json = await response.Content.ReadAsStringAsync();
                 var apiResult = JsonConvert.DeserializeObject<List<HourlyTrafficModel>>(json);
@@ -72,8 +76,9 @@ namespace MIS.Web.Services
             }
             catch
             {
-                return new PageHourlyTrafficModel(); // return empty model on exception
+                return new PageHourlyTrafficModel();
             }
         }
+
     }
 }

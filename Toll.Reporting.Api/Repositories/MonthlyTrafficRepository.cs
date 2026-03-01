@@ -20,88 +20,88 @@ namespace Toll.Reporting.Api.Repositories
             List<string>? classifications = null,
             List<int>? shifts = null)
         {
-            bool isOperational = operationalMonth ?? false;
+            var isOperational = operationalMonth ?? false;
 
-            // Determine date range
+            // ✅ Use local time because shifts are business-time rules
+            var now = DateTime.Now;
+
             DateTime start;
-            DateTime end;
+            DateTime endExclusive;
 
             if (year.HasValue && month.HasValue)
             {
                 start = new DateTime(year.Value, month.Value, 1);
-                end = start.AddMonths(1).AddTicks(-1);
+                endExclusive = start.AddMonths(1);
             }
-            else if (year.HasValue) // Full year
+            else if (year.HasValue)
             {
                 start = new DateTime(year.Value, 1, 1);
-                end = start.AddYears(1).AddTicks(-1);
+                endExclusive = start.AddYears(1);
             }
             else
             {
-                // Default to current month
-                var now = DateTime.UtcNow;
                 start = new DateTime(now.Year, now.Month, 1);
-                end = start.AddMonths(1).AddTicks(-1);
+                endExclusive = start.AddMonths(1);
             }
 
-            // 🔹 Base query: All transactions for the selected period
+            // ✅ Operational month boundary (month starts at 05:30)
+            if (isOperational)
+            {
+                start = start.AddHours(5).AddMinutes(30);
+                endExclusive = endExclusive.AddHours(5).AddMinutes(30);
+            }
+
+            // ✅ Base query in SQL
             var query =
-                from t in _context.Transactions
-                join tc in _context.TollClasses
+                from t in _context.Transactions.AsNoTracking()
+                join tc in _context.TollClasses.AsNoTracking()
                     on t.ManualTollClassId equals tc.TollClassId into tcs
                 from tc in tcs.DefaultIfEmpty()
-                where t.TransactionDateTime >= start && t.TransactionDateTime <= end
+                where t.TransactionDateTime >= start
+                   && t.TransactionDateTime < endExclusive
                 select new
                 {
                     t.TransactionDateTime,
-                    ClassDescription = tc.ClassDescription ?? "Unknown"
+                    ClassDescription = (tc != null && tc.ClassDescription != null)
+                        ? tc.ClassDescription
+                        : "Unknown"
                 };
 
-            // 🔹 Classification filter
+            // ✅ Classification filter
             if (classifications != null && classifications.Any())
             {
-                var loweredClasses = classifications.Select(c => c.ToLower()).ToList();
-                query = query.Where(x => loweredClasses.Contains(x.ClassDescription.ToLower()));
+                var normalized = classifications
+                    .Where(c => !string.IsNullOrWhiteSpace(c))
+                    .Select(c => c.Trim().ToLower())
+                    .Distinct()
+                    .ToList();
+
+                query = query.Where(x => normalized.Contains(x.ClassDescription.ToLower()));
             }
 
-            var transactions = await query.ToListAsync();
-
-            // 🔹 Apply operational month filtering using shifts
+            // ✅ Shift filter in SQL (only when operational)
             if (isOperational && shifts != null && shifts.Any())
             {
-                transactions = transactions.Where(t =>
-                {
-                    var hour = t.TransactionDateTime.Hour;
-                    var minute = t.TransactionDateTime.Minute;
-                    bool match = false;
-
-                    foreach (var shift in shifts)
-                    {
-                        switch (shift)
-                        {
-                            case 1: // 05:30 - 13:30
-                                match |= (hour > 5 || (hour == 5 && minute >= 30)) &&
-                                         (hour < 13 || (hour == 13 && minute <= 30));
-                                break;
-
-                            case 2: // 13:30 - 21:30
-                                match |= (hour > 13 || (hour == 13 && minute >= 30)) &&
-                                         (hour < 21 || (hour == 21 && minute <= 30));
-                                break;
-
-                            case 3: // 21:30 - 05:29
-                                match |= hour > 21 || (hour == 21 && minute >= 30) ||
-                                         hour < 5 || (hour == 5 && minute < 30);
-                                break;
-                        }
-                    }
-
-                    return match;
-                }).ToList();
+                query = query.Where(x =>
+                    (shifts.Contains(1) && (
+                        (x.TransactionDateTime.Hour > 5 || (x.TransactionDateTime.Hour == 5 && x.TransactionDateTime.Minute >= 30)) &&
+                        (x.TransactionDateTime.Hour < 13 || (x.TransactionDateTime.Hour == 13 && x.TransactionDateTime.Minute <= 30))
+                    ))
+                    ||
+                    (shifts.Contains(2) && (
+                        (x.TransactionDateTime.Hour > 13 || (x.TransactionDateTime.Hour == 13 && x.TransactionDateTime.Minute >= 30)) &&
+                        (x.TransactionDateTime.Hour < 21 || (x.TransactionDateTime.Hour == 21 && x.TransactionDateTime.Minute <= 30))
+                    ))
+                    ||
+                    (shifts.Contains(3) && (
+                        (x.TransactionDateTime.Hour > 21 || (x.TransactionDateTime.Hour == 21 && x.TransactionDateTime.Minute >= 30)) ||
+                        (x.TransactionDateTime.Hour < 5 || (x.TransactionDateTime.Hour == 5 && x.TransactionDateTime.Minute < 30))
+                    ))
+                );
             }
 
-            // 🔹 Group by Year/Month/Class
-            var grouped = transactions
+            // ✅ Grouping in SQL
+            var grouped = await query
                 .GroupBy(x => new { x.TransactionDateTime.Year, x.TransactionDateTime.Month, x.ClassDescription })
                 .Select(g => new MonthlyTrafficDto
                 {
@@ -114,29 +114,40 @@ namespace Toll.Reporting.Api.Repositories
                 })
                 .OrderBy(x => x.Year)
                 .ThenBy(x => x.Month)
-                .ToList();
+                .ThenBy(x => x.Classification)
+                .ToListAsync();
 
             return grouped;
         }
 
-        // 🔹 Return years dynamically for dropdowns
         public async Task<List<int>> GetAvailableYearsAsync()
         {
-            return await _context.Transactions
+            return await _context.Transactions.AsNoTracking()
                 .Select(t => t.TransactionDateTime.Year)
                 .Distinct()
                 .OrderBy(y => y)
                 .ToListAsync();
         }
 
-        // 🔹 Return months for a given year dynamically
         public async Task<List<int>> GetAvailableMonthsAsync(int year)
         {
-            return await _context.Transactions
+            return await _context.Transactions.AsNoTracking()
                 .Where(t => t.TransactionDateTime.Year == year)
                 .Select(t => t.TransactionDateTime.Month)
                 .Distinct()
                 .OrderBy(m => m)
+                .ToListAsync();
+        }
+        public async Task<List<string>> GetAvailableClassificationsAsync()
+        {
+            return await _context.Transactions.AsNoTracking()
+                .Join(_context.TollClasses.AsNoTracking(),
+                      t => t.ManualTollClassId,
+                      tc => tc.TollClassId,
+                      (t, tc) => tc.ClassDescription)
+                .Where(x => x != null && x != "")
+                .Distinct()
+                .OrderBy(x => x)
                 .ToListAsync();
         }
     }

@@ -44,10 +44,32 @@ namespace Toll.Reporting.Api.Repositories
                 from tc2 in tc2Group.DefaultIfEmpty()
                 join tc3 in _context.TollClasses on t.ActualTollClassId equals tc3.TollClassId into tc3Group
                 from tc3 in tc3Group.DefaultIfEmpty()
+                    //join tpd in _context.TariffPlanDetails
+                    //    on new { t.TariffPlanId, TollClassId = t.ManualTollClassId }
+                    //    equals new { tpd.TariffPlanId, tpd.TollClassId } into tariffGroup
+                    //from tpd in tariffGroup.DefaultIfEmpty()
+
+                    // new (13-02-26) (duplication fix)
+
                 join tpd in _context.TariffPlanDetails
-                    on new { t.TariffPlanId, TollClassId = t.ManualTollClassId }
-                    equals new { tpd.TariffPlanId, tpd.TollClassId } into tariffGroup
-                from tpd in tariffGroup.DefaultIfEmpty()
+                on new
+                {
+                    TariffPlanId = (int?)t.TariffPlanId,
+                    TollClassId = (int?)t.ManualTollClassId,
+                    TransactionTypeId = (int?)t.TransactionTypeId
+                }
+                equals new
+                {
+                    TariffPlanId = (int?)tpd.TariffPlanId,
+                    TollClassId = (int?)tpd.TollClassId,
+                    TransactionTypeId = (int?)tpd.TransactionTypeId
+                } into tariffGroup
+                            from tpd in tariffGroup.DefaultIfEmpty()
+
+
+
+                    // end of duplication fix
+
                 where t.TransactionDateTime >= startDate && t.TransactionDateTime <= endDate
                 select new
                 {
@@ -62,7 +84,7 @@ namespace Toll.Reporting.Api.Repositories
                     Tariff = tpd
                 };
 
-            // ✅ Apply filters safely
+            //  Apply filters safely
             if (operationalShift?.Any() == true && !operationalShift.Contains("-- All --"))
                 query = query.Where(x => x.Shift != null && operationalShift.Contains(x.Shift.Description));
 
@@ -78,7 +100,7 @@ namespace Toll.Reporting.Api.Repositories
             var totalCount = await query.CountAsync();
 
             var items = await query
-                .OrderByDescending(x => x.Transaction.TransactionDateTime)
+                .OrderBy(x => x.Transaction.TransactionDateTime)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .Select(x => new TransactionDetailsDto

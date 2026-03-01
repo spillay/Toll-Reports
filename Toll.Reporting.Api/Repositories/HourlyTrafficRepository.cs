@@ -119,5 +119,19 @@ namespace Toll.Reporting.Api.Repositories
 
             return result;
         }
+        public async Task<List<string>> GetAllClassificationsAsync()
+        {
+            var list = await _context.TollClasses
+                .AsNoTracking()
+                .Select(x => x.ClassDescription)
+                .Where(x => x != null)
+                .Select(x => x!.Trim())
+                .Where(x => x != "")
+                .Distinct()
+                .OrderBy(x => x)
+                .ToListAsync();
+
+            return list;
+        }
     }
 }

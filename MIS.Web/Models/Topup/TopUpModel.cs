@@ -17,9 +17,8 @@ namespace MIS.Web.Models.TopUp
         [JsonProperty("shift")]
         public string? Shift { get; set; }
 
-        // ⭐ Correct operator binding
         [JsonProperty("operator")]
-        public string? TollOperator { get; set; }
+        public string? Operator { get; set; }
 
         [JsonProperty("accountNumber")]
         public string? AccountNumber { get; set; }

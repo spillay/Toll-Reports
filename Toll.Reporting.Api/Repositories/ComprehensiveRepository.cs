@@ -59,9 +59,20 @@ public class ComprehensiveRepository : IComprehensiveRepository
             from tp in tpGroup.DefaultIfEmpty()
 
             join tpd in _context.TariffPlanDetails
-                on new { TariffPlanId = (int?)t.TariffPlanId, TollClassId = (int?)t.ManualTollClassId }
-                equals new { TariffPlanId = (int?)tpd.TariffPlanId, TollClassId = (int?)tpd.TollClassId } into tpdGroup
+    on new
+    {
+        TariffPlanId = (int?)t.TariffPlanId,
+        TollClassId = (int?)t.ManualTollClassId,
+        TransactionTypeId = (int?)t.TransactionTypeId
+    }
+    equals new
+    {
+        TariffPlanId = (int?)tpd.TariffPlanId,
+        TollClassId = (int?)tpd.TollClassId,
+        TransactionTypeId = (int?)tpd.TransactionTypeId
+    } into tpdGroup
             from tpd in tpdGroup.DefaultIfEmpty()
+
 
             where t.TransactionDateTime >= startDate && t.TransactionDateTime <= endDate
 
@@ -69,13 +80,13 @@ public class ComprehensiveRepository : IComprehensiveRepository
             {
                 t.TransactionDateTime,
                 Shift = s.Description,
-                TollOperator = u.Username, // ✅ Use username instead of ID
+                TollOperator = u.Username, 
                 LaneName = l.LaneName,
                 TransactionType = tt.Description,
                 DiscountType = d.Description,
                 ManualClass = tc.ClassDescription,
                 TariffPlanId = t.TariffPlanId,
-                MethodOfPayment = tt.Description, // Using TransactionType as MethodOfPayment
+                MethodOfPayment = tt.Description, 
                 AmountInclusive = tpd.AmountInclusive
             };
 

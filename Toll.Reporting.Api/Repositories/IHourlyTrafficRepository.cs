@@ -12,4 +12,5 @@ public interface IHourlyTrafficRepository
         List<int>? shifts = null,
         bool? operationalDay = null // optional nullable bool
     );
+    Task<List<string>> GetAllClassificationsAsync();
 }

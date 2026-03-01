@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using MIS.Web.Models.DailyCashup;
 using MIS.Web.Services;
 using System;
@@ -7,6 +8,7 @@ using System.Threading.Tasks;
 
 namespace MIS.Web.Controllers
 {
+    [Authorize]
     public class DailyCashupController : Controller
     {
         private readonly IDailyCashupReportService _service;

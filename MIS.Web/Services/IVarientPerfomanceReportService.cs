@@ -14,5 +14,9 @@ namespace MIS.Web.Services
             DateTime endDate,
             List<string>? operationalShift = null,
             List<string>? tollOperators = null);
+
+        // ✅ NEW: dropdown helpers (ALL values, system-wide)
+        Task<List<string>> GetAllShiftsAsync();
+        Task<List<string>> GetAllTollOperatorsAsync();
     }
 }

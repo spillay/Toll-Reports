@@ -28,10 +28,6 @@ namespace MIS.Web.Services
             List<string>? operationalShift = null,
             List<string>? tollOperators = null)
         {
-            //var baseUrl = _configuration["ApiSettings:VarientPerfomanceApiUrl"];
-            //if (string.IsNullOrEmpty(baseUrl))
-            //    throw new InvalidOperationException("VarientPerfomanceApiUrl is not configured in appsettings.json.");
-
             var queryParts = new List<string>
             {
                 $"startDate={Uri.EscapeDataString(startDate.ToString("s"))}",
@@ -42,8 +38,14 @@ namespace MIS.Web.Services
 
             void AddIfAny(string key, List<string>? list)
             {
-                if (list != null && list.Any())
-                    queryParts.Add($"{key}={Uri.EscapeDataString(string.Join(",", list))}");
+                if (list == null || !list.Any())
+                    return;
+
+                // ✅ Repeat query string keys so API binds List<string> correctly
+                foreach (var v in list.Where(x => !string.IsNullOrWhiteSpace(x)))
+                {
+                    queryParts.Add($"{key}={Uri.EscapeDataString(v.Trim())}");
+                }
             }
 
             AddIfAny("operationalShift", operationalShift);
@@ -51,6 +53,13 @@ namespace MIS.Web.Services
 
             string baseUrl = _configuration["BaseApiUrl:Link"];
             string endpoint = _configuration["ApiSettings:VarientPerformanceEndpoint"];
+
+            if (string.IsNullOrWhiteSpace(baseUrl))
+                throw new InvalidOperationException("BaseApiUrl:Link is missing in appsettings.json.");
+
+            if (string.IsNullOrWhiteSpace(endpoint))
+                throw new InvalidOperationException("ApiSettings:VarientPerformanceEndpoint is missing in appsettings.json.");
+
             string url = $"{baseUrl}{endpoint}?{string.Join("&", queryParts)}";
 
             var response = await _httpClient.GetAsync(url);
@@ -59,6 +68,68 @@ namespace MIS.Web.Services
 
             var json = await response.Content.ReadAsStringAsync();
             return JsonConvert.DeserializeObject<PageVarientPerfomanceModel>(json) ?? new PageVarientPerfomanceModel();
+        }
+
+        // =====================================================
+        // ✅ NEW: ALL SHIFTS (system-wide)
+        // =====================================================
+        public async Task<List<string>> GetAllShiftsAsync()
+        {
+            var url = BuildUrlFromConfig("ApiSettings:VarientPerformanceShiftsEndpoint");
+
+            var response = await _httpClient.GetAsync(url);
+            if (!response.IsSuccessStatusCode)
+                return new List<string>();
+
+            var json = await response.Content.ReadAsStringAsync();
+            var result = JsonConvert.DeserializeObject<List<string>>(json) ?? new List<string>();
+
+            return result
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(x => x.Trim())
+                .Distinct()
+                .OrderBy(x => x)
+                .ToList();
+        }
+
+        // =====================================================
+        // ✅ NEW: ALL OPERATORS (system-wide)
+        // =====================================================
+        public async Task<List<string>> GetAllTollOperatorsAsync()
+        {
+            var url = BuildUrlFromConfig("ApiSettings:VarientPerformanceOperatorsEndpoint");
+
+            var response = await _httpClient.GetAsync(url);
+            if (!response.IsSuccessStatusCode)
+                return new List<string>();
+
+            var json = await response.Content.ReadAsStringAsync();
+            var result = JsonConvert.DeserializeObject<List<string>>(json) ?? new List<string>();
+
+            return result
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(x => x.Trim())
+                .Distinct()
+                .OrderBy(x => x)
+                .ToList();
+        }
+
+        // =====================================================
+        // Helper: build full URL from BaseApiUrl + endpoint key
+        // =====================================================
+        private string BuildUrlFromConfig(string endpointKey)
+        {
+            string baseUrl = _configuration["BaseApiUrl:Link"];
+            string endpoint = _configuration[endpointKey];
+
+            if (string.IsNullOrWhiteSpace(baseUrl))
+                throw new InvalidOperationException("BaseApiUrl:Link is missing in appsettings.json.");
+
+            if (string.IsNullOrWhiteSpace(endpoint))
+                throw new InvalidOperationException($"{endpointKey} is missing in appsettings.json.");
+
+            // Ensure no double slashes issues
+            return $"{baseUrl.TrimEnd('/')}/{endpoint.TrimStart('/')}";
         }
     }
 }

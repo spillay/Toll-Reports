@@ -42,5 +42,11 @@ namespace Toll.Reporting.Api.Controllers
                 return Ok(result);
             }
 
+        [HttpGet("GetAllClassifications")]
+        public async Task<IActionResult> GetAllClassifications()
+        {
+            var classifications = await _repo.GetAllClassificationsAsync();
+            return Ok(classifications);
+        }
     }
 }

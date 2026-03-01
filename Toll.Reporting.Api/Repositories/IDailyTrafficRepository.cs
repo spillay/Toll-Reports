@@ -12,5 +12,6 @@ namespace Toll.Reporting.Api.Repositories
             List<int>? shifts = null,
             bool? operationalDay = null
         );
+        Task<List<string>> GetAllClassificationsAsync();
     }
 }

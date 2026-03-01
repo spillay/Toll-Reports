@@ -1,4 +1,6 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using ClosedXML.Excel;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using MIS.Web.Models.Comprehensive;
 using MIS.Web.Services;
 using System;
@@ -6,10 +8,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using ClosedXML.Excel;
 
 namespace MIS.Web.Controllers
 {
+    [Authorize]
     public class ComprehensiveController : Controller
     {
         private readonly IComprehensiveReportService _reportService;

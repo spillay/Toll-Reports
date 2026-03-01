@@ -13,5 +13,10 @@ namespace Toll.Reporting.Api.DTOs
         public string? AccountName { get; set; }
         public double AmountPaid { get; set; }
         public string? MethodOfPayment { get; set; }
+
+        public List<string>? ShiftOptions { get; set; }
+        public List<string>? OperatorOptions { get; set; }
+        public List<string>? LaneOptions { get; set; }
+        public List<string>? PaymentMethodOptions { get; set; }
     }
 }

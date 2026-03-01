@@ -19,6 +19,19 @@ namespace Toll.Reporting.Api.Controllers
             _repo = repo;
             _logger = logger;
         }
+        [HttpGet("shifts")]
+        public async Task<IActionResult> GetShifts()
+        {
+            var shifts = await _repo.GetShiftsAsync();
+            return Ok(shifts);
+        }
+
+        [HttpGet("operators")]
+        public async Task<IActionResult> GetOperators()
+        {
+            var ops = await _repo.GetTollOperatorsAsync();
+            return Ok(ops);
+        }
 
         [HttpGet("details")]
         public async Task<IActionResult> GetVarientPerformanceDetails(

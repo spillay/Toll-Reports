@@ -1,6 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Toll.Reporting.Api.Repositories;
-using Toll.Reporting.Api.Repositories.Interfaces;
 
 namespace Toll.Reporting.Api.Controllers
 {
@@ -15,21 +14,43 @@ namespace Toll.Reporting.Api.Controllers
             _repo = repo;
         }
 
+        // 1. FILTER OPTIONS ENDPOINT (for checkbox lists)
+        [HttpGet("filter-options")]
+        public async Task<IActionResult> GetFilterOptions()
+        {
+            var options = await _repo.GetTopUpFilterOptionsAsync();
+            return Ok(options);
+        }
+
+
+        // 2. REPORT ENDPOINT (checkbox multi-select supported)
         [HttpGet("details")]
         public async Task<IActionResult> GetTopUps(
-            DateTime startDate,
-            DateTime endDate,
-            string? shift = null,
-            string? operatorId = null,
-            string? lane = null,
-            string? accountNumber = null,
-            int page = 1,
-            int pageSize = 30)
+            [FromQuery] DateTime startDate,
+            [FromQuery] DateTime endDate,
+
+            // checkbox multi-select binding
+            [FromQuery] List<string>? shifts = null,
+            [FromQuery] List<string>? operatorIds = null,
+            [FromQuery] List<string>? lanes = null,
+            [FromQuery] List<string>? paymentMethods = null,
+
+            [FromQuery] string? accountNumber = null,
+
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 30
+        )
         {
             var result = await _repo.GetTopUpsAsync(
-                startDate, endDate,
-                shift, operatorId, lane, accountNumber,
-                page, pageSize
+                startDate,
+                endDate,
+                shifts,
+                operatorIds,
+                lanes,
+                paymentMethods,
+                accountNumber,
+                page,
+                pageSize
             );
 
             return Ok(result);

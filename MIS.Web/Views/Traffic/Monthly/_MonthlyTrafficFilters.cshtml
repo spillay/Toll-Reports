@@ -1,154 +1,114 @@
 ﻿@model MIS.Web.Models.Traffic.Monthly.PageMonthlyTrafficModel
 
 @{
-    var classes = Model.Classifications ?? new List<string> { "Class 1", "Class 2", "Class 4", "Class M" };
-    var filters = Model.Filters;
+    var filters = Model.Filters ?? new MIS.Web.Models.Traffic.Monthly.MonthlyTrafficInputModel();
 }
 
 <form method="get" asp-controller="MonthlyTraffic" asp-action="Index" id="filterForm" class="mb-4">
     <div class="row g-3 align-items-end">
 
         <!-- Year -->
-        <div class="col-md-3">
-            <label class="form-label">Year</label>
-            <select name="year" id="yearSelect" class="form-select">
+        <div class="col-md-2">
+            <label class="form-label fw-semibold">Year</label>
+            <select name="year" class="form-select" id="yearSelect">
                 <option value="">- All -</option>
-            </select>
-        </div>
-
-        <!-- Month -->
-        <div class="col-md-3">
-            <label class="form-label">Month</label>
-            <select name="month" id="monthSelect" class="form-select" disabled>
-                <option value="">- All -</option>
-            </select>
-        </div>
-
-        <!-- Operational Month -->
-        <div class="col-md-3">
-            <label class="form-label d-block">Operational Month</label>
-            <div class="form-check form-check-inline">
-                <input class="form-check-input" type="radio" name="operationalMonth" id="opYes" value="true"
-                       @(filters.OperationalMonth ? "checked" : "")>
-                <label class="form-check-label" for="opYes">Yes</label>
-            </div>
-            <div class="form-check form-check-inline">
-                <input class="form-check-input" type="radio" name="operationalMonth" id="opNo" value="false"
-                       @(!filters.OperationalMonth ? "checked" : "")>
-                <label class="form-check-label" for="opNo">No</label>
-            </div>
-        </div>
-
-        <!-- Classification -->
-        <div class="col-md-3">
-            <label class="form-label">Class</label>
-            <select name="classification" class="form-select" id="classificationSelect">
-                <option value="">- All -</option>
-                @foreach (var cls in classes)
+                @foreach (var y in Model.AvailableYears)
                 {
-                    <option value="@cls" selected="@(filters.Classification == cls ? "selected" : "")">@cls</option>
+                    <option value="@y" selected="@(filters.Year == y)">@y</option>
                 }
             </select>
         </div>
 
+        <!-- Month -->
+        <div class="col-md-2">
+            <label class="form-label fw-semibold">Month</label>
+            <select name="month" class="form-select" id="monthSelect" @(filters.Year.HasValue ? "" : "disabled")>
+                <option value="">- All -</option>
+                @foreach (var m in Model.AvailableMonths)
+                {
+                    <option value="@m" selected="@(filters.Month == m)">
+                        @System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(m) (@m)
+                    </option>
+                }
+            </select>
+        </div>
+
+        <!-- Operational Month -->
+        <div class="col-md-2">
+            <div class="form-check mt-4">
+                <input class="form-check-input" type="checkbox"
+                       name="operationalMonth" value="true"
+                       id="operationalMonth"
+                       checked="@(filters.OperationalMonth)" />
+                <label class="form-check-label fw-semibold" for="operationalMonth">Operational Month</label>
+            </div>
+        </div>
+
+        <!-- Classification Checklist -->
+        <div class="col-md-6">
+            <label class="form-label fw-semibold">Classification</label>
+            <div class="border rounded p-2" style="max-height:150px; overflow-y:auto;">
+                @foreach (var cls in Model.AvailableClassifications ?? new List<string>())
+                {
+                    var isChecked = filters.Classifications?.Contains(cls) == true;
+
+                    <div class="form-check">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               name="classification"
+                               value="@cls"
+                               id="cls_@cls.Replace(" ", "_")"
+                               checked="@(isChecked)" />
+                        <label class="form-check-label" for="cls_@cls.Replace(" ", "_")">@cls</label>
+                    </div>
+                }
+            </div>
+        </div>
+
         <!-- Shifts -->
-        <div class="col-12 mt-2">
-            <label class="form-label">Shifts</label>
-            <div id="shiftsContainer" class="mb-3">
+        <div class="col-md-4">
+            <label class="form-label fw-semibold">Shifts</label>
+            <div>
                 @for (int i = 1; i <= 3; i++)
                 {
+                    var isChecked = filters.Shifts?.Contains(i) == true;
+
                     <div class="form-check form-check-inline">
-                        <input class="form-check-input shift-checkbox" type="checkbox" name="shifts" value="@i" id="shift@i"
-                               @(filters.Shifts?.Contains(i) == true ? "checked" : "") @(filters.OperationalMonth ? "" : "disabled")>
-                        <label class="form-check-label" for="shift@i">Shift @i</label>
+                        <input class="form-check-input shift-checkbox"
+                               type="checkbox"
+                               name="shifts"
+                               value="@i"
+                               id="shift_@i"
+                               checked="@(isChecked)"
+                               disabled="@(!filters.OperationalMonth)" />
+                        <label class="form-check-label" for="shift_@i">Shift @i</label>
                     </div>
                 }
             </div>
         </div>
 
         <!-- Submit -->
-        <div class="col-md-3">
+        <div class="col-md-2">
             <button type="submit" class="btn btn-primary w-100">Filter</button>
         </div>
-
     </div>
 </form>
 
+<script>
+    // Enable/disable shifts when operational month toggles
+    (function () {
+        const op = document.getElementById('operationalMonth');
+        const shiftBoxes = document.querySelectorAll('.shift-checkbox');
 
-    <script>
-        (function () {
-            const yearSelect = document.getElementById('yearSelect');
-            const monthSelect = document.getElementById('monthSelect');
-            const opYes = document.getElementById('opYes');
-            const opNo = document.getElementById('opNo');
-            const shiftBoxes = document.querySelectorAll('.shift-checkbox');
-            const filterForm = document.getElementById('filterForm');
-
-            const initialYear = parseInt('@(filters.Year?.ToString() ?? "0")', 10) || 0;
-            const initialMonth = parseInt('@(filters.Month?.ToString() ?? "0")', 10) || 0;
-            const baseApi = '@Url.Action("GetMonthlyTrafficApi", "MonthlyTraffic")'; // adjust to your API endpoint
-
-            async function loadYears() {
-                try {
-                    const res = await fetch(`${baseApi}/years`);
-                    if (!res.ok) return;
-                    const years = await res.json();
-                    yearSelect.innerHTML = '<option value="">- All -</option>';
-                    years.forEach(y => {
-                        const opt = document.createElement('option');
-                        opt.value = y;
-                        opt.textContent = y;
-                        if(initialYear === y) opt.selected = true;
-                        yearSelect.appendChild(opt);
-                    });
-                    if(initialYear) await loadMonths(initialYear);
-                } catch(e){ console.error(e); }
-            }
-
-            async function loadMonths(year) {
-                monthSelect.disabled = true;
-                monthSelect.innerHTML = '<option value="">- All -</option>';
-                if(!year) return;
-                try {
-                    const res = await fetch(`${baseApi}/months/${year}`);
-                    if(!res.ok) return;
-                    const months = await res.json();
-                    months.forEach(m => {
-                        const opt = document.createElement('option');
-                        opt.value = m;
-                        opt.textContent = new Date(2000, m-1, 1).toLocaleString(undefined,{month:'long'}) + ` (${m})`;
-                        if(initialMonth === m) opt.selected = true;
-                        monthSelect.appendChild(opt);
-                    });
-                    monthSelect.disabled = false;
-                } catch(e){ console.error(e); }
-            }
-
-            function toggleShifts() {
-                const isOp = opYes.checked;
-                shiftBoxes.forEach(cb => cb.disabled = !isOp);
-            }
-
-            filterForm.addEventListener('submit', function() {
-                // Send checked shifts as a comma-separated hidden input
-                const existing = filterForm.querySelectorAll('input[type=hidden][name=shifts]');
-                existing.forEach(n => n.remove());
-                const checked = Array.from(shiftBoxes).filter(cb => cb.checked).map(cb => cb.value);
-                if(checked.length){
-                    const hidden = document.createElement('input');
-                    hidden.type = 'hidden';
-                    hidden.name = 'shifts';
-                    hidden.value = checked.join(',');
-                    filterForm.appendChild(hidden);
-                }
-                shiftBoxes.forEach(cb => cb.disabled = false);
+        function sync() {
+            const enabled = op.checked;
+            shiftBoxes.forEach(cb => {
+                cb.disabled = !enabled;
+                if (!enabled) cb.checked = false;
             });
+        }
 
-            yearSelect.addEventListener('change', () => loadMonths(parseInt(yearSelect.value) || 0));
-            opYes.addEventListener('change', toggleShifts);
-            opNo.addEventListener('change', toggleShifts);
-
-            toggleShifts();
-            loadYears();
-        })();
-    </script>
+        op?.addEventListener('change', sync);
+        sync();
+    })();
+</script>

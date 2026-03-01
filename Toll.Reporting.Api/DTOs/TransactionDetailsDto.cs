@@ -6,7 +6,7 @@
     public class TransactionDetailsDto
     {
         // -----------------------------
-        // ✅ Transaction Data Fields
+        // Transaction Data Fields
         // -----------------------------
         public int Lane_Nr { get; set; }
         public string Trx_Sequence_Nr { get; set; }

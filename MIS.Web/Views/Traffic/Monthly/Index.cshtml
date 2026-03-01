@@ -3,24 +3,32 @@
 @using System.Linq
 
 @{
-    var input = ViewBag.InputModel as MIS.Web.Models.Traffic.Monthly.MonthlyTrafficInputModel
-                ?? new MIS.Web.Models.Traffic.Monthly.MonthlyTrafficInputModel();
-    var classifications = ViewBag.Classifications as List<string> ?? new List<string>();
+    var filters = Model?.Filters ?? new MIS.Web.Models.Traffic.Monthly.MonthlyTrafficInputModel();
 
-    // Common footer + PDF meta
+    // ✅ Use DB/API-driven list from your page model
+    var classifications = Model?.AvailableClassifications ?? new List<string>();
+
+    // Common footer + export meta
     var reportGeneratedAt = DateTime.Now;
-    var currentUser = User.Identity?.Name ?? "Lucky";
+    var currentUser = @User.FindFirst("firstName")?.Value ?? "Unknown User";
     var reportVersion = "3.0.0.0";
 
-    // Filters for PDF "Filters Used" section
-    string filterYear = input.Year?.ToString() ?? "All";
-    string filterMonth = input.Month.HasValue
-        ? CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(input.Month.Value)
+    // Filters for "Filters Used" (PDF/Excel)
+    string filterYear = filters.Year?.ToString() ?? "All";
+
+    string filterMonth = filters.Month.HasValue
+        ? CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(filters.Month.Value)
         : "All";
-    string filterOperationalMonth = input.OperationalMonth ? "Yes" : "No";
-    string filterClass = string.IsNullOrEmpty(input.Classification) ? "All" : input.Classification;
-    string filterShifts = (input.Shifts != null && input.Shifts.Any())
-        ? string.Join(", ", input.Shifts)
+
+    string filterOperationalMonth = filters.OperationalMonth ? "Yes" : "No";
+
+    // ✅ Multi-select checklist display
+    string filterClass = (filters.Classifications != null && filters.Classifications.Any())
+        ? string.Join(", ", filters.Classifications)
+        : "All";
+
+    string filterShifts = (filters.Shifts != null && filters.Shifts.Any())
+        ? string.Join(", ", filters.Shifts)
         : "All";
 }
 
@@ -55,12 +63,9 @@
                     <label class="form-label">Year</label>
                     <select name="year" id="yearSelect" class="form-select">
                         <option value="">- All -</option>
-                        @if (ViewBag.Years != null)
+                        @foreach (var y in Model.AvailableYears)
                         {
-                            foreach (var y in ViewBag.Years as List<int>)
-                            {
-                                <option value="@y" selected="@(y == (input.Year ?? 0) ? "selected" : null)">@y</option>
-                            }
+                            <option value="@y" selected="@(filters.Year == y)">@y</option>
                         }
                     </select>
                 </div>
@@ -68,60 +73,92 @@
                 <!-- Month -->
                 <div class="col-md-3">
                     <label class="form-label">Month</label>
-                    <select name="month" id="monthSelect" class="form-select" @(((ViewBag.Months as List<int>)?.Count ?? 0) == 0 ? "disabled" : "")>
+                    <select name="month" id="monthSelect" class="form-select" @(filters.Year.HasValue ? "" : "disabled")>
                         <option value="">- All -</option>
-                        @if (ViewBag.Months != null)
+                        @foreach (var m in Model.AvailableMonths)
                         {
-                            foreach (var m in ViewBag.Months as List<int>)
-                            {
-                                <option value="@m" selected="@(m == (input.Month ?? 0) ? "selected" : null)">
-                                    @CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(m)
-                                </option>
-                            }
+                            <option value="@m" selected="@(filters.Month == m)">
+                                @CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(m)
+                            </option>
                         }
                     </select>
                 </div>
-                <!-- Classification -->
-                <div class="col-md-3">
-                    <label class="form-label">Class</label>
-                    <select name="classification" class="form-select" id="classificationSelect">
-                        <option value="">- All -</option>
-                        <option value="Class 1">Class 1</option>
-                        <option value="Class 2">Class 2</option>
-                        <option value="Class 4">Class 4</option>
-                        <option value="Class M">Class M</option>
-                    </select>
+                <!-- Classification Checklist (Multi-Select) -->
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Classification</label>
+
+                    <div class="border rounded p-2" style="max-height:150px; overflow-y:auto;">
+                        @foreach (var cls in classifications)
+                        {
+                            var isChecked = filters.Classifications?.Contains(cls) == true;
+
+                            <div class="form-check">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       name="classification"
+                                       value="@cls"
+                                       id="cls_@cls.Replace(" ", "_")"
+                                       checked="@(isChecked)" />
+
+                                <label class="form-check-label" for="cls_@cls.Replace(" ", "_")">
+                                    @cls
+                                </label>
+                            </div>
+                        }
+                    </div>
                 </div>
 
                 <!-- Operational Month -->
                 <div class="col-md-3">
-                    <label class="form-label d-block">Operational Month</label>
+                    <label class="form-label fw-semibold d-block">Operational Month</label>
+
                     <div class="form-check form-check-inline">
-                        <input class="form-check-input" type="radio" name="operationalMonth" id="opYes" value="true" @(input.OperationalMonth ? "checked" : "")>
+                        <input class="form-check-input"
+                               type="radio"
+                               name="operationalMonth"
+                               id="opYes"
+                               value="true"
+                               checked="@(filters.OperationalMonth)" />
+
                         <label class="form-check-label" for="opYes">Yes</label>
                     </div>
+
                     <div class="form-check form-check-inline">
-                        <input class="form-check-input" type="radio" name="operationalMonth" id="opNo" value="false" @(!input.OperationalMonth ? "checked" : "")>
+                        <input class="form-check-input"
+                               type="radio"
+                               name="operationalMonth"
+                               id="opNo"
+                               value="false"
+                               checked="@(!filters.OperationalMonth)" />
+
                         <label class="form-check-label" for="opNo">No</label>
                     </div>
                 </div>
 
                 <!-- Shifts -->
                 <div class="col-12 mt-2">
-                    <label class="form-label">Operational Shifts</label>
-                    <div id="shiftsContainer" class="mb-3">
+                    <label class="form-label fw-semibold">Operational Shifts</label>
+                    <div class="mb-3">
                         @for (int i = 1; i <= 3; i++)
                         {
+                            var isChecked = filters.Shifts?.Contains(i) == true;
+
                             <div class="form-check form-check-inline">
-                                <input class="form-check-input shift-checkbox" type="checkbox" name="shifts" value="@i" id="shift@i"
-                                       @(input.Shifts.Contains(i) ? "checked" : "") @(input.OperationalMonth ? "" : "disabled")>
+                                <input class="form-check-input shift-checkbox"
+                                       type="checkbox"
+                                       name="shifts"
+                                       value="@i"
+                                       id="shift@i"
+                                       checked="@(isChecked)"
+                                       disabled="@(!filters.OperationalMonth)" />
+
                                 <label class="form-check-label" for="shift@i">
                                     Shift @i
                                 </label>
                             </div>
                         }
+                      </div>
                     </div>
-                </div>
 
                 <div class="col-md-3">
                     <button type="submit" class="btn btn-primary w-100">Filter</button>
@@ -410,14 +447,17 @@
 
                 // Header Title
                 doc.setFont("helvetica", "bold");
+
                 doc.setFontSize(14);
                 doc.text("LEKKI CONCESSION COMPANY LIMITED", pageWidth / 2, logoY + 20, { align: "center" });
 
                 doc.setFontSize(12);
-                doc.text("Monthly Traffic Report", pageWidth / 2, logoY + 45, { align: "center" });
+                doc.text("LEKKI-IKOYI LINK BRIDGE", pageWidth / 2, logoY + 40, { align: "center" });
 
-                // Filters Used
-                let y = logoY + logoSize + 25;
+                doc.setFontSize(12);
+                doc.text("MONTHLY TRAFFIC REPORT", pageWidth / 2, logoY + 60, { align: "center" });
+                        // Filters Used
+                let y = logoY + logoSize + 35;
                 doc.setFontSize(10);
                 doc.setFont("helvetica", "normal");
                 doc.text("Filters Used:", margin, y);

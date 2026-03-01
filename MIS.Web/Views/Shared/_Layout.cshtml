@@ -94,8 +94,34 @@
                         LEKKI-IKOYI LINK BRIDGE
                     </h3>
                 </div>
-                <div>
-                    <img src="~/images/ICT-Works Logo.jpg" alt="ICT Works Logo" style="height: 100px; width 100px;" />
+                <div class="d-flex align-items-center">
+
+                    @if (User.Identity != null && User.Identity.IsAuthenticated)
+                    {
+                        <div class="me-3 text-end">
+                            <div class="fw-bold text-dark">
+                                @User.FindFirst("firstName")?.Value
+                            </div>
+                            <small class="text-muted">
+                                @User.Identity.Name
+                            </small>
+                        </div>
+
+                        <form asp-controller="Login"
+                              asp-action="Logout"
+                              method="post"
+                              class="me-3">
+                            @Html.AntiForgeryToken()
+                            <button type="submit"
+                                    class="btn btn-outline-danger btn-sm">
+                                Logout
+                            </button>
+                        </form>
+                    }
+
+                    <img src="~/images/ICT-Works Logo.jpg"
+                         alt="ICT Works Logo"
+                         style="height: 100px; width: 100px;" />
                 </div>
             </div>
         </nav>

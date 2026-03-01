@@ -1,4 +1,5 @@
 ﻿
+using Microsoft.AspNetCore.Authentication.Cookies;
 using MIS.Web.Services;
 using MIS.Web.Services.Interfaces;
 using OfficeOpenXml;
@@ -18,7 +19,7 @@ builder.Services.AddRazorPages();
 builder.Services.AddControllers();
 
 // Register API services
-builder.Services.AddHttpClient<IReportService, ReportService>();
+builder.Services.AddHttpClient<ITransactionService, TransactionService>();
 builder.Services.AddHttpClient<IDiscrepancyReportService, DiscrepancyReportService>();
 builder.Services.AddScoped<IComprehensiveReportService, ComprehensiveReportService>();
 builder.Services.AddScoped<IVarientPerfomanceReportService, VarientPerfomanceReportService>();
@@ -32,8 +33,23 @@ builder.Services.AddHttpClient<IAccountHistoryService, AccountHistoryService>();
 builder.Services.AddScoped<IAccountUsageSummaryService, AccountUsageSummaryService>();
 builder.Services.AddHttpClient<IAccountUsageDetailsService, AccountUsageDetailsService>();
 builder.Services.AddHttpClient<IEndOfDayReportService, EndOfDayReportService>();
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.LoginPath = "/Login/Login";
+        options.AccessDeniedPath = "/Login/Login";
 
+        options.Cookie.Name = "MIS.Reports.Auth";
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SameSite = SameSiteMode.Lax;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest; // change to Always when HTTPS
 
+        options.ExpireTimeSpan = TimeSpan.FromMinutes(20);
+        options.SlidingExpiration = true;
+    });
+
+builder.Services.AddAuthorization();
+builder.Services.AddHttpClient();
 
 builder.Services.AddWindowsService();
 
@@ -57,6 +73,7 @@ if (!app.Environment.IsDevelopment())
 app.UseStaticFiles();
 app.UseCors("AllowAll");
 app.UseRouting();
+app.UseAuthentication();
 app.UseAuthorization();
 
 

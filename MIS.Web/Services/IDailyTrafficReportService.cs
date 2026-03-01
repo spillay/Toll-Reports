@@ -14,5 +14,7 @@ namespace MIS.Web.Services
             List<int>? shifts = null,
             bool operationalDay = false
         );
+        Task<List<string>> GetAllClassificationsAsync();
+    
     }
 }

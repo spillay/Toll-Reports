@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-#nullable disable
+
 
 namespace MIS.Models
 {
@@ -9,6 +9,8 @@ namespace MIS.Models
     {
         public int TariffPlanId { get; set; }
         public byte TollClassId { get; set; }
+
+        public int TransactionTypeId { get; set; } // Added 13_feb_2026
         public double AmountInclusive { get; set; }
         public double Vat { get; set; }
         public double DiscountAmount { get; set; }

@@ -136,7 +136,7 @@ namespace Toll.Reporting.Api.Repositories
         public async Task<IEnumerable<string>> GetShiftsAsync()
         {
             return await _context.Shifts
-                .Select(s => s.Description)
+                .Select(s => s.ShiftId.ToString())
                 .Where(s => s != null)
                 .Distinct()
                 .OrderBy(s => s)

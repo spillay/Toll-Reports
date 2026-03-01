@@ -1,71 +1,88 @@
-﻿@model MIS.Web.Models.Traffic.Hourly.HourlyTrafficInputModel
+﻿@model MIS.Web.Models.Traffic.Hourly.PageHourlyTrafficModel
 
 @{
-    var classes = new List<string> { "Class 1", "Class 2", "Class 4", "Class M" };
+    var input = Model.Input ?? new MIS.Web.Models.Traffic.Hourly.HourlyTrafficInputModel();
+    var classes = Model.Classifications ?? new List<string>();
+
+    var selected = (input.Classification ?? "")
+        .Split(',', StringSplitOptions.RemoveEmptyEntries)
+        .Select(x => x.Trim())
+        .ToHashSet(StringComparer.OrdinalIgnoreCase);
 }
 
 <form method="get" asp-controller="Traffic" asp-action="HourlyReport" id="filterForm" class="mb-4">
     <div class="row g-3 align-items-end">
 
-        @* <!-- Start Date -->
-        <div class="col-md-3">
-            <label class="form-label">Start Date</label>
-            <input type="date" name="startDate" class="form-control"
-                   value="@Model.StartDate.ToString("yyyy-MM-dd")" />
-        </div>
-
-        <!-- End Date -->
-        <div class="col-md-3">
-            <label class="form-label">End Date</label>
-            <input type="date" name="endDate" class="form-control"
-                   value="@Model.EndDate.ToString("yyyy-MM-dd")" />
-        </div> *@
-
+        <!-- Start DateTime -->
         <div class="col-md-3">
             <label class="form-label fw-semibold">Start Date And Time</label>
             <input type="datetime-local" name="startDate" class="form-control"
-                   value="@Model.StartDate.ToString("yyyy-MM-ddTHH:mm")" />
+                   value="@input.StartDate.ToString("yyyy-MM-ddTHH:mm")" />
         </div>
+
+        <!-- End DateTime -->
         <div class="col-md-3">
             <label class="form-label fw-semibold">End Date And Time</label>
             <input type="datetime-local" name="endDate" class="form-control"
-                   value="@Model.EndDate.ToString("yyyy-MM-ddTHH:mm")" />
+                   value="@input.EndDate.ToString("yyyy-MM-ddTHH:mm")" />
         </div>
 
-        <!-- Classification -->
+        <!-- Classes (Checklist) - SAME COL SIZE -->
         <div class="col-md-3">
-            <label class="form-label">Class </label>
-            <select name="classification" class="form-select">
-                <option value="">All</option>
-                @foreach (var cls in classes)
+            <label class="form-label fw-semibold">Class</label>
+
+            <div class="border rounded p-2" style="max-height: 180px; overflow-y: auto;">
+                @if (classes.Any())
                 {
-                    <option value="@cls" selected="@(Model.Classification == cls ? "selected" : null)">@cls</option>
+                    foreach (var cls in classes)
+                    {
+                        var isChecked = selected.Contains(cls);
+                        var safeId = "cls_" + cls.Replace(" ", "_").Replace("/", "_").Replace("-", "_");
+
+                        <div class="form-check">
+                            <input class="form-check-input class-checkbox"
+                                   type="checkbox"
+                                   id="@safeId"
+                                   value="@cls"
+                                   @(isChecked ? "checked" : "") />
+                            <label class="form-check-label" for="@safeId">@cls</label>
+                        </div>
+                    }
                 }
-            </select>
+                else
+                {
+                    <div class="text-muted small">No classifications found.</div>
+                }
+            </div>
+
+            <!-- Hidden input sent to controller as CSV -->
+            <input type="hidden" name="classification" id="classificationHidden" value="@input.Classification" />
         </div>
 
         <!-- Operational Day -->
         <div class="col-md-3">
-            <label class="form-label d-block">Operational Day</label>
+            <label class="form-label d-block fw-semibold">Operational Day</label>
+
             <div class="form-check form-check-inline">
                 <input class="form-check-input" type="radio" name="operationalDay"
-                       id="opYes" value="true" @(Model.OperationalDay ? "checked" : "")>
+                       id="opYes" value="true" @(input.OperationalDay ? "checked" : "")>
                 <label class="form-check-label" for="opYes">Yes</label>
             </div>
+
             <div class="form-check form-check-inline">
                 <input class="form-check-input" type="radio" name="operationalDay"
-                       id="opNo" value="false" @(!Model.OperationalDay ? "checked" : "")>
+                       id="opNo" value="false" @(!input.OperationalDay ? "checked" : "")>
                 <label class="form-check-label" for="opNo">No</label>
             </div>
         </div>
 
         <!-- Shifts -->
         <div class="col-12 mt-2">
-            <label class="form-label">Operational Shift</label>
+            <label class="form-label fw-semibold">Operational Shift</label>
             <div id="shiftsContainer" class="mb-3">
                 @for (int i = 1; i <= 3; i++)
                 {
-                    var shiftChecked = Model.Shifts?.Contains(i) == true ? "checked" : "";
+                    var shiftChecked = input.Shifts?.Contains(i) == true ? "checked" : "";
                     <div class="form-check form-check-inline">
                         <input class="form-check-input shift-checkbox"
                                type="checkbox" name="shifts" value="@i" id="shift@i" @shiftChecked>
@@ -84,12 +101,37 @@
 
 <script>
     document.addEventListener("DOMContentLoaded", function () {
+
+        // === Build comma-separated classification list for backend ===
+        const form = document.getElementById("filterForm");
+        const hidden = document.getElementById("classificationHidden");
+
+        function syncClassesToHidden() {
+            const checked = Array.from(document.querySelectorAll(".class-checkbox:checked"))
+                .map(x => x.value.trim());
+            hidden.value = checked.join(",");
+        }
+
+        if (form && hidden) {
+            document.querySelectorAll(".class-checkbox").forEach(cb => {
+                cb.addEventListener("change", syncClassesToHidden);
+            });
+
+            form.addEventListener("submit", function () {
+                syncClassesToHidden();
+            });
+
+            // ✅ sync on load
+            syncClassesToHidden();
+        }
+
+        // === Operational day shift enable/disable (same behavior) ===
         const opYes = document.getElementById("opYes");
         const opNo = document.getElementById("opNo");
         const shiftCheckboxes = document.querySelectorAll(".shift-checkbox");
 
         function toggleShifts() {
-            const enable = opYes?.checked;
+            const enable = opYes && opYes.checked;
             shiftCheckboxes.forEach(cb => {
                 cb.disabled = !enable;
                 if (!enable) cb.checked = false;
@@ -103,4 +145,3 @@
         }
     });
 </script>
-

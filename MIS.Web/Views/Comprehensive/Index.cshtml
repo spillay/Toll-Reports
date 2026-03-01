@@ -6,7 +6,7 @@
     ViewData["Title"] = "Comprehensive Report";
 
     var reportGeneratedAt = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
-    var currentUserId = User.Identity?.Name ?? "Unknown User";
+    var currentUserId = @User.FindFirst("firstName")?.Value ?? "Unknown User";
     var reportVersion = "3.0.0.0";
 
     var grandTotalCount = Model.Items.Count();
@@ -172,17 +172,17 @@
 
                                     <td>
                                         @data.Count<br />
-                                        @classCountPercent.ToString("0.##")<br />
+                                        @classCountPercent.ToString("0.##")%<br />
                                         @data.Revenue.ToString("N2")<br />
-                                        @classRevenuePercent.ToString("0.##")
+                                        @classRevenuePercent.ToString("0.##")%
                                     </td>
                                 }
 
                                 <td>
                                     @rowTotalCount<br />
-                                    @rowCountPercent.ToString("0.##")<br />
+                                    @rowCountPercent.ToString("0.##")%<br />
                                     @rowTotalRevenue.ToString("N2")<br />
-                                    @rowRevenuePercent.ToString("0.##")
+                                    @rowRevenuePercent.ToString("0.##")%
                                 </td>
                             </tr>
                         }
@@ -227,7 +227,7 @@
                 <tr>
                     <td class="fw-bold text-dark"> Report Name: Comprehensive Report</td>
                     <td><strong>Date and Time:</strong> @reportGeneratedAt</td>
-                    <td><strong>User ID:</strong> @currentUserId</td>
+                    <td><strong>User:</strong>  @User.FindFirst("firstName")?.Value</td>
                     <td class="text-end">Page <strong>1</strong> of <strong>1</strong></td>
                 </tr>
                 <tr>

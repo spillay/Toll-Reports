@@ -18,75 +18,94 @@ namespace MIS.Web.Services
             _httpClient = httpClient;
             _configuration = configuration;
         }
-
-        public async Task<PageDailyTrafficModel> GetTrafficReportAsync(
-        DateTime startDate,
-        DateTime endDate,
-        List<string>? classifications = null,
-        List<int>? shifts = null,
-        bool operationalDay = false)
-            {
-                // Read from appsettings.json instead of hardcoding
-                //string baseUrl = _configuration["ApiSettings:DailyTrafficApiUrl"];
-
-                var queryParams = new List<string>
+        private static string CombineUrl(string baseUrl, string endpoint)
         {
-            $"startDate={Uri.EscapeDataString(startDate.ToString("yyyy-MM-dd"))}",
-            $"endDate={Uri.EscapeDataString(endDate.ToString("yyyy-MM-dd"))}",
-            $"operationalDay={operationalDay.ToString().ToLower()}"
-        };
-            
+            baseUrl = (baseUrl ?? "").TrimEnd('/');
+            endpoint = (endpoint ?? "").TrimStart('/');
+            return $"{baseUrl}/{endpoint}";
+        }
+        public async Task<PageDailyTrafficModel> GetTrafficReportAsync(
+    DateTime startDate,
+    DateTime endDate,
+    List<string>? classifications = null,
+    List<int>? shifts = null,
+    bool operationalDay = false)
+        {
+            var queryParams = new List<string>
+    {
+        $"startDate={Uri.EscapeDataString(startDate.ToString("yyyy-MM-dd"))}",
+        $"endDate={Uri.EscapeDataString(endDate.ToString("yyyy-MM-dd"))}",
+        $"operationalDay={operationalDay.ToString().ToLower()}"
+    };
 
-            if (classifications?.Count > 0)
-                {
-                    queryParams.Add($"classification={Uri.EscapeDataString(classifications.First())}");
-                }
+            // ✅ send multiple classes as CSV
+            if (classifications?.Any() == true)
+            {
+                queryParams.Add($"classification={Uri.EscapeDataString(string.Join(",", classifications))}");
+            }
 
-                if (operationalDay && shifts?.Count > 0)
-                {
-                    var joined = string.Join(",", shifts);
-                    queryParams.Add($"shifts={Uri.EscapeDataString(joined)}");
-                }
+            if (operationalDay && shifts?.Any() == true)
+            {
+                queryParams.Add($"shifts={Uri.EscapeDataString(string.Join(",", shifts))}");
+            }
 
-            // string url = $"{baseUrl}?{string.Join("&", queryParams)}";
             string baseUrl = _configuration["BaseApiUrl:Link"];
-            string endpoint = _configuration["ApiSettings:DailyTrafficEndpoint"];
-            string url = $"{baseUrl}{endpoint}?{string.Join("&", queryParams)}";
-
+            string endpoint = _configuration["ApiSettings:DailyTrafficEndpoint"]; // e.g. /api/DailyTraffic/GetDailyTrafficByDate
+            string url = $"{CombineUrl(baseUrl, endpoint)}?{string.Join("&", queryParams)}";
 
             try
             {
-                    var response = await _httpClient.GetAsync(url);
-
+                var response = await _httpClient.GetAsync(url);
                 if (!response.IsSuccessStatusCode)
-                    {
-                        return CreateEmptyModel(startDate, endDate, classifications, shifts, operationalDay);
-                    }
-
-                    var json = await response.Content.ReadAsStringAsync();
-
-                    var items = JsonConvert.DeserializeObject<List<DailyTrafficModel>>(json) ?? new List<DailyTrafficModel>();
-
-                    return new PageDailyTrafficModel
-                    {
-                        Items = items,
-                        Filters = new DailyTrafficInputModel
-                        {
-                            StartDate = startDate,
-                            EndDate = endDate,
-                            Classification = classifications?.FirstOrDefault(),
-                            Shifts = shifts ?? new List<int>(),
-                            OperationalDay = operationalDay
-                        },
-                  
-                        Classifications = new List<string> { "Class 1", "Class 2", "Class 4", "Class M" }
-                    };
-                }
-                catch (Exception ex)
-                {
                     return CreateEmptyModel(startDate, endDate, classifications, shifts, operationalDay);
-                }
+
+                var json = await response.Content.ReadAsStringAsync();
+                var items = JsonConvert.DeserializeObject<List<DailyTrafficModel>>(json) ?? new List<DailyTrafficModel>();
+
+                return new PageDailyTrafficModel
+                {
+                    Items = items,
+                    Filters = new DailyTrafficInputModel
+                    {
+                        StartDate = startDate,
+                        EndDate = endDate,
+                        Classification = classifications != null ? string.Join(",", classifications) : null,
+                        Shifts = shifts ?? new List<int>(),
+                        OperationalDay = operationalDay
+                    },
+
+                    // ✅ DO NOT set Classifications here anymore
+                    // Controller will set it using GetAllClassificationsAsync()
+                    Classifications = new List<string>()
+                };
             }
+            catch
+            {
+                return CreateEmptyModel(startDate, endDate, classifications, shifts, operationalDay);
+            }
+        }
+
+        public async Task<List<string>> GetAllClassificationsAsync()
+        {
+            string baseUrl = _configuration["BaseApiUrl:Link"];
+            string endpoint = _configuration["ApiSettings:DailyTrafficClassificationsEndpoint"];
+            // e.g. /api/DailyTraffic/GetAllClassifications
+
+            string url = CombineUrl(baseUrl, endpoint);
+
+            try
+            {
+                var response = await _httpClient.GetAsync(url);
+                if (!response.IsSuccessStatusCode) return new List<string>();
+
+                var json = await response.Content.ReadAsStringAsync();
+                return JsonConvert.DeserializeObject<List<string>>(json) ?? new List<string>();
+            }
+            catch
+            {
+                return new List<string>();
+            }
+        }
 
         private PageDailyTrafficModel CreateEmptyModel(
             DateTime startDate,

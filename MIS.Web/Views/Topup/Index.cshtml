@@ -7,10 +7,11 @@
     ViewData["Title"] = "Top-Up Report";
 
     var reportGeneratedAt = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
-    var currentUserId = User.Identity?.Name ?? "Lucky";
+    var currentUserId = @User.FindFirst("firstName")?.Value ?? "Unknown User";
     var reportVersion = "3.0.0.0";
+    var reportName = "TOP-UP REPORT";
 
-    var totalAmount = Model.PageData?.items?.Sum(i => i.AmountPaid) ?? 0;
+    var totalAmount = Model.PageData?.Items?.Sum(i => i.AmountPaid) ?? 0;
 
     int maxPagesToShow = 3;
     int currentPage = Model.PageData?.page ?? 1;
@@ -48,8 +49,8 @@
 
 <!-- ====== FILTER FORM  ====== -->
 <form method="get"
-      asp-controller="VarientPerfomance"
-      asp-action="VarientPerfomances">
+      asp-controller="TopUp"
+      asp-action="Index">
 
     <div class="row g-3 mb-4">
 
@@ -81,52 +82,89 @@
 
         <!-- Operational Shift -->
         <div class="col-md-2">
-            <label class="form-label fw-semibold">Operational Shift</label>
-            <select name="Shift" id="shiftSelect"
-                    class="form-select"
-                    @(Model.OperationalDate == false ? "disabled" : "")>
-                <option value="">- All -</option>
-                @foreach (var s in ViewBag.Shifts ?? new List<string>())
-                {
-                    <option value="@s" @(Model.Shift == s ? "selected" : "")>@s</option>
-                }
-            </select>
+        <label class="form-label fw-semibold">Operational Shift</label>
+
+        <div class="border rounded p-2"
+             style="max-height:160px; overflow:auto;"
+             @(Model.OperationalDate == false ? "aria-disabled=true" : "")>
+
+            @foreach (var s in (Model.ShiftOptions ?? new List<string>()))
+            {
+                var isChecked = Model.Shifts != null && Model.Shifts.Contains(s);
+
+                <div class="form-check">
+                    <input class="form-check-input"
+                           type="checkbox"
+                           name="Shifts"
+                           value="@s"
+                           @(isChecked ? "checked" : "")
+                           @(Model.OperationalDate == false ? "disabled" : "") />
+                    <label class="form-check-label">@s</label>
+                </div>
+            }
+            </div>
         </div>
 
         <!-- Toll Operator -->
         <div class="col-md-2">
-            <label class="form-label fw-semibold">Toll Operator</label>
-            <select name="TollOperator" class="form-select">
-                <option value="">- All -</option>
-                @foreach (var op in ViewBag.TollOperators ?? new List<string>())
-                {
-                    <option value="@op" @(Model.TollOperator == op ? "selected" : "")>@op</option>
-                }
-            </select>
+        <label class="form-label fw-semibold">Toll Operator</label>
+
+        <div class="border rounded p-2" style="max-height:160px; overflow:auto;">
+            @foreach (var opId in (Model.OperatorOptions ?? new List<string>()))
+            {
+                var isChecked = Model.OperatorIds != null && Model.OperatorIds.Contains(opId);
+
+                <div class="form-check">
+                    <input class="form-check-input"
+                           type="checkbox"
+                           name="OperatorIds"
+                           value="@opId"
+                           @(isChecked ? "checked" : "") />
+                    <label class="form-check-label">@opId</label>
+                </div>
+            }
+            </div>
         </div>
 
         <!-- Lane -->
         <div class="col-md-2">
-            <label class="form-label fw-semibold">Lane / Workstation</label>
-            <select name="Lane" class="form-select">
-                <option value="">- All -</option>
-                @foreach (var lane in ViewBag.Lanes ?? new List<string>())
-                {
-                    <option value="@lane" @(Model.Lane == lane ? "selected" : "")>@lane</option>
-                }
-            </select>
+        <label class="form-label fw-semibold">Lane</label>
+
+        <div class="border rounded p-2" style="max-height:160px; overflow:auto;">
+            @foreach (var lane in (Model.LaneOptions ?? new List<string>()))
+            {
+                var isChecked = Model.Lanes != null && Model.Lanes.Contains(lane);
+
+                <div class="form-check">
+                    <input class="form-check-input"
+                           type="checkbox"
+                           name="Lanes"
+                           value="@lane"
+                           @(isChecked ? "checked" : "") />
+                    <label class="form-check-label">@lane</label>
+                </div>
+            }
+            </div>
         </div>
 
-        <!-- Account Number -->
-        <div class="col-md-2">
+        <!-- Account Number SEARCH BOX (REFACTORED) -->
+        <div class="col-md-3">
             <label class="form-label fw-semibold">Account Number</label>
-            <select name="AccountNumber" class="form-select">
-                <option value="">- All -</option>
-                @foreach (var acc in ViewBag.AccountNumbers ?? new List<string>())
-                {
-                    <option value="@acc" @(Model.AccountNumber == acc ? "selected" : "")>@acc</option>
-                }
-            </select>
+
+            <!-- type-ahead search input -->
+            <input type="text"
+                   id="accountSearch"
+                   name="AccountNumber"
+                   class="form-control"
+                   placeholder="Enter account number..."
+                   value="@Model.AccountNumber"
+                   autocomplete="off" />
+
+            <!-- optional suggestion dropdown -->
+            <div id="accountSuggestions"
+                 class="list-group position-absolute shadow-sm"
+                 style="z-index:1000; display:none; max-height:200px; overflow-y:auto;">
+            </div>
         </div>
 
         <!-- Filter Button -->
@@ -161,9 +199,9 @@
             </thead>
 
             <tbody>
-                @if (Model.PageData?.items != null && Model.PageData.items.Any())
+                @if (Model.PageData?.Items != null && Model.PageData.Items.Any())
                 {
-                    foreach (var item in Model.PageData.items)
+                    foreach (var item in Model.PageData.Items)
                     {
                         <tr>
                             <td>@item.TopUpNumber</td>
@@ -171,7 +209,7 @@
                             <td>@item.TopUpDateTime.ToString("dd/MM/yyyy HH:mm")</td>
                             <td>@item.LaneWorkstation</td>
                             <td>@item.Shift</td>
-                            <td>@item.TollOperator</td>
+                            <td>@item.Operator</td>
                             <td>@item.AccountNumber</td>
                             <td>@item.AccountName</td>
                             <td>@item.AmountPaid.ToString("N2", CultureInfo.InvariantCulture)</td>
@@ -193,26 +231,26 @@
         </table>
 
       <!-- Footer -->
-            <div class="mt-4 p-3 border-top ">
-                <table class="table table-borderless w-100 mb-0 align-middle">
-                    <tr>
-                        <td class="fw-bold text-dark">Top-Up  Report</td>
-                        <td><strong>Date and Time:</strong> @reportGeneratedAt</td>
-                        <td><strong>User ID:</strong> @currentUserId</td>
-                        <td class="text-end">
-                            Page <strong>@Model.page</strong> of <strong>@Model.totalPages</strong>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td colspan="4">
-                            <small class="text-muted">
-                                Reports Module Version Number: <strong>@reportVersion</strong>
-                            </small>
-                        </td>
-                    </tr>
-                </table>
+           <div class="mt-4 border-top pt-3">
+                <table class="table table-borderless mb-0">
+                        <tr>
+                            <td><strong>Top-Up Report</strong></td>
+                            <td><strong>Date And Time:</strong> @reportGeneratedAt</td>
+                            <td><strong>User:</strong> @currentUserId</td>
+                            <td class="text-end">
+                                Page <strong>@currentPage</strong> of <strong>@totalPages</strong>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td colspan="4">
+                                <small class="text-muted">
+                                    Version: <strong>@reportVersion</strong>
+                                </small>
+                            </td>
+                        </tr>
+                    </table>
+             </div>
             </div>
-    </div>
 
     <!-- ===========================
          PAGINATION
@@ -229,8 +267,8 @@
                                 StartDate = Model.StartDate?.ToString("yyyy-MM-ddTHH:mm"),
                                 EndDate = Model.EndDate?.ToString("yyyy-MM-ddTHH:mm"),
                                 OperationalDate = Model.OperationalDate,
-                                Shift = Model.Shift,
-                                Lane = Model.Lane,
+                                Shift = Model.Shifts,
+                                Lane = Model.Lanes,
                                 AccountNumber = Model.AccountNumber,
                                 page = currentPage - 1,
                                 pageSize = Model.pageSize
@@ -247,8 +285,8 @@
                                     StartDate = Model.StartDate?.ToString("yyyy-MM-ddTHH:mm"),
                                     EndDate = Model.EndDate?.ToString("yyyy-MM-ddTHH:mm"),
                                     OperationalDate = Model.OperationalDate,
-                                    Shift = Model.Shift,
-                                    Lane = Model.Lane,
+                                    Shift = Model.Shifts,
+                                    Lane = Model.Lanes,
                                     AccountNumber = Model.AccountNumber,
                                     page = i,
                                     pageSize = Model.pageSize
@@ -265,8 +303,8 @@
                                 StartDate = Model.StartDate?.ToString("yyyy-MM-ddTHH:mm"),
                                 EndDate = Model.EndDate?.ToString("yyyy-MM-ddTHH:mm"),
                                 OperationalDate = Model.OperationalDate,
-                                Shift = Model.Shift,
-                                Lane = Model.Lane,
+                                Shift = Model.Shifts,
+                                Lane = Model.Lanes,
                                 AccountNumber = Model.AccountNumber,
                                 page = currentPage + 1,
                                 pageSize = Model.pageSize
@@ -280,54 +318,66 @@
 </div>
 
 <!-- ===========================
-     EXPORT SCRIPTS (FULL DATA)
+     EXPORT SCRIPTS 
 =========================== -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 
 <script>
+function getCheckedValues(name) {
+    return Array.from(document.querySelectorAll(`input[name="${name}"]:checked`))
+        .map(x => x.value);
+}
 // ===================================================================
-// ⭐ 1. READ FILTERS FROM THE RAZOR PAGE
+//  1. READ FILTERS FROM THE RAZOR PAGE
 // ===================================================================
 function getFilters() {
     return {
         StartDate: document.querySelector('[name="StartDate"]').value,
         EndDate: document.querySelector('[name="EndDate"]').value,
         OperationalDate: document.querySelector('[name="OperationalDate"]').value,
-        Shift: document.querySelector('[name="Shift"]').value,
-        TollOperator: document.querySelector('[name="TollOperator"]').value,   // ⭐ FIXED
-        Lane: document.querySelector('[name="Lane"]').value,
-        AccountNumber: document.querySelector('[name="AccountNumber"]').value
+
+        Shifts: getCheckedValues("Shifts"),
+        OperatorIds: getCheckedValues("OperatorIds"),
+        Lanes: getCheckedValues("Lanes"),
+
+        AccountNumber: document.getElementById("accountSearch").value
     };
 }
 
+const reportName = "@reportName";
+    const reportGeneratedAt = "@reportGeneratedAt";
+    const currentUserId = "@currentUserId";
+    const reportVersion = "@reportVersion";
+
 // ===================================================================
-// ⭐ 2. BUILD EXPORT URL (INCLUDES TOLLOPERATOR)
+//  2. BUILD EXPORT URL (INCLUDES TOLLOPERATOR)
 // ===================================================================
 function buildExportUrl() {
     const f = getFilters();
+    const params = new URLSearchParams();
 
-    const params = new URLSearchParams({
-        StartDate: f.StartDate || "",
-        EndDate: f.EndDate || "",
-        OperationalDate: f.OperationalDate || "",
-        Shift: f.Shift || "",
-        TollOperator: f.TollOperator || "",     // ⭐ FIXED
-        Lane: f.Lane || "",
-        AccountNumber: f.AccountNumber || ""
-    });
+    params.set("StartDate", f.StartDate || "");
+    params.set("EndDate", f.EndDate || "");
+    params.set("OperationalDate", f.OperationalDate || "");
+    params.set("AccountNumber", f.AccountNumber || "");
+
+    (f.Shifts || []).forEach(v => params.append("Shifts", v));
+    (f.OperatorIds || []).forEach(v => params.append("OperatorIds", v));
+    (f.Lanes || []).forEach(v => params.append("Lanes", v));
 
     return `/TopUp/export?${params.toString()}`;
 }
 
 // ===================================================================
-// ⭐ 3. PDF EXPORT (FULL DATASET)
+// 3. PDF EXPORT (FULL DATASET)
 // ===================================================================
 document.getElementById("btnDownloadPdf").addEventListener("click", async () => {
 
     const response = await fetch(buildExportUrl());
     const fullData = await response.json();
+   
 
     if (!fullData || fullData.length === 0) {
         alert("No data available for export.");
@@ -356,14 +406,29 @@ document.getElementById("btnDownloadPdf").addEventListener("click", async () => 
     doc.addImage(leftLogo, "JPEG", 40, 25, 60, 60);
     doc.addImage(rightLogo, "JPEG", pageWidth - 100, 25, 60, 60);
 
+
     // --------------------------
     // Report Title
     // --------------------------
-    doc.setFontSize(16);
-    doc.text("LEKKI-IKOYI LINK BRIDGE", pageWidth / 2, 45, { align: "center" });
-    doc.setFontSize(14);
-    doc.text("TOP-UP REPORT", pageWidth / 2, 70, { align: "center" });
 
+    const logoTop = 25;
+    const logoHeight = 60;
+
+    // Vertically center title block relative to logos
+    let centerY = logoTop + (logoHeight / 2) - 15;
+
+    doc.setFont("helvetica", "bold");
+
+    doc.setFontSize(14);
+    doc.text("LEKKI CONCESSION COMPANY LIMITED", pageWidth / 2, centerY, { align: "center" });
+
+    centerY += 18;
+    doc.setFontSize(12);
+    doc.text("LEKKI-IKOYI LINK BRIDGE", pageWidth / 2, centerY, { align: "center" });
+
+    centerY += 22;
+    doc.setFontSize(16);
+    doc.text(reportName || "TOP-UP REPORT", pageWidth / 2, centerY, { align: "center" });
     // --------------------------
     // Filters Used
     // --------------------------
@@ -372,9 +437,9 @@ document.getElementById("btnDownloadPdf").addEventListener("click", async () => 
         `Start Date & Time: ${f.StartDate || "N/A"}`,
         `End Date & Time: ${f.EndDate || "N/A"}`,
         `Operational Date: ${f.OperationalDate || "N/A"}`,
-        `Operational Shift: ${f.Shift || "All"}`,
-        `Toll Operator: ${f.TollOperator || "All"}`,       // ⭐ FIXED
-        `Lane / Workstation: ${f.Lane || "All"}`,
+        `Operational Shift: ${(f.Shifts && f.Shifts.length ? f.Shifts.join(", ") : "All")}`,
+        `Toll Operator: ${(f.OperatorIds && f.OperatorIds.length ? f.OperatorIds.join(", ") : "All")}`,
+        `Lane / Workstation: ${(f.Lanes && f.Lanes.length ? f.Lanes.join(", ") : "All")}`,
         `Account Number: ${f.AccountNumber || "All"}`
     ];
 
@@ -417,23 +482,36 @@ document.getElementById("btnDownloadPdf").addEventListener("click", async () => 
         body: tableRows,
         startY: yPos + 5,
         theme: "grid",
-        headStyles: { fillColor: [13, 110, 253] },
+        headStyles: { fillColor: [41, 128, 185], textColor: 255 },
         styles: { fontSize: 8, cellPadding: 3 },
 
-        didDrawPage: function (data) {
-            const footerY = doc.internal.pageSize.height - 40;
-            doc.setFontSize(9);
-            doc.text(`Report Version: 2.0.0.11`, 40, footerY);
-            doc.text(`Generated By: @currentUserId`, 250, footerY);
-            doc.text(`Date & Time: @reportGeneratedAt`, 500, footerY);
+        didDrawPage: function () {
 
-            doc.text(
-                "© 2025 Lekki Concession Company / ICT-Works",
-                pageWidth - 40,
-                footerY,
-                { align: "right" }
-            );
-        }
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const footerY = pageHeight - 40;
+
+    const pageCount = doc.internal.getNumberOfPages();
+    const pageNumber = doc.internal.getCurrentPageInfo().pageNumber;
+
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+
+    // Left
+    doc.text(`Report Version: ${reportVersion}`, 40, footerY);
+
+    // Center
+    doc.text(`Date & Time: ${reportGeneratedAt}`, pageWidth / 2, footerY, { align: "center" });
+
+    // Right
+    doc.text(
+        `Page ${pageNumber} of ${pageCount}`,
+        pageWidth - 40,
+        footerY,
+        { align: "right" }
+    );
+
+}
     });
 
     // --------------------------
@@ -452,7 +530,7 @@ document.getElementById("btnDownloadPdf").addEventListener("click", async () => 
 });
 
 // ===================================================================
-// ⭐ 4. EXCEL EXPORT
+//  4. EXCEL EXPORT
 // ===================================================================
 document.getElementById("btnDownloadExcel").addEventListener("click", async () => {
 

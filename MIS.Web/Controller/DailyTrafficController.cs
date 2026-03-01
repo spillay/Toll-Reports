@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using MIS.Web.Models.Traffic.Daily;
 using MIS.Web.Services;
 using System;
@@ -8,6 +9,7 @@ using System.Threading.Tasks;
 
 namespace MIS.Web.Controllers
 {
+    [Authorize]
     public class DailyTrafficController : Controller
     {
         private readonly IDailyTrafficReportService _trafficService;
@@ -21,45 +23,51 @@ namespace MIS.Web.Controllers
         public async Task<IActionResult> Index(
             DateTime? startDate = null,
             DateTime? endDate = null,
-            string? classification = null,
-            List<int> shifts = null,
+            List<string>? classification = null,    // ✅ checklist binds here
+            List<int>? shifts = null,
             bool operationalDay = false)
         {
-            var start = startDate ?? DateTime.UtcNow.AddDays(-7);
-            var end = endDate ?? DateTime.UtcNow;
+            var now = DateTime.Now;
 
-            List<string>? classifications = !string.IsNullOrEmpty(classification)
-                ? new List<string> { classification }
+            var start = startDate ?? now.AddDays(-7);
+            var end = endDate ?? now;
+
+            // ✅ If nothing selected -> treat as "All" (null)
+            var selectedClasses = (classification != null && classification.Any())
+                ? classification
+                    .Select(x => x?.Trim())
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList()
                 : null;
 
-            List<int>? shiftsToSend = operationalDay ? (shifts ?? new List<int>()) : null;
+            // ✅ Only send shifts if operational day is enabled
+            var shiftsToSend = operationalDay ? (shifts ?? new List<int>()) : null;
 
-            // Fetch traffic data from service
+            // 1) Get report data
             var pageModel = await _trafficService.GetTrafficReportAsync(
-                start, end, classifications, shiftsToSend, operationalDay);
+                start,
+                end,
+                selectedClasses,
+                shiftsToSend,
+                operationalDay);
 
-            // Persist filter selections for the view
+            pageModel ??= new PageDailyTrafficModel();
+
+            // 2) Load lookup values (DB/API)
+            var allClasses = await _trafficService.GetAllClassificationsAsync();
+            pageModel.Classifications = allClasses ?? new List<string>();
+
+            // 3) Preserve filters for UI
             pageModel.Filters = new DailyTrafficInputModel
             {
                 StartDate = start,
                 EndDate = end,
-                Classification = classification,
+                // ✅ store the selected list for checkbox re-checking
+                ClassificationList = selectedClasses ?? new List<string>(),
                 Shifts = shifts ?? new List<int>(),
                 OperationalDay = operationalDay
             };
-
-            // Populate classifications dynamically from the data
-            pageModel.Classifications = pageModel.Items
-                .Select(x => x.Classification ?? "Unknown")
-                .Distinct()
-                .OrderBy(c => c)
-                .ToList();
-
-            // If no classifications from data, use default ones
-            if (!pageModel.Classifications.Any())
-            {
-                pageModel.Classifications = new List<string> { "Class 1", "Class 2", "Class 4", "Class M" };
-            }
 
             return View("~/Views/Traffic/Daily/Index.cshtml", pageModel);
         }

@@ -14,5 +14,6 @@ namespace Toll.Reporting.Api.Repositories
 
         Task<List<int>> GetAvailableYearsAsync();
         Task<List<int>> GetAvailableMonthsAsync(int year);
+        Task<List<string>> GetAvailableClassificationsAsync();
     }
 }

@@ -1,45 +1,70 @@
-﻿@model MIS.Web.Models.Traffic.Daily.DailyTrafficInputModel
+﻿@* _DailyTrafficFilters.cshtml *@
+@model MIS.Web.Models.Traffic.Daily.PageDailyTrafficModel
 @removeTagHelper "Microsoft.AspNetCore.Mvc.TagHelpers.OptionTagHelper, Microsoft.AspNetCore.Mvc.TagHelpers"
 
-
 @{
-    var classes = new List<string> { "Class 1", "Class 2", "Class 4", "Motor Cycle" };
+    // Safe defaults
+    var filters = Model?.Filters ?? new MIS.Web.Models.Traffic.Daily.DailyTrafficInputModel();
+
+    var startDate = filters.StartDate;
+    var endDate = filters.EndDate;
+
+    // DB/API-driven classifications from controller/service
+    var classes = Model?.Classifications ?? new List<string>();
+
+    var selectedClass = filters.Classification;
+    var isOperational = filters.OperationalDay == true;
+    var selectedShifts = filters.Shifts ?? new List<int>();
 }
 
 <form method="get" asp-controller="DailyTraffic" asp-action="Index" id="filterForm" class="mb-4">
     <div class="row g-3 align-items-end">
         <!-- Start Date -->
         <div class="col-md-3">
-            <label class="form-label fw-semibold">Start Date</label>
-            <input type="date" name="startDate" class="form-control"
-                   value="@(Model?.StartDate.ToString("yyyy-MM-dd") ?? "")" required />
+            <label class="form-label fw-semibold" for="startDate">Start Date</label>
+            <input type="date" id="startDate" name="startDate" class="form-control"
+                   value="@(startDate.ToString("yyyy-MM-dd"))" required />
         </div>
 
         <!-- End Date -->
         <div class="col-md-3">
-            <label class="form-label fw-semibold">End Date</label>
-            <input type="date" name="endDate" class="form-control"
-                   value="@(Model?.EndDate.ToString("yyyy-MM-dd") ?? "")" required />
+            <label class="form-label fw-semibold" for="endDate">End Date</label>
+            <input type="date" id="endDate" name="endDate" class="form-control"
+                   value="@(endDate.ToString("yyyy-MM-dd"))" required />
         </div>
 
         <!-- Classification -->
-        <div class="col-md-3">
-            <label class="form-label fw-semibold">Class</label>
-            <select name="classification" class="form-select">
-                <option value="">All</option>
+        <div class="col-md-6">
+            <label class="form-label fw-semibold">Classification</label>
+
+            <div class="border rounded p-2" style="max-height:150px; overflow-y:auto;">
                 @foreach (var cls in classes)
                 {
-                    <option value="@cls" @(Model?.Classification == cls ? "selected" : "")>@cls</option>
+                    var isChecked = filters.ClassificationList?.Contains(cls) == true;
+
+                    <div class="form-check">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               name="classification"
+                               value="@cls"
+                               id="class_@cls.Replace(" ", "_")"
+                               checked="@(isChecked)" />
+
+                        <label class="form-check-label"
+                               for="class_@cls.Replace(" ", "_")">
+                            @cls
+                        </label>
+                    </div>
                 }
-            </select>
+            </div>
         </div>
 
         <!-- Operational Day -->
         <div class="col-md-3">
             <div class="form-check mt-4">
-                <input class="form-check-input" type="checkbox" id="operationalDay"
-                       name="operationalDay" value="true"
-                       @(Model?.OperationalDay == true ? "checked" : "") />
+                <input class="form-check-input" type="checkbox"
+                       id="operationalDay" name="operationalDay" value="true"
+                       checked="@(isOperational)" />
                 <label class="form-check-label fw-semibold" for="operationalDay">Operational Day</label>
             </div>
         </div>
@@ -51,12 +76,16 @@
                 @for (int i = 1; i <= 3; i++)
                 {
                     var shiftName = i switch { 1 => "Shift 1", 2 => "Shift 2", 3 => "Shift 3", _ => "" };
-                    bool isChecked = Model?.Shifts?.Contains(i) == true;
+                    var isChecked = selectedShifts.Contains(i);
+
                     <div class="form-check form-check-inline">
-                        <input class="form-check-input shift-checkbox" type="checkbox"
-                               name="shifts" value="@i"
-                               @(isChecked ? "checked" : "")
-                               @(Model?.OperationalDay != true ? "disabled" : "") />
+                        <input class="form-check-input shift-checkbox"
+                               type="checkbox"
+                               id="shift_@i"
+                               name="shifts"
+                               value="@i"
+                               checked="@(isChecked)"
+                               disabled="@(!isOperational)" />
                         <label class="form-check-label" for="shift_@i">@shiftName</label>
                     </div>
                 }
@@ -69,3 +98,22 @@
         </div>
     </div>
 </form>
+
+<script>
+    // Enable/disable shift checkboxes when operational day toggles
+    (function () {
+        const operational = document.getElementById('operationalDay');
+        const shifts = document.querySelectorAll('.shift-checkbox');
+
+        function sync() {
+            const enabled = operational.checked;
+            shifts.forEach(cb => {
+                cb.disabled = !enabled;
+                if (!enabled) cb.checked = false; // optional: clears shifts when off
+            });
+        }
+
+        operational?.addEventListener('change', sync);
+        sync();
+    })();
+</script>

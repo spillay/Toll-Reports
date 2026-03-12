@@ -1,10 +1,9 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Toll.Reporting.Api.DTOs;
-using Toll.Reporting.Api.Repositories;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
+using Toll.Reporting.Api.DTOs;
+using Toll.Reporting.Api.Repositories;
 
 namespace Toll.Reporting.Api.Controllers
 {
@@ -18,55 +17,42 @@ namespace Toll.Reporting.Api.Controllers
         {
             _repo = repo;
         }
+        [HttpGet("options")]
+        public async Task<ActionResult<ComprehensiveOptionsDto>> GetOptions()
+        {
+            var options = await _repo.GetComprehensiveOptionsAsync();
+            return Ok(options);
+        }
 
-        /// <summary>
-        /// Retrieves the comprehensive report for the specified filters and date range.
-        /// </summary>
         [HttpGet("report")]
         public async Task<ActionResult<IEnumerable<ComprehensiveDto>>> GetComprehensiveReport(
             [FromQuery] DateTime startDate,
             [FromQuery] DateTime endDate,
-            [FromQuery] string? operationalShift = null,
-            [FromQuery] string? tollOperators = null,      // maps to SystemUser.Username (Operator)
-            [FromQuery] string? laneNames = null,
-            [FromQuery] string? laneDiscountTypes = null,  // discount descriptions
-            [FromQuery] string? classification = null,
-            [FromQuery] string? paymentMethods = null,
-            [FromQuery] string? transactionTypes = null)
+
+            //  Multi-select IDs
+            [FromQuery] List<byte>? shiftIds = null,
+            [FromQuery] List<long>? operatorIds = null,
+            [FromQuery] List<int>? laneIds = null,
+            [FromQuery] List<byte>? discountTypeIds = null,
+            [FromQuery] List<byte>? tollClassIds = null,
+
+            //  PaymentMethod
+            [FromQuery] List<byte>? paymentMethodIds = null
+        )
         {
             try
             {
-                // --- Utility: convert comma-separated values to list safely ---
-                static List<string>? ToList(string? csv) =>
-                    string.IsNullOrWhiteSpace(csv)
-                        ? null
-                        : csv.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                             .Select(s => s.Trim())
-                             .ToList();
-
-                // --- Parse incoming filters ---
-                var operationalShiftList = ToList(operationalShift);
-                var tollOperatorsList = ToList(tollOperators);
-                var laneNamesList = ToList(laneNames);
-                var laneDiscountTypesList = ToList(laneDiscountTypes);
-                var classificationList = ToList(classification);
-                var paymentMethodsList = ToList(paymentMethods);
-                var transactionTypesList = ToList(transactionTypes);
-
-                // --- Repository call (correct parameter order) ---
                 var data = await _repo.GetComprehensiveRepositoryAsync(
                     startDate,
                     endDate,
-                    operationalShiftList,
-                    tollOperatorsList,      
-                    laneNamesList,
-                    laneDiscountTypesList,  
-                    classificationList,
-                    paymentMethodsList,
-                    transactionTypesList
+                    shiftIds,
+                    operatorIds,
+                    laneIds,
+                    discountTypeIds,
+                    tollClassIds,
+                    paymentMethodIds
                 );
 
-                // --- Return data ---
                 return Ok(data);
             }
             catch (Exception ex)

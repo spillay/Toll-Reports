@@ -1,10 +1,13 @@
-﻿namespace MIS.Web.Models.DailyCashup
+﻿using System;
+
+namespace MIS.Web.Models.DailyCashup
 {
     public class DailyCashupModel
     {
         public DateTime ShiftDate { get; set; }
-        public string ShiftDescription { get; set; }
-        public string TollOperator { get; set; }
+
+        public string ShiftDescription { get; set; } = "";
+        public string TollOperator { get; set; } = "";
 
         public double NettAmount { get; set; }      // Lane Cash
         public double ActualAmount { get; set; }    // Top-ups

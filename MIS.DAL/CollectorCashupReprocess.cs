@@ -12,7 +12,7 @@ namespace MIS.DAL
     {
         public Models.CollectorCashupReprocess Create(Models.CollectorCashupReprocess CollectorCashupReprocess)
         {
-            using (var dbContext = new Models.MISDBContext())
+            using (var dbContext = new Models.ApplicationDbContext())
             {
                 dbContext.CollectorCashupReprocesses.Add(CollectorCashupReprocess);
                 dbContext.SaveChanges();
@@ -23,7 +23,7 @@ namespace MIS.DAL
 
         public Models.CollectorCashupReprocess Update(Models.CollectorCashupReprocess CollectorCashupReprocess)
         {
-            using (var dbContext = new Models.MISDBContext())
+            using (var dbContext = new Models.ApplicationDbContext())
             {
                 dbContext.CollectorCashupReprocesses.Attach(CollectorCashupReprocess);
                 dbContext.Entry(CollectorCashupReprocess).State = EntityState.Modified;

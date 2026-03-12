@@ -14,7 +14,7 @@ namespace MIS.DAL
         {
             List<Models.LaneLastTransactionImage> laneLastTransactionImage = new List<Models.LaneLastTransactionImage>();
 
-            using (var db = new Models.MISDBContext())
+            using (var db = new Models.ApplicationDbContext())
             {
                 laneLastTransactionImage = db.LaneLastTransactionImages.ToList();
             }

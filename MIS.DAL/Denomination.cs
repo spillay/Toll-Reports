@@ -14,7 +14,7 @@ namespace MIS.DAL
         {
             List<Models.Denomination> denomination = new List<Models.Denomination>();
 
-            using (var db = new Models.MISDBContext())
+            using (var db = new Models.ApplicationDbContext())
             {
                 denomination = db.Denominations.OrderBy(o => o.DisplayOrder).ToList();
             }

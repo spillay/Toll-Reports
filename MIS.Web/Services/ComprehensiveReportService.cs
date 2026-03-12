@@ -1,12 +1,10 @@
 ﻿using MIS.Web.Models.Comprehensive;
+using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Configuration;
 
 namespace MIS.Web.Services
 {
@@ -21,61 +19,67 @@ namespace MIS.Web.Services
             _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         }
 
+        private static string CombineUrl(string baseUrl, string endpoint)
+        {
+            baseUrl = (baseUrl ?? "").TrimEnd('/');
+            endpoint = (endpoint ?? "").TrimStart('/');
+            return $"{baseUrl}/{endpoint}";
+        }
+
+        public async Task<ComprehensiveOptionsResponse> GetComprehensiveOptionsAsync()
+        {
+            var baseUrl = _configuration["BaseApiUrl:Link"];
+            var endpoint = _configuration["ApiSettings:ComprehensiveOptionsEndpoint"]; 
+            var url = CombineUrl(baseUrl, endpoint);
+
+            var resp = await _httpClient.GetAsync(url);
+            resp.EnsureSuccessStatusCode();
+
+            var json = await resp.Content.ReadAsStringAsync();
+            return JsonConvert.DeserializeObject<ComprehensiveOptionsResponse>(json) ?? new ComprehensiveOptionsResponse();
+        }
+
         public async Task<List<ComprehensiveModel>> GetComprehensiveDetailsAsync(
             DateTime startDate,
             DateTime endDate,
-            List<string>? operationalShift = null,
-            List<string>? tollOperators = null,
-            List<string>? laneNames = null,
-            List<string>? paymentMethods = null,
-            List<string>? laneDiscountTypes = null,
-            List<string>? classification = null,
-            List<string>? transactionTypes = null)
+            List<byte>? shiftIds = null,
+            List<long>? operatorIds = null,
+            List<int>? laneIds = null,
+            List<byte>? discountTypeIds = null,
+            List<byte>? tollClassIds = null,
+            List<byte>? paymentMethodIds = null)
         {
-           // var baseUrl = _configuration["ApiSettings:ComprehensiveReportApiUrl"];
-           
+            var baseUrl = _configuration["BaseApiUrl:Link"];
+            var endpoint = _configuration["ApiSettings:ComprehensiveReportEndpoint"];
+            var url = CombineUrl(baseUrl, endpoint);
 
-            string encodedStartDate = Uri.EscapeDataString(startDate.ToString("yyyy/MM/dd"));
-            string encodedEndDate = Uri.EscapeDataString(endDate.ToString("yyyy/MM/dd"));
-
-            var queryParts = new List<string>
+            var query = new List<string>
             {
-                $"startDate={encodedStartDate}",
-                $"endDate={encodedEndDate}"
+                $"startDate={Uri.EscapeDataString(startDate.ToString("yyyy-MM-dd"))}",
+                $"endDate={Uri.EscapeDataString(endDate.ToString("yyyy-MM-dd"))}"
             };
 
-            void AddIfAny(string key, List<string>? list)
+            static void AddList<T>(List<string> q, string key, IEnumerable<T>? list)
             {
-                if (list != null && list.Any())
-                    queryParts.Add($"{key}={Uri.EscapeDataString(string.Join(",", list))}");
+                if (list == null) return;
+                foreach (var v in list)
+                    q.Add($"{key}={Uri.EscapeDataString(Convert.ToString(v) ?? "")}");
             }
 
-            AddIfAny("operationalShift", operationalShift);
-            AddIfAny("tollOperators", tollOperators);
-            AddIfAny("laneNames", laneNames);
-            AddIfAny("paymentMethods", paymentMethods);
-            AddIfAny("laneDiscountTypes", laneDiscountTypes);
-            AddIfAny("classification", classification);
-            AddIfAny("transactionTypes", transactionTypes);
+            AddList(query, "shiftIds", shiftIds);
+            AddList(query, "operatorIds", operatorIds);
+            AddList(query, "laneIds", laneIds);
+            AddList(query, "discountTypeIds", discountTypeIds);
+            AddList(query, "tollClassIds", tollClassIds);
+            AddList(query, "paymentMethodIds", paymentMethodIds);
 
-            string baseUrl = _configuration["BaseApiUrl:Link"];
-            string endpoint = _configuration["ApiSettings:ComprehensiveReportEndpoint"];
-            string url = $"{baseUrl}{endpoint}?{string.Join("&", queryParts)}";
-            Console.WriteLine($"Comprehensive API URL: {url}");
+            var fullUrl = $"{url}?{string.Join("&", query)}";
 
+            var resp = await _httpClient.GetAsync(fullUrl);
+            resp.EnsureSuccessStatusCode();
 
-            var response = await _httpClient.GetAsync(url);
-            response.EnsureSuccessStatusCode();
-            var content = await response.Content.ReadAsStringAsync();
-
-            var settings = new JsonSerializerSettings
-            {
-                DateFormatString = "dd/MM/yyyy",
-                Culture = CultureInfo.InvariantCulture
-            };
-
-            var result = JsonConvert.DeserializeObject<List<ComprehensiveModel>>(content, settings);
-            return result ?? new List<ComprehensiveModel>();
+            var json = await resp.Content.ReadAsStringAsync();
+            return JsonConvert.DeserializeObject<List<ComprehensiveModel>>(json) ?? new List<ComprehensiveModel>();
         }
     }
 }

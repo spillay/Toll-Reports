@@ -11,7 +11,7 @@ namespace MIS.DAL
     {
         public Models.CollectorCashupCashSurplusAllocatedToDiscrepancy Create(Models.CollectorCashupCashSurplusAllocatedToDiscrepancy CollectorCashupCashSurplusAllocatedToDiscrepancy)
         {
-            using (var dbContext = new Models.MISDBContext())
+            using (var dbContext = new Models.ApplicationDbContext())
             {
                 dbContext.CollectorCashupCashSurplusAllocatedToDiscrepancies.Add(CollectorCashupCashSurplusAllocatedToDiscrepancy);
                 dbContext.SaveChanges();

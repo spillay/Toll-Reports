@@ -12,7 +12,7 @@ namespace MIS.DAL
     {
         public Models.CollectorCashup Create(Models.CollectorCashup CollectorCashup)
         {
-            using (var dbContext = new Models.MISDBContext())
+            using (var dbContext = new Models.ApplicationDbContext())
             {
                 dbContext.CollectorCashups.Add(CollectorCashup);
                 dbContext.SaveChanges();
@@ -23,7 +23,7 @@ namespace MIS.DAL
 
         public Models.CollectorCashup Update(Models.CollectorCashup CollectorCashup)
         {
-            using (var dbContext = new Models.MISDBContext())
+            using (var dbContext = new Models.ApplicationDbContext())
             {
                 dbContext.CollectorCashups.Attach(CollectorCashup);
                 dbContext.Entry(CollectorCashup).State = EntityState.Modified;
@@ -35,7 +35,7 @@ namespace MIS.DAL
 
         public Models.CollectorCashup Get(long CollectorCashupId)
         {
-            using (var dbContext = new Models.MISDBContext())
+            using (var dbContext = new Models.ApplicationDbContext())
             {
                 return dbContext.CollectorCashups.Where(x => x.CollectorCashupId == CollectorCashupId).Include(z => z.SystemUser).Include(z => z.Shift).FirstOrDefault();
             }
@@ -43,7 +43,7 @@ namespace MIS.DAL
 
         public List<Models.CollectorCashup> Get(DateTime ShiftDate, byte ShiftId)
         {
-            using (var dbContext = new Models.MISDBContext())
+            using (var dbContext = new Models.ApplicationDbContext())
             {
                 return dbContext.CollectorCashups.Where(x => x.ShiftDate == ShiftDate && x.ShiftId == ShiftId).Include(z => z.SystemUser).Include(z => z.Shift).ToList();
             }
@@ -52,7 +52,7 @@ namespace MIS.DAL
 
         public List<Models.CollectorCashup> Get(DateTime StartShiftDate, DateTime EndShiftDate, List<Models.SystemUser> Collectors)
         {
-            using (var dbContext = new Models.MISDBContext())
+            using (var dbContext = new Models.ApplicationDbContext())
             {
                 return dbContext.CollectorCashups.
                         Include(z => z.SystemUser).

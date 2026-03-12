@@ -17,7 +17,7 @@ namespace MIS.DAL
         {
             List<Models.RegisteredUser> RegisteredUsers = new List<Models.RegisteredUser>();
 
-            using (var db = new Models.MISDBContext())
+            using (var db = new Models.ApplicationDbContext())
             {
                 RegisteredUsers = db.RegisteredUsers.OrderBy(o => o.RegistrationNumber).ToList();
             }
@@ -30,7 +30,7 @@ namespace MIS.DAL
         {
             List<Models.RegisteredUser> registeredUsers = new List<Models.RegisteredUser>();
 
-            using (var db = new Models.MISDBContext())
+            using (var db = new Models.ApplicationDbContext())
             {
                 registeredUsers = db.RegisteredUsers
                                 .Include(r => r.RegisteredUserIdentifiers)

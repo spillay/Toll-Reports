@@ -1,13 +1,17 @@
 ﻿using MIS.Web.Models.AccountUsageDetails;
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace MIS.Web.Services
 {
     public interface IAccountUsageDetailsService
     {
-        // Return *combined* details+summary wrapped inside the page model
-        Task<PageAccountUsageDetailsModel> GetAccountUsageDetailsAsync(DateTime start, DateTime end);
+        Task<List<AccountSearchResultModel>> SearchAccountsAsync(string q, int take = 20);
 
-        // Provide summary separately
-        Task<AccountUsageSummaryModel> GetSummaryAsync();
+        Task<PageAccountUsageDetailsModel> GetAccountUsageDetailsAsync(
+            string accountNumber,
+            DateTime startDate,
+            DateTime endDate);
     }
 }

@@ -12,7 +12,7 @@ namespace MIS.DAL
         {
             List<Models.TariffPlanDetail> tariffPlanDetails = new List<Models.TariffPlanDetail>();
 
-            using (var db = new Models.MISDBContext())
+            using (var db = new Models.ApplicationDbContext())
             {
                 tariffPlanDetails = db.TariffPlanDetails.ToList();
             }

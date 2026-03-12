@@ -14,7 +14,7 @@ namespace MIS.DAL
         {
             List<Models.Ufdmessage> ufdMessages = new List<Models.Ufdmessage>();
 
-            using (var db = new Models.MISDBContext())
+            using (var db = new Models.ApplicationDbContext())
             {
                 ufdMessages = db.Ufdmessages.OrderBy(o => o.UfdmessageId).ToList();
             }
@@ -24,7 +24,7 @@ namespace MIS.DAL
 
         public Models.Ufdmessage Save(Models.Ufdmessage UFDMessage)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 dBContext.Ufdmessages.Add(UFDMessage);
                 dBContext.SaveChanges();
@@ -35,7 +35,7 @@ namespace MIS.DAL
 
         public void Update(Models.Ufdmessage UFDMessage)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 dBContext.Ufdmessages.Attach(UFDMessage);
                 dBContext.Entry(UFDMessage).State = EntityState.Modified;

@@ -3,9 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using TollReportingSystem.Data;
-using Toll.Reporting.Api.DTOs;
 using Toll.Reporting.Api.Repositories.Interfaces;
+using TollReportingSystem.Data;
 
 namespace Toll.Reporting.Api.Controllers
 {
@@ -16,17 +15,12 @@ namespace Toll.Reporting.Api.Controllers
         private readonly IAccountHistoryRepository _repository;
         private readonly ApplicationDbContext _context;
 
-        public AccountHistoryController(
-            IAccountHistoryRepository repository,
-            ApplicationDbContext context)
+        public AccountHistoryController(IAccountHistoryRepository repository, ApplicationDbContext context)
         {
             _repository = repository;
             _context = context;
         }
 
-        // ================================================================================
-        // ✅ ACCOUNT HISTORY REPORT (MAIN ENDPOINT)
-        // ================================================================================
         [HttpGet("details")]
         public async Task<IActionResult> GetAccountHistory(
             [FromQuery] string? accountNumber = null,
@@ -35,20 +29,14 @@ namespace Toll.Reporting.Api.Controllers
         {
             try
             {
-                // Basic validation – ensure at least one filter is present
-                if (string.IsNullOrWhiteSpace(accountNumber)
-                    && !startDate.HasValue
-                    && !endDate.HasValue)
-                {
+                if (string.IsNullOrWhiteSpace(accountNumber) && !startDate.HasValue && !endDate.HasValue)
                     return BadRequest("At least one filter (account number OR start/end date) must be provided.");
-                }
 
-                // Normalize dates
-                DateTime start = startDate ?? DateTime.MinValue;
-                DateTime end = endDate ?? DateTime.MaxValue;
+                var start = startDate ?? DateTime.MinValue;
+                var end = endDate ?? DateTime.MaxValue;
 
                 var result = await _repository.GetAccountHistoryAsync(
-                    accountNumber,
+                    accountNumber ?? string.Empty,
                     start,
                     end
                 );
@@ -72,36 +60,92 @@ namespace Toll.Reporting.Api.Controllers
             }
         }
 
-        // ================================================================================
-        // ✅ FETCH ACCOUNT LIST (USED FOR DROPDOWN)
-        // ================================================================================
-        [HttpGet("accounts")]
-        public async Task<IActionResult> GetAccounts()
+        [HttpGet("search-accounts")]
+        public async Task<IActionResult> SearchAccounts([FromQuery] string q, [FromQuery] int take = 20)
         {
-            try
+            q = (q ?? "").Trim();
+            if (q.Length < 2)
+                return Ok(Array.Empty<object>());
+
+            take = Math.Clamp(take, 1, 50);
+
+            // ---------------------------
+            // DIGITS: prefix range search
+            // ---------------------------
+            if (long.TryParse(q, out var prefix))
             {
-                var rawAccounts = await _context.RegisteredUsers
+                // Your IDs look like 6 digits (116407, 169323, etc.)
+                const int totalDigits = 6;
+
+                // If user typed too many digits, fallback (rare case)
+                if (q.Length >= totalDigits)
+                {
+                    // If you want strict equality instead, use u.RegisterUserId == prefix
+                    var resultsExact = await _context.RegisteredUsers
+                        .AsNoTracking()
+                        .Where(u => u.RegisterUserId.ToString().Contains(q)) // fallback only
+                        .OrderBy(u => u.RegisterUserId)
+                        .Take(take)
+                        .Select(u => new
+                        {
+                            accountNumber = u.RegisterUserId.ToString(),
+                            description = (u.CompanyName ?? "") != ""
+                                ? (u.RegisterUserId + " - " + u.CompanyName)
+                                : (u.RegisterUserId + " - " + (u.FirstName ?? "") + " " + (u.LastName ?? "")),
+                            balance = (decimal)u.Balance
+                        })
+                        .ToListAsync();
+
+                    return Ok(resultsExact);
+                }
+
+                var factor = (long)Math.Pow(10, totalDigits - q.Length); // q=1164 => 100
+                var min = prefix * factor;                               // 116400
+                var max = (prefix + 1) * factor;                         // 116500
+
+                var resultsDigits = await _context.RegisteredUsers
                     .AsNoTracking()
-                    .Select(u => u.RegisterUserId.ToString())
+                    .Where(u => u.RegisterUserId >= min && u.RegisterUserId < max)
+                    .OrderBy(u => u.RegisterUserId)
+                    .Take(take)
+                    .Select(u => new
+                    {
+                        accountNumber = u.RegisterUserId.ToString(),
+                        description = (u.CompanyName ?? "") != ""
+                            ? (u.RegisterUserId + " - " + u.CompanyName)
+                            : (u.RegisterUserId + " - " + (u.FirstName ?? "") + " " + (u.LastName ?? "")),
+                        balance = (decimal)u.Balance
+                    })
                     .ToListAsync();
 
-                var accounts = rawAccounts
-                    .Where(a => !string.IsNullOrWhiteSpace(a))
-                    .Select(a => a.Trim())
-                    .Distinct()
-                    .OrderBy(a => a)
-                    .ToList();
+                return Ok(resultsDigits);
+            }
 
-                return Ok(accounts);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new
+            // ---------------------------
+            // TEXT: name/company search
+            // ---------------------------
+            var like = $"%{q}%";
+
+            var resultsText = await _context.RegisteredUsers
+                .AsNoTracking()
+                .Where(u =>
+                    EF.Functions.Like(u.CompanyName ?? "", like) ||
+                    EF.Functions.Like(u.FirstName ?? "", like) ||
+                    EF.Functions.Like(u.LastName ?? "", like)
+                )
+                .OrderBy(u => u.RegisterUserId)
+                .Take(take)
+                .Select(u => new
                 {
-                    message = "An error occurred while loading account numbers.",
-                    details = ex.Message
-                });
-            }
+                    accountNumber = u.RegisterUserId.ToString(),
+                    description = (u.CompanyName ?? "") != ""
+                        ? (u.RegisterUserId + " - " + u.CompanyName)
+                        : (u.RegisterUserId + " - " + (u.FirstName ?? "") + " " + (u.LastName ?? "")),
+                    balance = (decimal)u.Balance
+                })
+                .ToListAsync();
+
+            return Ok(resultsText);
         }
     }
 }

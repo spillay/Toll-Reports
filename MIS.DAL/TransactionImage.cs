@@ -12,7 +12,7 @@ namespace MIS.DAL
     {
         public void Save(List<Models.TransactionImage> TransactionImage)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 dBContext.TransactionImages.AddRange(TransactionImage);
                 dBContext.SaveChanges();
@@ -21,7 +21,7 @@ namespace MIS.DAL
 
         public void Save(Models.TransactionImage TransactionImages)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 dBContext.TransactionImages.Add(TransactionImages);
                 dBContext.SaveChanges();
@@ -32,7 +32,7 @@ namespace MIS.DAL
         {
             List<Models.TransactionImage> images = new List<Models.TransactionImage>();
 
-            using (var db = new Models.MISDBContext())
+            using (var db = new Models.ApplicationDbContext())
             {
                 images = db.TransactionImages.Where(x => x.LaneId == LaneId && x.TransactionNumber == TransactionNumber).OrderBy(o => o.LaneTransactionImageId).ToList();
             }

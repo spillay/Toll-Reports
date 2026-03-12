@@ -13,7 +13,7 @@ namespace MIS.DAL
         {
             List<Models.TariffPlan> tariffPlans = new List<Models.TariffPlan>();
 
-            using (var db = new Models.MISDBContext())
+            using (var db = new Models.ApplicationDbContext())
             {
                 tariffPlans = db.TariffPlans.ToList();
             }
@@ -25,7 +25,7 @@ namespace MIS.DAL
         {
             Models.TariffPlan tariffPlans = new();
 
-            using (var db = new Models.MISDBContext())
+            using (var db = new Models.ApplicationDbContext())
             {
                 tariffPlans = db.TariffPlans.Where(x => x.TariffPlanId == TariffPlanId)
                     .Include(x => x.TariffPlanDetails)

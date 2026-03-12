@@ -10,7 +10,7 @@ namespace MIS.DAL
     {
         public void Save(Models.TransactionVehicleCharacteristic TransactionVehicleCharacteristic)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 dBContext.TransactionVehicleCharacteristics.Add(TransactionVehicleCharacteristic);
                 dBContext.SaveChanges();

@@ -12,7 +12,7 @@ namespace MIS.DAL
     {
         public void Save(Models.Transaction Transaction)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 dBContext.Transactions.Add(Transaction);
                 dBContext.SaveChanges();
@@ -21,7 +21,7 @@ namespace MIS.DAL
 
         public List<Models.Transaction> Update(List<Models.Transaction> Transactions)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 dBContext.Transactions.AttachRange(Transactions);
                 foreach (var item in Transactions)
@@ -33,7 +33,7 @@ namespace MIS.DAL
 
         public void Save(List<Models.Transaction> Transaction)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 dBContext.Transactions.AddRange(Transaction);
                 dBContext.SaveChanges();
@@ -43,7 +43,7 @@ namespace MIS.DAL
         public List<Models.Transaction> GetTransactionDetails(DateTime StartDate, DateTime EndDate, List<Models.Lane> Lanes,
         List<Models.TransactionType> TransactionTypes, List<Models.TollClass> TollClasses, List<Models.SystemUser> SystemUsers)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 return dBContext.Transactions.Where(x => x.TransactionDateTime >= StartDate && x.TransactionDateTime <= EndDate.AddDays(1).AddSeconds(-1) &&
                     (Lanes == null || Lanes.Contains(x.Lane)) &&
@@ -67,7 +67,7 @@ namespace MIS.DAL
         public List<Models.Transaction> GetTransactionDetails(DateTime ShiftDate, DateTime EndShiftDate, List<Models.Shift> Shifts, List<Models.Lane> Lanes,
         List<Models.TransactionType> TransactionTypes, List<Models.TollClass> TollClasses, List<Models.SystemUser> SystemUsers)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 return dBContext.Transactions.Where(x => (x.ShiftDate >= ShiftDate && x.ShiftDate <= EndShiftDate) &&
                     (Lanes == null || Lanes.Contains(x.Lane)) &&
@@ -90,7 +90,7 @@ namespace MIS.DAL
 
         public List<Models.Transaction> GetForCashup(Models.CollectorCashup CollectorCashup)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 return dBContext.Transactions.Where(x => x.ShiftDate == CollectorCashup.ShiftDate && x.ShiftId == CollectorCashup.ShiftId && 
                                                     x.SystemUserId == CollectorCashup.SystemUserId &&
@@ -100,7 +100,7 @@ namespace MIS.DAL
 
         public List<Models.Transaction> GetUnallocatedToCashup(DateTime ShiftDate, byte ShiftId)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 return dBContext.Transactions.Where(x => x.ShiftDate == ShiftDate 
                                                     && x.ShiftId == ShiftId 
@@ -111,7 +111,7 @@ namespace MIS.DAL
         public List<Models.Transaction> GetManualTollClass(DateTime StartDate, DateTime EndDate, List<Models.Lane> Lanes,
                 List<Models.TransactionType> TransactionTypes, List<Models.TollClass> TollClasses, List<Models.SystemUser> SystemUsers)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 return dBContext.Transactions.Where(x => x.TransactionDateTime >= StartDate && x.TransactionDateTime <= EndDate.AddDays(1).AddSeconds(-1) &&
                     (Lanes == null || Lanes.Contains(x.Lane)) &&
@@ -128,7 +128,7 @@ namespace MIS.DAL
         public List<Models.Transaction> GetExemptType(DateTime StartDate, DateTime EndDate, List<Models.Lane> Lanes,
         List<Models.TransactionType> TransactionTypes, List<Models.TollClass> TollClasses, List<Models.SystemUser> SystemUsers, List<Models.ExemptType> ExemptTypes)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 return dBContext.Transactions.Where(x => x.TransactionDateTime >= StartDate && x.TransactionDateTime <= EndDate.AddDays(1).AddSeconds(-1) &&
                     (x.TransactionType.TransactionTypeId == (byte)Common.Enums.TransactionType.ExemptPassageTransaction) &&
@@ -147,7 +147,7 @@ namespace MIS.DAL
         public List<Models.Transaction> GetExemptType(DateTime ShiftDate, DateTime EndShiftDate, List<Models.Shift> Shifts, List<Models.Lane> Lanes,
         List<Models.TransactionType> TransactionTypes, List<Models.TollClass> TollClasses, List<Models.SystemUser> SystemUsers, List<Models.ExemptType> ExemptTypes)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 return dBContext.Transactions.Where(x => (x.ShiftDate >= ShiftDate && x.ShiftDate <= EndShiftDate) &&
                     (x.TransactionType.TransactionTypeId == (byte)Common.Enums.TransactionType.ExemptPassageTransaction) &&
@@ -166,7 +166,7 @@ namespace MIS.DAL
         public List<Models.Transaction> GetManualTollClass(DateTime ShiftDate, DateTime EndShiftDate, List<Models.Shift> Shifts, List<Models.Lane> Lanes,
         List<Models.TransactionType> TransactionTypes, List<Models.TollClass> TollClasses, List<Models.SystemUser> SystemUsers)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 return dBContext.Transactions.Where(x => (x.ShiftDate >= ShiftDate && x.ShiftDate <= EndShiftDate) &&
                 (Shifts == null || Shifts.Contains(x.Shift)) &&
@@ -184,7 +184,7 @@ namespace MIS.DAL
         public List<Models.Transaction> GetActualTollClass(DateTime StartDate, DateTime EndDate, List<Models.Lane> Lanes,
                 List<Models.TransactionType> TransactionTypes, List<Models.TollClass> TollClasses, List<Models.SystemUser> SystemUsers)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 return dBContext.Transactions.Where(x => x.TransactionDateTime >= StartDate && x.TransactionDateTime <= EndDate.AddDays(1).AddSeconds(-1) &&
                     (Lanes == null || Lanes.Contains(x.Lane)) &&
@@ -201,7 +201,7 @@ namespace MIS.DAL
         public List<Models.Transaction> GetActualTollClass(DateTime ShiftDate, DateTime EndShiftDate, List<Models.Shift> Shifts, List<Models.Lane> Lanes,
         List<Models.TransactionType> TransactionTypes, List<Models.TollClass> TollClasses, List<Models.SystemUser> SystemUsers)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 return dBContext.Transactions.Where(x => (x.ShiftDate >= ShiftDate && x.ShiftDate <= EndShiftDate) &&
                                 (Shifts == null || Shifts.Contains(x.Shift)) &&
@@ -219,7 +219,7 @@ namespace MIS.DAL
         public List<Models.Transaction> GetAutomaticTollClass(DateTime StartDate, DateTime EndDate, List<Models.Lane> Lanes,
         List<Models.TransactionType> TransactionTypes, List<Models.TollClass> TollClasses, List<Models.SystemUser> SystemUsers)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 return dBContext.Transactions.Where(x => x.TransactionDateTime >= StartDate && x.TransactionDateTime <= EndDate.AddDays(1).AddSeconds(-1) &&
                     (Lanes == null || Lanes.Contains(x.Lane)) &&
@@ -236,7 +236,7 @@ namespace MIS.DAL
         public List<Models.Transaction> GetAutomaticTollClass(DateTime ShiftDate, DateTime EndShiftDate, List<Models.Shift> Shifts, List<Models.Lane> Lanes,
         List<Models.TransactionType> TransactionTypes, List<Models.TollClass> TollClasses, List<Models.SystemUser> SystemUsers)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 return dBContext.Transactions.Where(x => (x.ShiftDate >= ShiftDate && x.ShiftDate <= EndShiftDate) &&
                                 (Shifts == null || Shifts.Contains(x.Shift)) &&
@@ -254,7 +254,7 @@ namespace MIS.DAL
         public List<Models.Transaction> GetManualRevenue(DateTime StartDate, DateTime EndDate, List<Models.Lane> Lanes,
                 List<Models.TransactionType> TransactionTypes, List<Models.TollClass> TollClasses, List<Models.SystemUser> SystemUsers)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 return dBContext.Transactions.Where(x => x.TransactionDateTime >= StartDate && x.TransactionDateTime <= EndDate.AddDays(1).AddSeconds(-1) &&
                     (Lanes == null || Lanes.Contains(x.Lane)) &&
@@ -271,7 +271,7 @@ namespace MIS.DAL
         public List<Models.Transaction> GetManualRevenue(DateTime ShiftDate, DateTime EndShiftDate, List<Models.Shift> Shifts, List<Models.Lane> Lanes,
         List<Models.TransactionType> TransactionTypes, List<Models.TollClass> TollClasses, List<Models.SystemUser> SystemUsers)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 return dBContext.Transactions.Where(x => (x.ShiftDate >= ShiftDate && x.ShiftDate <= EndShiftDate) &&
                 (Shifts == null || Shifts.Contains(x.Shift)) &&
@@ -289,7 +289,7 @@ namespace MIS.DAL
         public List<Models.Transaction> GetActualRevenue(DateTime StartDate, DateTime EndDate, List<Models.Lane> Lanes,
                 List<Models.TransactionType> TransactionTypes, List<Models.TollClass> TollClasses, List<Models.SystemUser> SystemUsers)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 return dBContext.Transactions.Where(x => x.TransactionDateTime >= StartDate && x.TransactionDateTime <= EndDate.AddDays(1).AddSeconds(-1) &&
                     (Lanes == null || Lanes.Contains(x.Lane)) &&
@@ -307,7 +307,7 @@ namespace MIS.DAL
         public List<Models.Transaction> GetActualRevenue(DateTime ShiftDate, DateTime EndShiftDate, List<Models.Shift> Shifts, List<Models.Lane> Lanes,
         List<Models.TransactionType> TransactionTypes, List<Models.TollClass> TollClasses, List<Models.SystemUser> SystemUsers)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 return dBContext.Transactions.Where(x => (x.ShiftDate >= ShiftDate && x.ShiftDate <= EndShiftDate) &&
                                 (Shifts == null || Shifts.Contains(x.Shift)) &&
@@ -325,7 +325,7 @@ namespace MIS.DAL
         public List<Models.Transaction> GetAutomaticRevenue(DateTime StartDate, DateTime EndDate, List<Models.Lane> Lanes,
         List<Models.TransactionType> TransactionTypes, List<Models.TollClass> TollClasses, List<Models.SystemUser> SystemUsers)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 return dBContext.Transactions.Where(x => x.TransactionDateTime >= StartDate && x.TransactionDateTime <= EndDate.AddDays(1).AddSeconds(-1) &&
                     (Lanes == null || Lanes.Contains(x.Lane)) &&
@@ -342,7 +342,7 @@ namespace MIS.DAL
         public List<Models.Transaction> GetAutomaticRevenue(DateTime ShiftDate, DateTime EndShiftDate, List<Models.Shift> Shifts, List<Models.Lane> Lanes,
         List<Models.TransactionType> TransactionTypes, List<Models.TollClass> TollClasses, List<Models.SystemUser> SystemUsers)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 return dBContext.Transactions.Where(x => (x.ShiftDate >= ShiftDate && x.ShiftDate <= EndShiftDate) &&
                                 (Shifts == null || Shifts.Contains(x.Shift)) &&

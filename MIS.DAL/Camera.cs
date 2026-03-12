@@ -14,7 +14,7 @@ namespace MIS.DAL
         {
             List<Models.Camera> Cameras = new List<Models.Camera>();
 
-            using (var db = new Models.MISDBContext())
+            using (var db = new Models.ApplicationDbContext())
             {
                 Cameras = db.Cameras.OrderBy(o => o.CameraId).ToList();
             }
@@ -24,7 +24,7 @@ namespace MIS.DAL
 
         public Models.Camera Save(Models.Camera Camera)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 dBContext.Cameras.Add(Camera);
                 dBContext.SaveChanges();
@@ -35,7 +35,7 @@ namespace MIS.DAL
 
         public void Update(Models.Camera Camera)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 dBContext.Cameras.Attach(Camera);
                 dBContext.Entry(Camera).State = EntityState.Modified;

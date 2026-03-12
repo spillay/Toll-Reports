@@ -6,7 +6,8 @@
     ViewData["Title"] = "Account History Report";
 
     var reportGeneratedAt = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
-    var currentUserId = User.Identity?.Name ?? "Lucky";
+    var currentUserId = User.FindFirst("firstName")?.Value ?? (User.Identity?.Name ?? "Lucky");
+
     var reportVersion = "3.0.0.0";
 
     decimal totalAdd = Model?.PageData?.Items?.Sum(i => i.TopUpAmount) ?? 0;
@@ -69,66 +70,56 @@
     }
 
     <!-- FILTERS -->
-    <div class="accordion mb-4" id="filterPanel">
-        <div class="accordion-item shadow-sm">
-            <h2 class="accordion-header">
-                <button class="accordion-button fw-bold" type="button" data-bs-toggle="collapse"
-                        data-bs-target="#collapseFilters">
-                    Filters
-                </button>
-            </h2>
+    <form id="accountForm" method="get" class="row g-3">
 
-            <div id="collapseFilters" class="accordion-collapse collapse show">
-                <div class="accordion-body">
+        <!-- ACCOUNT (FIRST) -->
+        <div class="col-md-3">
+            <label class="form-label fw-semibold">Account Number <span class="text-danger">*</span></label>
 
-                    <form id="accountForm" method="get" class="row g-3">
+            <div class="account-search-wrap">
+                <input type="hidden" id="AccountNumber" name="accountNumber" value="@Model?.AccountNumber" />
 
-                        <!-- START DATE -->
-                        <div class="col-md-3">
-                            <label class="form-label fw-semibold">Start Date And Time</label>
-                            <input type="datetime-local" name="startDate" class="form-control"
-                                   value="@(Model.StartDate?.ToString("yyyy-MM-ddTHH:mm") ?? "")" />
-                        </div>
-
-                        <!-- END DATE -->
-                        <div class="col-md-3">
-                            <label class="form-label fw-semibold">End Date And Time</label>
-                            <input type="datetime-local" name="endDate" class="form-control"
-                                   value="@(Model.EndDate?.ToString("yyyy-MM-ddTHH:mm") ?? "")" />
-                        </div>
-
-                        <!-- OPERATIONAL -->
-                        <div class="col-md-3">
-                            <label class="form-label fw-semibold">Operational Period</label>
-                            <select name="operational" id="operationalSelect" class="form-select">
-                                <option value="">-- Select --</option>
-                                <option value="true" @(Model.Operational == true ? "selected" : "")>Yes</option>
-                                <option value="false" @(Model.Operational == false ? "selected" : "")>No</option>
-                            </select>
-                        </div>
-
-                        <!-- ACCOUNT -->
-                        <div class="col-md-3">
-                            <label class="form-label fw-semibold">Account Number</label>
-                            <select name="accountNumber" id="accountSelect" class="form-select">
-                                <option value="">-- Select Account --</option>
-                                @foreach (var acc in accountList)
-                                {
-                                    <option value="@acc" @(Model.AccountNumber == acc ? "selected" : "")>@acc</option>
-                                }
-                            </select>
-                        </div>
-
-                        <!-- BUTTONS -->
-                        <div class="col-md-2 mt-3">
-                            <button type="submit" class="btn btn-primary w-100">Apply</button>
-                        </div>
-
-                    </form>
-                </div>
+                <select id="accountSearch" class="form-select" required>
+                    @if (!string.IsNullOrWhiteSpace(Model?.AccountNumber))
+                    {
+                        <option value="@Model.AccountNumber" selected="selected">@Model.AccountNumber</option>
+                    }
+                </select>
             </div>
+
+            <small class="text-muted">Select account first to enable other filters.</small>
         </div>
-    </div>
+
+        <!-- START DATE -->
+        <div class="col-md-3">
+            <label class="form-label fw-semibold">Start Date And Time</label>
+            <input type="datetime-local" name="startDate" id="startDateInput" class="form-control"
+                   value="@(Model.StartDate?.ToString("yyyy-MM-ddTHH:mm") ?? "")" />
+        </div>
+
+        <!-- END DATE -->
+        <div class="col-md-3">
+            <label class="form-label fw-semibold">End Date And Time</label>
+            <input type="datetime-local" name="endDate" id="endDateInput" class="form-control"
+                   value="@(Model.EndDate?.ToString("yyyy-MM-ddTHH:mm") ?? "")" />
+        </div>
+
+        <!-- OPERATIONAL -->
+        <div class="col-md-3">
+            <label class="form-label fw-semibold">Operational Period</label>
+            <select name="operational" id="operationalSelect" class="form-select">
+                <option value="">-- Select --</option>
+                <option value="true" @(Model.Operational == true ? "selected" : "")>Yes</option>
+                <option value="false" @(Model.Operational == false ? "selected" : "")>No</option>
+            </select>
+        </div>
+
+        <!-- BUTTON -->
+        <div class="col-md-2 mt-3">
+            <button type="submit" id="btnApply" class="btn btn-primary w-100">Apply Filters</button>
+        </div>
+
+    </form>
 
     <!-- EXPORT BUTTONS -->
     @if (Model?.PageData?.Items?.Any() == true)
@@ -146,7 +137,7 @@
     }
 
     <!-- ACCOUNT HEADER INFO -->
-    @if (!string.IsNullOrEmpty(Model?.AccountNumber) && Model.Operational == true)
+    @if (!string.IsNullOrEmpty(Model?.AccountNumber))
     {
         <div class="card mb-4 border-primary">
             <div class="card-header bg-primary text-white fw-bold">Account Information</div>
@@ -223,7 +214,7 @@
             </table>
         </div>
     }
-    else if (Model.Operational == true && !string.IsNullOrEmpty(Model.AccountNumber))
+    else if (!string.IsNullOrEmpty(Model?.AccountNumber))
     {
         <div class="alert alert-warning text-center">No records found for this account.</div>
     }
@@ -234,7 +225,7 @@
             <tr>
                 <td class="fw-bold text-dark">Account History Report</td>
                 <td><strong>Date and Time:</strong> @reportGeneratedAt</td>
-                <td><strong>User ID:</strong> @currentUserId</td>
+                <td><strong>User:</strong> @currentUserId</td>
                 <td class="text-end">
                     Page <strong>1</strong> of <strong>1</strong>
                 </td>
@@ -251,148 +242,360 @@
 
 </div>
 
+
 @section Scripts {
-
     <!-- Select2 -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.4/jquery.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/js/select2.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/css/select2.min.css" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/js/select2.min.js"></script>
 
-    <script>
-        $(document).ready(function () {
-
-            $("#accountSelect").select2({ placeholder: "-- Select Account --", width: "100%" });
-
-            function toggleAccount() {
-                const op = $("#operationalSelect").val();
-                $("#accountSelect").prop("disabled", op !== "true");
-            }
-
-            toggleAccount();
-            $("#operationalSelect").on("change", toggleAccount);
-        });
-    </script>
-
-    <!-- EXPORT LIBRARIES -->
+    <!-- Export libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 
-    <!-- ================================
-         PDF EXPORT (FINAL VERSION)
-         With Header + Filters + Footer
-    ==================================== -->
     <script>
+        // =========================================================
+        // Account History Page Script
+        // Refactored for:
+        // 1. Stable account search on all PCs
+        // 2. Hidden input submission pattern
+        // 3. Cleaner Select2 initialization
+        // 4. Consistent PDF / Excel exports
+        // =========================================================
 
-        document.getElementById("btnExportPdf")?.addEventListener("click", async function () {
+        // -----------------------------
+        // Shared DOM helpers
+        // -----------------------------
+        function getHiddenAccountValue() {
+            return ($("#AccountNumber").val() || "").toString().trim();
+        }
 
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF({
-                orientation: "landscape",
-                unit: "pt",
-                format: "a4"
+        function hasSelectedAccount() {
+            return getHiddenAccountValue().length > 0;
+        }
+
+        function setFiltersEnabled(enabled) {
+            $("#startDateInput").prop("disabled", !enabled);
+            $("#endDateInput").prop("disabled", !enabled);
+            $("#operationalSelect").prop("disabled", !enabled);
+
+            // Business rule:
+            // If no account is selected, clear dependent filters
+            if (!enabled) {
+                $("#startDateInput").val("");
+                $("#endDateInput").val("");
+                $("#operationalSelect").val("");
+            }
+        }
+
+        // -----------------------------
+        // Image helper for PDF logos
+        // -----------------------------
+        function loadImage(url) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = function () {
+                    resolve(img);
+                };
+                img.onerror = function () {
+                    reject(new Error("Failed to load image: " + url));
+                };
+                img.src = url;
             });
+        }
 
-            const pageWidth = doc.internal.pageSize.getWidth();
-            const pageHeight = doc.internal.pageSize.getHeight();
-            const margin = 40;
+        // -----------------------------
+        // Select2 initialization
+        // Uses hidden input for actual submitted value
+        // -----------------------------
+        function initializeAccountSearch() {
+            const $accountSearch = $("#accountSearch");
+            const $accountNumber = $("#AccountNumber");
+            const existingAccount = ($accountNumber.val() || "").trim();
 
-            // Load Logos
-            const leftLogo = new Image(); leftLogo.src = '/images/lCC Logo.jpg';
-            const rightLogo = new Image(); rightLogo.src = '/images/ICT-Works Logo.jpg';
+            if (!$accountSearch.length) {
+                console.error("Account search dropdown (#accountSearch) was not found.");
+                return;
+            }
 
-            await Promise.all([
-                new Promise(res => leftLogo.onload = res),
-                new Promise(res => rightLogo.onload = res)
-            ]);
+            $accountSearch.select2({
+                placeholder: "Search account number / name...",
+                allowClear: true,
+                width: "100%",
+                minimumInputLength: 2,
+                dropdownParent: $accountSearch.closest(".account-search-wrap"),
+                ajax: {
+                    url: '@Url.Action("SearchAccounts", "AccountHistory")',
+                    dataType: "json",
+                    delay: 300,
+                    data: function (params) {
+                        return {
+                            q: params.term || "",
+                            take: 20
+                        };
+                    },
+                    processResults: function (data) {
+                        return {
+                            results: $.map(data || [], function (item) {
+                                const accountNumber = item.accountNumber || item.AccountNumber || "";
+                                const description = item.description || item.Description || "";
 
-            // ------------------------------
-            // HEADER
-            // ------------------------------
-            doc.addImage(leftLogo, "JPEG", margin, 20, 60, 60);
-            doc.addImage(rightLogo, "JPEG", pageWidth - 100, 20, 60, 60);
+                                return {
+                                    id: accountNumber,
+                                    text: description && description.trim() !== ""
+                                        ? description
+                                        : accountNumber,
+                                    accountNumber: accountNumber,
+                                    description: description
+                                };
+                            })
+                        };
+                    },
+                    cache: true
+                },
 
-            doc.setFontSize(16).setFont("helvetica", "bold");
-            doc.text("ACCOUNT HISTORY REPORT", pageWidth / 2, 60, { align: "center" });
+                // What appears after selection
+                templateSelection: function (item) {
+                    return item.text || item.id || "";
+                },
 
-            // ------------------------------
-            // META + FILTERS
-            // ------------------------------
-            let y = 100;
-            doc.setFontSize(9);
+                // What appears in the dropdown list
+                templateResult: function (item) {
+                    if (item.loading) return item.text;
 
-            doc.text(`Generated By: @currentUserId`, margin, y); y += 12;
-            doc.text(`Generated On: @reportGeneratedAt`, margin, y); y += 12;
-            doc.text(`Version: @reportVersion`, margin, y); y += 20;
+                    const acc = item.accountNumber || item.id || "";
+                    const desc = item.description || item.text || "";
 
-            doc.setFont("helvetica", "bold");
-            doc.text("Filters Used:", margin, y);
-            y += 12;
+                    if (desc && desc !== acc) {
+                        return $("<span>").text(desc + " (" + acc + ")");
+                    }
 
-            doc.setFont("helvetica", "normal");
-            doc.text("Account: @Model.AccountNumber", margin, y); y += 12;
-            doc.text("Start Date: @(Model.StartDate?.ToString("dd/MM/yyyy HH:mm") ?? "N/A")", margin, y); y += 12;
-            doc.text("End Date: @(Model.EndDate?.ToString("dd/MM/yyyy HH:mm") ?? "N/A")", margin, y); y += 12;
-            doc.text("Operational: @Model.Operational", margin, y);
-            y += 20;
+                    return $("<span>").text(acc);
+                },
 
-            // ------------------------------
-            // TABLE + FOOTER CALLBACK
-            // ------------------------------
-            doc.autoTable({
-                html: "#accountHistoryTable",
-                startY: y,
-                theme: "grid",
-                margin: { left: margin, right: margin },
-                headStyles: { fillColor: [13, 110, 253], textColor: 255 },
-                styles: { fontSize: 8, halign: "center" },
-
-                didDrawPage: function (data) {
-                    const footerY = pageHeight - 40;
-
-                    doc.setFontSize(9).setFont("helvetica", "normal");
-
-                    // LEFT FOOTER
-                    doc.text("Account History Report", margin, footerY);
-
-                    // CENTER FOOTER
-                    doc.text(`Printed On: @reportGeneratedAt`,
-                        pageWidth / 2,
-                        footerY,
-                        { align: "center" });
-
-                    // RIGHT FOOTER (Page number)
-                    doc.text(
-                        "Page " + doc.internal.getNumberOfPages(),
-                        pageWidth - margin,
-                        footerY,
-                        { align: "right" }
-                    );
+                escapeMarkup: function (markup) {
+                    return markup;
                 }
             });
 
-            // ------------------------------
-            // SAVE FILE
-            // ------------------------------
-            doc.save(`Account_History_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
+            // When an account is selected, copy it into hidden input
+            $accountSearch.on("select2:select", function (e) {
+                const selected = e.params.data;
+                const selectedValue = (selected && selected.id) ? selected.id : "";
+
+                $accountNumber.val(selectedValue);
+                setFiltersEnabled(hasSelectedAccount());
+            });
+
+            // When cleared, also clear hidden input
+            $accountSearch.on("select2:clear", function () {
+                $accountNumber.val("");
+                setFiltersEnabled(false);
+            });
+
+            // Rehydrate existing selected value on page load
+            // Useful when page reloads after filter submit
+            if (existingAccount) {
+                const option = new Option(existingAccount, existingAccount, true, true);
+                $accountSearch.append(option).trigger("change");
+                $accountNumber.val(existingAccount);
+            }
+        }
+
+        // -----------------------------
+        // Form validation
+        // -----------------------------
+        function validateAccountOnSubmit(e) {
+            if (!hasSelectedAccount()) {
+                e.preventDefault();
+                alert("Please select an Account Number first.");
+                $("#accountSearch").focus();
+                return false;
+            }
+
+            console.log("Submitting accountNumber:", getHiddenAccountValue());
+            return true;
+        }
+
+        // -----------------------------
+        // PDF Export
+        // -----------------------------
+        async function exportAccountHistoryPdf() {
+            try {
+                const table = document.querySelector("#accountHistoryTable");
+                if (!table) {
+                    alert("Account history table was not found.");
+                    return;
+                }
+
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF({
+                    orientation: "landscape",
+                    unit: "pt",
+                    format: "a4"
+                });
+
+                const pageWidth = doc.internal.pageSize.getWidth();
+                const pageHeight = doc.internal.pageSize.getHeight();
+                const margin = 40;
+
+                const logoWidth = 90;
+                const logoHeight = 45;
+                const headerTop = 25;
+
+                const leftLogoUrl = "/images/lCC Logo.jpg";
+                const rightLogoUrl = "/images/ICT-Works Logo.jpg";
+
+                // Load both logos safely
+                let leftLogo = null;
+                let rightLogo = null;
+
+                try {
+                    [leftLogo, rightLogo] = await Promise.all([
+                        loadImage(leftLogoUrl),
+                        loadImage(rightLogoUrl)
+                    ]);
+                } catch (logoError) {
+                    console.warn("Logo loading failed. PDF will continue without one or more logos.", logoError);
+                }
+
+                function drawHeader() {
+                    // Logos
+                    if (leftLogo) {
+                        doc.addImage(leftLogo, "JPEG", margin, headerTop, logoWidth, logoHeight);
+                    }
+
+                    if (rightLogo) {
+                        doc.addImage(rightLogo, "JPEG", pageWidth - margin - logoWidth, headerTop, logoWidth, logoHeight);
+                    }
+
+                    // Titles
+                    doc.setFont("helvetica", "bold");
+                    doc.setFontSize(13);
+                    doc.text("LEKKI CONCESSION COMPANY (LCC)", pageWidth / 2, headerTop + 15, { align: "center" });
+
+                    doc.setFontSize(11);
+                    doc.text("MIS REPORTING SYSTEM", pageWidth / 2, headerTop + 30, { align: "center" });
+
+                    doc.setFontSize(14);
+                    doc.text("ACCOUNT HISTORY REPORT", pageWidth / 2, headerTop + 52, { align: "center" });
+
+                    // Meta data
+                    let y = headerTop + 85;
+
+                    doc.setFont("helvetica", "normal");
+                    doc.setFontSize(9);
+                    doc.text("Generated By: @currentUserId", margin, y); y += 12;
+                    doc.text("Generated On: @reportGeneratedAt", margin, y); y += 12;
+                    doc.text("Version: @reportVersion", margin, y); y += 18;
+
+                    doc.setFont("helvetica", "bold");
+                    doc.text("Filters Used:", margin, y); y += 12;
+
+                    doc.setFont("helvetica", "normal");
+                    doc.text("Account: @(!string.IsNullOrWhiteSpace(Model?.AccountNumber) ? Model.AccountNumber : "N/A")", margin, y); y += 12;
+                    doc.text("Start Date: @(Model?.StartDate?.ToString("dd/MM/yyyy HH:mm") ?? "N/A")", margin, y); y += 12;
+                    doc.text("End Date: @(Model?.EndDate?.ToString("dd/MM/yyyy HH:mm") ?? "N/A")", margin, y); y += 12;
+                    doc.text("Operational: @(Model?.Operational.HasValue == true ? (Model.Operational.Value ? "Yes" : "No") : "N/A")", margin, y);
+
+                    return y + 14;
+                }
+
+                const tableStartY = drawHeader();
+
+                doc.autoTable({
+                    html: "#accountHistoryTable",
+                    startY: tableStartY,
+                    theme: "grid",
+                    margin: { left: margin, right: margin },
+
+                    headStyles: {
+                        fillColor: [41, 128, 185],
+                        textColor: 255
+                    },
+
+                    styles: {
+                        fontSize: 8,
+                        halign: "center",
+                        valign: "middle"
+                    },
+
+                    didDrawPage: function (data) {
+                        // Redraw header on every page for consistency
+                        drawHeader();
+
+                        const footerY = pageHeight - 30;
+                        const pageNumber = doc.internal.getNumberOfPages();
+
+                        doc.setFont("helvetica", "normal");
+                        doc.setFontSize(9);
+
+                        doc.text("Account History Report", margin, footerY);
+                        doc.text("Printed On: @reportGeneratedAt", pageWidth / 2, footerY, { align: "center" });
+                        doc.text("Page " + pageNumber, pageWidth - margin, footerY, { align: "right" });
+                    }
+                });
+
+                const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+                doc.save("Account_History_" + timestamp + ".pdf");
+            } catch (error) {
+                console.error("PDF export failed:", error);
+                alert("An error occurred while exporting the PDF.");
+            }
+        }
+
+        // -----------------------------
+        // Excel Export
+        // -----------------------------
+        function exportAccountHistoryExcel() {
+            try {
+                const table = document.querySelector("#accountHistoryTable");
+                if (!table) {
+                    alert("Account history table was not found.");
+                    return;
+                }
+
+                const workbook = XLSX.utils.book_new();
+                const worksheet = XLSX.utils.table_to_sheet(table);
+
+                XLSX.utils.book_append_sheet(workbook, worksheet, "AccountHistory");
+
+                const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+                XLSX.writeFile(workbook, "Account_History_" + timestamp + ".xlsx");
+            } catch (error) {
+                console.error("Excel export failed:", error);
+                alert("An error occurred while exporting Excel.");
+            }
+        }
+
+        // -----------------------------
+        // Wire page events
+        // -----------------------------
+        function bindPageEvents() {
+            $("#accountForm").on("submit", validateAccountOnSubmit);
+
+            document.getElementById("btnExportPdf")?.addEventListener("click", exportAccountHistoryPdf);
+            document.getElementById("btnExportExcel")?.addEventListener("click", exportAccountHistoryExcel);
+        }
+
+        // -----------------------------
+        // Page startup
+        // -----------------------------
+        $(document).ready(function () {
+            if (!window.jQuery) {
+                console.error("jQuery is not loaded.");
+                return;
+            }
+
+            if (!$.fn.select2) {
+                console.error("Select2 is not loaded.");
+                return;
+            }
+
+            initializeAccountSearch();
+            setFiltersEnabled(hasSelectedAccount());
+            bindPageEvents();
         });
-
-        // ============================
-        // EXCEL EXPORT
-        // ============================
-        document.getElementById("btnExportExcel")?.addEventListener("click", function () {
-            const table = document.querySelector("#accountHistoryTable");
-            if (!table) return;
-
-            const wb = XLSX.utils.book_new();
-            const ws = XLSX.utils.table_to_sheet(table);
-
-            XLSX.utils.book_append_sheet(wb, ws, "AccountHistory");
-
-            XLSX.writeFile(wb, `Account_History_${new Date().toISOString().replace(/[:.]/g, '-')}.xlsx`);
-        });
-
     </script>
-
 }
 

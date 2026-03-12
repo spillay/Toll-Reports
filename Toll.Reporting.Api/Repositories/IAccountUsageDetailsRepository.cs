@@ -7,6 +7,11 @@ namespace Toll.Reporting.Api.Repositories.Interfaces
 {
     public interface IAccountUsageDetailsRepository
     {
-        Task<AccountUsageDetailsReportDto> GetAccountUsageDetailsAsync(DateTime startDate, DateTime endDate);
+        Task<List<AccountSearchResultDto>> SearchAccountsAsync(string q, int take = 20);
+
+        Task<AccountUsageDetailsResponseDto> GetAccountUsageDetailsAsync(
+            string accountNumber,
+            DateTime startDate,
+            DateTime endDate);
     }
 }

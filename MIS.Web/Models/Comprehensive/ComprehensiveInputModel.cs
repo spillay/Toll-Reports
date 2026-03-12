@@ -2,12 +2,15 @@
 {
     public DateTime StartDate { get; set; } = DateTime.UtcNow.AddDays(-7);
     public DateTime EndDate { get; set; } = DateTime.UtcNow;
-    public string? Shift { get; set; } = "";
-    public string? TransactionType { get; set; } = "";
-    public string? TollOperatorID { get; set; } = "";
-    public string? LaneName { get; set; } = "";
-    public string? MethodOfPayment { get; set; } = "";
-    public string? DiscountType { get; set; } = "";
-    public string? Classification { get; set; } = "";
+
+    public List<byte> ShiftIds { get; set; } = new();
+    public List<long> OperatorIds { get; set; } = new();
+    public List<int> LaneIds { get; set; } = new();
+    public List<byte> DiscountTypeIds { get; set; } = new();
+    public List<byte> TollClassIds { get; set; } = new();
+
+    public List<byte> PaymentMethodIds { get; set; } = new();
+
     public string GroupBy { get; set; } = "TransactionType";
+    
 }

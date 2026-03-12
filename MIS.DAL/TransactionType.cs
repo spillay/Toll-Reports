@@ -14,7 +14,7 @@ namespace MIS.DAL
         {
             List<Models.TransactionType> transactionTypes = new List<Models.TransactionType>();
 
-            using (var db = new Models.MISDBContext())
+            using (var db = new Models.ApplicationDbContext())
             {
                 transactionTypes = db.TransactionTypes.OrderBy(o => o.Description).ToList();
             }

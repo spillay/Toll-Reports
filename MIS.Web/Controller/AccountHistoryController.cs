@@ -20,42 +20,57 @@ namespace MIS.Web.Controllers
             _logger = logger;
         }
 
+        [HttpGet("search")]
+        public async Task<IActionResult> SearchAccounts(string q, int take = 20)
+        {
+            var results = await _service.SearchAccountsAsync(q, take);
+            return Json(results);
+        }
         [HttpGet]
         public async Task<IActionResult> Index(
-    string? accountNumber = null,
-    DateTime? startDate = null,
-    DateTime? endDate = null,
-    bool? operational = null)
+            string? accountNumber = null,
+            DateTime? startDate = null,
+            DateTime? endDate = null,
+            bool? operational = null)
         {
             var model = new AccountHistoryInputModel();
 
             try
             {
-                ViewBag.Accounts = await _service.GetAccountsAsync();
+              
+                accountNumber = (accountNumber ?? "").Trim();
 
-                // ============================================================
-                // RULE: Account filter ONLY works when operational = true
-                // ============================================================
-                bool useAccountFilter = operational == true && !string.IsNullOrWhiteSpace(accountNumber);
-
-                if (!useAccountFilter)
-                    accountNumber = null;  // Force API to return ALL ACCOUNTS
-
-                // If using operational mode, date range is required
-                if (operational == true && (startDate == null || endDate == null))
+                //  Account first
+                if (string.IsNullOrWhiteSpace(accountNumber))
                 {
-                    TempData["Warning"] = "Start Date and End Date are required in operational mode.";
+                    model.Operational = operational;
+                    model.StartDate = startDate;
+                    model.EndDate = endDate;
+
+                    TempData["Warning"] = "Please select an Account Number first.";
                     return View(model);
                 }
 
-                // Fetch data
+                // ✅ If user sets one date, require both
+                if ((startDate.HasValue && !endDate.HasValue) || (!startDate.HasValue && endDate.HasValue))
+                {
+                    TempData["Warning"] = "Please provide BOTH Start Date and End Date, or leave both empty.";
+                    model.AccountNumber = accountNumber;
+                    model.StartDate = startDate;
+                    model.EndDate = endDate;
+                    model.Operational = operational;
+                    return View(model);
+                }
+
+                // Fetch from API
                 model = await _service.GetAccountHistoryAsync(
                     accountNumber,
                     startDate,
                     endDate,
-                    operational);
+                    operational
+                );
 
-                // Push filter values back to UI
+                // Push filters back to UI (service already does some, but keep consistent)
                 model.AccountNumber = accountNumber;
                 model.StartDate = startDate;
                 model.EndDate = endDate;
@@ -69,7 +84,5 @@ namespace MIS.Web.Controllers
 
             return View(model);
         }
-
-
     }
 }

@@ -5,7 +5,8 @@
     ViewData["Title"] = "End Of Day Report";
 
     string generatedAt = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
-    string userId = User.Identity?.Name ?? "Lucky";
+    var userId = User.FindFirst("firstName")?.Value ?? (User.Identity?.Name ?? "Lucky");
+
     string version = "3.0.0.0";
 
     // Safe loading
@@ -431,7 +432,7 @@
             <div class="col-md-4"><strong>User ID:</strong> @userId</div>
             <div class="col-md-4 text-end">Page 1 of 1</div>
         </div>
-        <div class="mt-2"><strong>Reports Module Version:</strong> @version</div>
+        <div class="mt-2"><strong>Reports Module Version Number:</strong> @version</div>
     </div>
 
 </div>

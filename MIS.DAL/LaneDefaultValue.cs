@@ -14,7 +14,7 @@ namespace MIS.DAL
         {
             List<Models.LaneDefaultValue> laneDefaultValues = new List<Models.LaneDefaultValue>();
 
-            using (var db = new Models.MISDBContext())
+            using (var db = new Models.ApplicationDbContext())
             {
                 laneDefaultValues = db.LaneDefaultValues.OrderBy(o => o.LaneDefaultValueId).ToList();
             }
@@ -24,7 +24,7 @@ namespace MIS.DAL
 
         public Models.LaneDefaultValue Save(Models.LaneDefaultValue LaneDefaultValue)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 dBContext.LaneDefaultValues.Add(LaneDefaultValue);
                 dBContext.SaveChanges();
@@ -35,7 +35,7 @@ namespace MIS.DAL
 
         public void Update(Models.LaneDefaultValue LaneDefaultValue)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 dBContext.LaneDefaultValues.Attach(LaneDefaultValue);
                 dBContext.Entry(LaneDefaultValue).State = EntityState.Modified;

@@ -2,6 +2,11 @@
 using Microsoft.Extensions.Logging;
 using MIS.Web.Models.AccountUsageDetails;
 using Newtonsoft.Json;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net.Http;
+using System.Threading.Tasks;
 
 namespace MIS.Web.Services
 {
@@ -21,63 +26,143 @@ namespace MIS.Web.Services
             _logger = logger;
         }
 
-        // =========================================================
-        // GET DETAILS + SUMMARY (from GetDetails API)
-        // =========================================================
-        public async Task<PageAccountUsageDetailsModel> GetAccountUsageDetailsAsync(
-            DateTime startDate, DateTime endDate)
+        private string GetBaseUrl()
         {
-            var model = new PageAccountUsageDetailsModel();
+            return _config["BaseApiUrl:Link"]?.TrimEnd('/') ?? string.Empty;
+        }
 
-            string baseUrl = _config["BaseApiUrl:Link"]?.TrimEnd('/');
+        // =========================================================
+        // Search accounts
+        // GET: /api/AccountUsageDetails/SearchAccounts?q=charity&take=20
+        // =========================================================
+        public async Task<List<AccountSearchResultModel>> SearchAccountsAsync(string q, int take = 20)
+        {
+            var baseUrl = GetBaseUrl();
             if (string.IsNullOrWhiteSpace(baseUrl))
-                return model;
+            {
+                _logger.LogWarning("Base API URL is missing for AccountUsageDetails search.");
+                return new List<AccountSearchResultModel>();
+            }
 
-            string start = Uri.EscapeDataString(startDate.ToString("yyyy-MM-ddTHH:mm:ss"));
-            string end = Uri.EscapeDataString(endDate.ToString("yyyy-MM-ddTHH:mm:ss"));
+            q = (q ?? string.Empty).Trim();
+            if (q.Length < 2)
+            {
+                return new List<AccountSearchResultModel>();
+            }
 
-            string url = $"{baseUrl}/api/AccountUsageDetails/GetDetails?startDate={start}&endDate={end}";
+            take = Math.Clamp(take, 1, 50);
+
+            var url = $"{baseUrl}/api/AccountUsageDetails/SearchAccounts" +
+                      $"?q={Uri.EscapeDataString(q)}&take={take}";
 
             try
             {
-                _logger.LogInformation("🌐 Calling API: {Url}", url);
+                _logger.LogInformation("Calling AccountUsageDetails SearchAccounts API: {Url}", url);
 
                 var response = await _httpClient.GetAsync(url);
                 if (!response.IsSuccessStatusCode)
                 {
-                    _logger.LogWarning("⚠ API returned status {StatusCode}", response.StatusCode);
+                    _logger.LogWarning(
+                        "SearchAccounts API returned status code {StatusCode} for query {Query}",
+                        response.StatusCode,
+                        q);
+
+                    return new List<AccountSearchResultModel>();
+                }
+
+                var json = await response.Content.ReadAsStringAsync();
+
+                var results = JsonConvert.DeserializeObject<List<AccountSearchResultModel>>(json)
+                              ?? new List<AccountSearchResultModel>();
+
+                return results
+                    .Where(x => !string.IsNullOrWhiteSpace(x.AccountNumber))
+                    .Select(x => new AccountSearchResultModel
+                    {
+                        AccountNumber = x.AccountNumber?.Trim() ?? string.Empty,
+                        Description = x.Description?.Trim() ?? string.Empty
+                    })
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error calling SearchAccounts API for query {Query}", q);
+                return new List<AccountSearchResultModel>();
+            }
+        }
+
+        // =========================================================
+        // Get details
+        // GET: /api/AccountUsageDetails/GetDetails?accountNumber=...&startDate=...&endDate=...
+        // =========================================================
+        public async Task<PageAccountUsageDetailsModel> GetAccountUsageDetailsAsync(
+            string accountNumber,
+            DateTime startDate,
+            DateTime endDate)
+        {
+            var model = new PageAccountUsageDetailsModel
+            {
+                Header = new AccountUsageDetailsHeaderModel(),
+                Items = new List<AccountUsageDetailsRowModel>()
+            };
+
+            var baseUrl = GetBaseUrl();
+            if (string.IsNullOrWhiteSpace(baseUrl))
+            {
+                _logger.LogWarning("Base API URL is missing for AccountUsageDetails details request.");
+                return model;
+            }
+
+            accountNumber = (accountNumber ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(accountNumber))
+            {
+                _logger.LogWarning("Account number is required for AccountUsageDetails details request.");
+                return model;
+            }
+
+            var start = Uri.EscapeDataString(startDate.ToString("yyyy-MM-ddTHH:mm:ss"));
+            var end = Uri.EscapeDataString(endDate.ToString("yyyy-MM-ddTHH:mm:ss"));
+            var acc = Uri.EscapeDataString(accountNumber);
+
+            var url = $"{baseUrl}/api/AccountUsageDetails/GetDetails" +
+                      $"?accountNumber={acc}&startDate={start}&endDate={end}";
+
+            try
+            {
+                _logger.LogInformation("Calling AccountUsageDetails GetDetails API: {Url}", url);
+
+                var response = await _httpClient.GetAsync(url);
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning(
+                        "GetDetails API returned status code {StatusCode} for account {AccountNumber}",
+                        response.StatusCode,
+                        accountNumber);
+
                     return model;
                 }
 
                 var json = await response.Content.ReadAsStringAsync();
 
-                // Deserialize the WRAPPER { summary: {}, details: [] }
-                var wrapper = JsonConvert.DeserializeObject<AccountUsageDetailsApiResponse>(json);
+                var apiResponse = JsonConvert.DeserializeObject<AccountUsageDetailsResponse>(json)
+                                  ?? new AccountUsageDetailsResponse();
 
-                model.Summary = wrapper?.Summary ?? new AccountUsageSummaryModel();
-                model.Items = wrapper?.Details ?? new List<AccountUsageDetailsModel>();
+                model.Header = apiResponse.Header ?? new AccountUsageDetailsHeaderModel();
+                model.Items = apiResponse.Details ?? new List<AccountUsageDetailsRowModel>();
 
                 return model;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "❌ Error fetching Account Usage Details");
+                _logger.LogError(
+                    ex,
+                    "Error fetching Account Usage Details for account {AccountNumber} between {StartDate} and {EndDate}",
+                    accountNumber,
+                    startDate,
+                    endDate);
+
                 return model;
             }
         }
-
-        // =========================================================
-        // NOT USED ANYMORE – Summary comes from GetDetails API
-        // =========================================================
-        public Task<AccountUsageSummaryModel> GetSummaryAsync()
-        {
-            return Task.FromResult(new AccountUsageSummaryModel());
-        }
-    }
-
-    public class AccountUsageDetailsApiResponse
-    {
-        public AccountUsageSummaryModel? Summary { get; set; }
-        public List<AccountUsageDetailsModel>? Details { get; set; }
     }
 }

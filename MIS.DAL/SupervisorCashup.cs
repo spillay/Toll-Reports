@@ -12,7 +12,7 @@ namespace MIS.DAL
     {
         public Models.SupervisorCashup Create(Models.SupervisorCashup SupervisorCashup)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 dBContext.SupervisorCashups.Add(SupervisorCashup);
                 dBContext.SaveChanges();
@@ -22,7 +22,7 @@ namespace MIS.DAL
 
         public List<Models.SupervisorCashup> GetUnverified(DateTime ShiftDate, byte ShiftId)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 return dBContext.SupervisorCashups
                             .Where(x => x.ShiftId == ShiftId && x.ShiftDate == ShiftDate && !x.VerifiedById.HasValue)
@@ -33,7 +33,7 @@ namespace MIS.DAL
 
         public Models.SupervisorCashup Update(Models.SupervisorCashup SupervisorCashup)
         {
-            using (var dbContext = new Models.MISDBContext())
+            using (var dbContext = new Models.ApplicationDbContext())
             {
                 dbContext.SupervisorCashups.Attach(SupervisorCashup);
                 dbContext.Entry(SupervisorCashup).State = EntityState.Modified;

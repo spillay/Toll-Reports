@@ -4,29 +4,23 @@ namespace Toll.Reporting.Api.DTOs
 {
     public class AccountUsageDetailsItemDto
     {
-        // ACCOUNT INFO
-        public string AccountNumber { get; set; }
-        public string UserName { get; set; }
-        public string VehicleRegNumber { get; set; }
-        public string Status { get; set; }
+        public string? EID_DeviceType { get; set; }
+        public string? EID_DeviceNumber { get; set; }
+        public string? VehicleRegNumber { get; set; }
+        public string? VehicleClass { get; set; }
 
-        // BALANCES
-        public decimal OpeningBalance { get; set; }
-        public decimal ClosingBalance { get; set; }
+        public decimal Balance { get; set; }
 
-        // TRANSACTION DETAILS
-        public string TransactionType { get; set; }
-        public decimal NettAmount { get; set; }
-        public decimal DiscountValue { get; set; }
-        public decimal NominalTariff { get; set; }
-        public decimal VatAmount { get; set; }
-        public DateTime? TransactionDateTime { get; set; }
-        public string LaneName { get; set; }
-        public string PaymentMethod { get; set; }   // Always string
+        public int LaneTransactionCount { get; set; }
+        public decimal LaneTransactionValue { get; set; }
 
-        // TOP-UP DETAILS
-        public decimal TopUpAmount { get; set; }
-        public string TopUpMethod { get; set; }
-        public DateTime? TopUpDateTime { get; set; }
+        public decimal ReceiptTopUp { get; set; }
+        public decimal ReceiptDeposit { get; set; }
+
+        public decimal PaymentFees { get; set; }
+        public decimal PaymentRefunds { get; set; }
+
+        public decimal RefundAccount { get; set; }
+        public decimal RefundDeposit { get; set; }
     }
 }

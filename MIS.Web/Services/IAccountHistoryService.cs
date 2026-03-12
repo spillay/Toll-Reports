@@ -3,11 +3,10 @@
 public interface IAccountHistoryService
 {
     Task<AccountHistoryInputModel> GetAccountHistoryAsync(
-        string accountNumber,
+        string? accountNumber,
         DateTime? startDate,
         DateTime? endDate,
         bool? operational);
 
-    Task<List<string>> GetAccountsAsync();
+    Task<List<AccountSearchItem>> SearchAccountsAsync(string q, int take = 20);
 }
-

@@ -145,7 +145,7 @@ namespace Toll.Reporting.Api.Repositories
                         : (x.User != null ? x.User.RegisterUserId.ToString() : string.Empty),
 
                     AccountName = x.User != null ? (x.User.CompanyName ?? string.Empty) : string.Empty,
-                    AmountPaid = x.TopUp.Amount,
+                    AmountPaid = (decimal)x.TopUp.Amount,
                     MethodOfPayment = x.Payment != null ? (x.Payment.Description ?? string.Empty) : string.Empty
                 })
                 .ToListAsync();

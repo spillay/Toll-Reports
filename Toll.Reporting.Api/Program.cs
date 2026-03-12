@@ -11,33 +11,37 @@ var builder = WebApplication.CreateBuilder(args);
 // ====================
 builder.Services.AddWindowsService();
 
-
+// ====================
+// Controllers + JSON
+// ====================
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
-        // return PascalCase for MVC frontend
+        // Keep PascalCase for MVC frontend
         options.JsonSerializerOptions.PropertyNamingPolicy = null;
     });
-
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 // ====================
-// Load Configuration
+// Configuration
 // ====================
-var configBuilder = new ConfigurationBuilder().AddJsonFile("appsettings.json").Build();
-var connectionString = configBuilder.GetConnectionString("SQLServerConnection");
+var connectionString =
+    builder.Configuration.GetConnectionString("SQLServerConnection")
+    ?? throw new InvalidOperationException("Connection string 'SQLServerConnection' was not found.");
 
-var configServer = configBuilder.GetSection("Server");
-var host = configServer["Host"];
-var port = configServer["Port"];
+var host = builder.Configuration["Server:Host"] ?? "localhost";
+var port = builder.Configuration["Server:Port"] ?? "4567";
 
 // ====================
 // DbContext
 // ====================
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(connectionString));
+    options.UseSqlServer(connectionString, sql =>
+    {
+        sql.CommandTimeout(120);
+    }));
 
 // ====================
 // CORS
@@ -68,7 +72,6 @@ builder.Services.AddScoped<IAccountUsageDetailsRepository, AccountUsageDetailsRe
 builder.Services.AddScoped<IEndOfDayReportRepository, EndOfDayReportRepository>();
 builder.Services.AddScoped<IAuthRepository, AuthRepository>();
 
-
 builder.Services.AddHttpClient();
 
 // ====================
@@ -91,5 +94,3 @@ app.MapControllers();
 // Run
 // ====================
 app.Run($"http://{host}:{port}");
-//app.Run("http://192.168.1.103:4567");
-

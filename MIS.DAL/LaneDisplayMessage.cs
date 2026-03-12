@@ -14,7 +14,7 @@ namespace MIS.DAL
         {
             List<Models.LaneDisplayMessage> laneDefaultValues = new List<Models.LaneDisplayMessage>();
 
-            using (var db = new Models.MISDBContext())
+            using (var db = new Models.ApplicationDbContext())
             {
                 laneDefaultValues = db.LaneDisplayMessages.OrderBy(o => o.LaneDisplayMessageId).ToList();
             }
@@ -24,7 +24,7 @@ namespace MIS.DAL
 
         public Models.LaneDisplayMessage Save(Models.LaneDisplayMessage LaneDisplayMessage)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 dBContext.LaneDisplayMessages.Add(LaneDisplayMessage);
                 dBContext.SaveChanges();
@@ -35,7 +35,7 @@ namespace MIS.DAL
 
         public void Update(Models.LaneDisplayMessage LaneDisplayMessage)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 dBContext.LaneDisplayMessages.Attach(LaneDisplayMessage);
                 dBContext.Entry(LaneDisplayMessage).State = EntityState.Modified;

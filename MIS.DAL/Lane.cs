@@ -14,7 +14,7 @@ namespace MIS.DAL
         {
             List<Models.Lane> lanes = new List<Models.Lane>();
 
-            using (var db = new Models.MISDBContext())
+            using (var db = new Models.ApplicationDbContext())
             {
                 lanes = db.Lanes.OrderBy(o => o.LaneCode).ThenBy(o => o.LaneName).Include(x => x.VirtualPlaza)
                     .ToList();
@@ -27,7 +27,7 @@ namespace MIS.DAL
         {
             List<Models.Lane> lanes = new List<Models.Lane>();
 
-            using (var db = new Models.MISDBContext())
+            using (var db = new Models.ApplicationDbContext())
             {
                 lanes = db.Lanes.Where(x => x.VirtualPlazaId == VirtualPlazaId).OrderBy(o => o.LaneName).ToList();
             }
@@ -37,7 +37,7 @@ namespace MIS.DAL
 
         public Models.Lane Save(Models.Lane Lane)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 dBContext.Lanes.Add(Lane);
                 dBContext.SaveChanges();
@@ -48,7 +48,7 @@ namespace MIS.DAL
 
         public void Update(Models.Lane Lane)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 dBContext.Lanes.Attach(Lane);
                 dBContext.Entry(Lane).State = EntityState.Modified;

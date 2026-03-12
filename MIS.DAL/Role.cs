@@ -14,7 +14,7 @@ namespace MIS.DAL
         {
             List<Models.Role> roles = new List<Models.Role>();
 
-            using (var db = new Models.MISDBContext())
+            using (var db = new Models.ApplicationDbContext())
             {
                 roles = db.Roles.OrderBy(o => o.Description).ToList();
             }

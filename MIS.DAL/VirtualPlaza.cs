@@ -14,7 +14,7 @@ namespace MIS.DAL
         {
             List<Models.VirtualPlaza> virtualPlazas = new List<Models.VirtualPlaza>();
 
-            using (var db = new Models.MISDBContext())
+            using (var db = new Models.ApplicationDbContext())
             {
                 virtualPlazas = db.VirtualPlazas.OrderBy(o => o.VirtualPlazaName).Include(x => x.TollPlaza).ToList();
             }
@@ -26,7 +26,7 @@ namespace MIS.DAL
         {
             List<Models.VirtualPlaza> virtualPlazas = new List<Models.VirtualPlaza>();
 
-            using (var db = new Models.MISDBContext())
+            using (var db = new Models.ApplicationDbContext())
             {
                 virtualPlazas = db.VirtualPlazas.Where(x=> x.TollPlazaId == TollPlazaId).OrderBy(o => o.VirtualPlazaName).ToList();
             }
@@ -36,7 +36,7 @@ namespace MIS.DAL
 
         public Models.VirtualPlaza Save(Models.VirtualPlaza VirtualPlaza)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 dBContext.VirtualPlazas.Add(VirtualPlaza);
                 dBContext.SaveChanges();
@@ -47,7 +47,7 @@ namespace MIS.DAL
 
         public void Update(Models.VirtualPlaza VirtualPlaza)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 dBContext.VirtualPlazas.Attach(VirtualPlaza);
                 dBContext.Entry(VirtualPlaza).State = EntityState.Modified;

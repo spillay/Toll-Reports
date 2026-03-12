@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -17,156 +18,264 @@ namespace Toll.Reporting.Api.Repositories
             _context = context;
         }
 
-        public async Task<AccountUsageDetailsReportDto> GetAccountUsageDetailsAsync(
+        public async Task<List<AccountSearchResultDto>> SearchAccountsAsync(string q, int take = 20)
+        {
+            q = (q ?? string.Empty).Trim();
+
+            if (q.Length < 2)
+                return new List<AccountSearchResultDto>();
+
+            take = Math.Clamp(take, 1, 50);
+
+            var results = await _context.RegisteredUsers
+                .AsNoTracking()
+                .Where(ru =>
+                    ru.RegisterUserId.ToString().Contains(q) ||
+                    (ru.AccNr != null && ru.AccNr.Contains(q)) ||
+                    (ru.CompanyName != null && ru.CompanyName.Contains(q)) ||
+                    (ru.FirstName != null && ru.FirstName.Contains(q)) ||
+                    (ru.LastName != null && ru.LastName.Contains(q)) ||
+                    (((ru.FirstName ?? "") + " " + (ru.LastName ?? "")).Trim()).Contains(q))
+                .OrderBy(ru => ru.RegisterUserId)
+                .Select(ru => new AccountSearchResultDto
+                {
+                    AccountNumber = ru.RegisterUserId.ToString(),
+
+                    Description =
+                (!string.IsNullOrWhiteSpace(ru.AccNr) ? ru.AccNr : ru.RegisterUserId.ToString()) +
+                " - " +
+                (!string.IsNullOrWhiteSpace(ru.CompanyName)
+                    ? ru.CompanyName
+                    : ((ru.FirstName ?? "") + " " + (ru.LastName ?? "")).Trim())
+                })
+                .Take(take)
+                .ToListAsync();
+
+            return results;
+        }
+
+        public async Task<AccountUsageDetailsResponseDto> GetAccountUsageDetailsAsync(
+            string accountNumber,
             DateTime startDate,
             DateTime endDate)
         {
-            // Make end date inclusive of full day
-            if (endDate.TimeOfDay == TimeSpan.Zero)
-                endDate = endDate.AddDays(1).AddSeconds(-1);
+            var response = new AccountUsageDetailsResponseDto();
 
-            // ============================================================
-            // 1️⃣ DETAILS QUERY — JOINS (RU + Movements + TopUp + Transaction)
-            // ============================================================
-            var detailsQuery =
-                from ru in _context.RegisteredUsers.AsNoTracking()
+            accountNumber = (accountNumber ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(accountNumber))
+                return response;
 
-                    // ACCOUNT MOVEMENTS
-                join rum in _context.RegisterUserAccountMovements.AsNoTracking()
-                    on ru.RegisterUserId equals rum.RegisterUserId into rumGroup
-                from rum in rumGroup.DefaultIfEmpty()
+            long accId;
 
-                    // TOP UPS
-                join rut in _context.RegisteredUserTopUps.AsNoTracking()
-                    on ru.RegisterUserId equals rut.RegisterUserId into rutGroup
-                from rut in rutGroup.DefaultIfEmpty()
-
-                    // TRANSACTIONS
-                join t in _context.Transactions.AsNoTracking()
-                    on ru.RegisterUserId equals t.RegisteredUserId into tGroup
-                from t in tGroup.DefaultIfEmpty()
-
-                    // PAYMENT METHOD for TopUps
-                join pm in _context.PaymentMethods.AsNoTracking()
-                    on rut.PaymentMethodId equals pm.PaymentMethodId into pmGroup
-                from pm in pmGroup.DefaultIfEmpty()
-
-                    // FILTER RANGE
-                where
-                    (t != null &&
-                     t.TransactionDateTime >= startDate &&
-                     t.TransactionDateTime <= endDate)
-
-                    ||
-                    (t == null &&
-                     rut != null &&
-                     rut.RechargedOn >= startDate &&
-                     rut.RechargedOn <= endDate)
-
-                select new AccountUsageDetailsItemDto
-                {
-                    // ==========================================
-                    // ACCOUNT INFO
-                    // ==========================================
-                    AccountNumber = ru.AccNr,
-
-                    UserName = ((ru.FirstName ?? "") + " " + (ru.LastName ?? ""))
-                        .Trim(),
-
-                    VehicleRegNumber = ru.RegisteredUserIdentifiers
-                        .Where(id => id.IsActive == true)
-                        .Select(id => id.RegisteredIdentifier)
-                        .FirstOrDefault() ?? string.Empty,
-
-                    Status =
-                        ru.IsActive == true ? "Active" :
-                        ru.IsActive == false ? "Terminated" :
-                        "Dormant",
-
-                    // ==========================================
-                    // BALANCES
-                    // ==========================================
-                    OpeningBalance = rum != null
-                        ? (decimal)(rum.OpeningBalance ?? 0)
-                        : 0m,
-
-                    ClosingBalance = rum != null
-                        ? (decimal)(rum.ClosingBalance ?? 0)
-                        : 0m,
-
-                    // ==========================================
-                    // TRANSACTION DETAILS
-                    // ==========================================
-                    TransactionType = t != null && t.TransactionType != null
-                        ? t.TransactionType.Description ?? ""
-                        : "",
-
-                    NettAmount = t != null ? (decimal)t.NettAmount : 0m,
-                    DiscountValue = t != null ? (decimal)t.DiscountValue : 0m,
-                    NominalTariff = t != null ? (decimal)t.NominalTariff : 0m,
-                    VatAmount = t != null ? (decimal)t.VatAmout : 0m,
-
-                    TransactionDateTime = t.TransactionDateTime,
-
-                    LaneName = t.Lane.LaneName ?? "",
-
-                    PaymentMethod = "",   // As discussed earlier
-
-                    // ==========================================
-                    // TOP UPS
-                    // ==========================================
-                    TopUpAmount = rut != null
-                        ? (decimal)rut.Amount
-                        : 0m,
-
-                    TopUpMethod = pm != null
-                        ? pm.Description ?? ""
-                        : "",
-
-                    TopUpDateTime = rut.RechargedOn
-                };
-
-            var details = await detailsQuery
-                .OrderByDescending(x => x.TransactionDateTime ?? x.TopUpDateTime)
-                .ToListAsync();
-
-            // ============================================================
-            // 2️⃣ SUMMARY CALCULATION
-            // ============================================================
-            var summary = new AccountUsageDetailsTotalsDto
+            // Accept either numeric RegisterUserId or AccNr
+            if (long.TryParse(accountNumber, out var parsedId))
             {
-                TotalAccounts = details
-                    .Where(x => !string.IsNullOrWhiteSpace(x.AccountNumber))
-                    .Select(x => x.AccountNumber)
-                    .Distinct()
-                    .Count(),
+                accId = parsedId;
+            }
+            else
+            {
+                var foundId = await _context.RegisteredUsers
+                    .AsNoTracking()
+                    .Where(r => r.AccNr == accountNumber)
+                    .Select(r => (long?)r.RegisterUserId)
+                    .FirstOrDefaultAsync();
 
-                TotalOpeningBalance = details.Sum(x => x.OpeningBalance),
-                TotalClosingBalance = details.Sum(x => x.ClosingBalance),
+                if (!foundId.HasValue)
+                    return response;
 
-                TotalTopUp = details.Sum(x => x.TopUpAmount),
-                TotalDeduct = details.Sum(x => x.NettAmount),
+                accId = foundId.Value;
+            }
 
-                TotalNett = details.Sum(x => x.NettAmount),
-                TotalDiscount = details.Sum(x => x.DiscountValue),
-                TotalNominal = details.Sum(x => x.NominalTariff),
-                TotalVat = details.Sum(x => x.VatAmount),
+            var endExclusive =
+                endDate.TimeOfDay == TimeSpan.Zero
+                    ? endDate.Date.AddDays(1)
+                    : endDate.AddMilliseconds(1);
 
-                TotalTransactions = details.Count(x => x.NettAmount > 0),
-                TotalTopUpCount = details.Count(x => x.TopUpAmount > 0),
+            // =========================================================
+            // 1) USER / ACCOUNT HEADER
+            // =========================================================
+            var user = await _context.RegisteredUsers
+                .AsNoTracking()
+                .Where(ru => ru.RegisterUserId == accId)
+                .Select(ru => new
+                {
+                    ru.RegisterUserId,
+                    ru.AccNr,
+                    ru.IsActive,
+                    Balance = (decimal?)ru.Balance
+                })
+                .FirstOrDefaultAsync();
 
+            if (user == null)
+                return response;
+
+            var accountStatus =
+                user.IsActive == true ? "Active" :
+                user.IsActive == false ? "Inactive" :
+                "Dormant";
+
+            var currentBalance = user.Balance ?? 0m;
+
+            // =========================================================
+            // 2) TOP-UP TOTALS
+            // =========================================================
+            var totalTopUps = await _context.RegisteredUserTopUps
+                .AsNoTracking()
+                .Where(rtu =>
+                    rtu.RegisterUserId == accId &&
+                    rtu.RechargedOn >= startDate &&
+                    rtu.RechargedOn < endExclusive)
+                .SumAsync(rtu => (decimal?)rtu.Amount) ?? 0m;
+
+            // =========================================================
+            // 3) TRANSACTION TOTALS
+            // =========================================================
+            var totalTransactions = await _context.Transactions
+                .AsNoTracking()
+                .Where(t =>
+                    t.RegisteredUserId == accId &&
+                    t.TransactionDateTime >= startDate &&
+                    t.TransactionDateTime < endExclusive)
+                .SumAsync(t => (decimal?)t.NettAmount) ?? 0m;
+
+            // Opening balance inferred from current balance and in-period movement.
+            // This matches the approach we tested before moving back to repository code.
+            var openingBalance = currentBalance - totalTopUps + totalTransactions;
+
+            response.Header = new AccountUsageDetailsHeaderDto
+            {
+                AccountNumber = !string.IsNullOrWhiteSpace(user.AccNr)
+                    ? user.AccNr
+                    : user.RegisterUserId.ToString(),
+
+                AccountStatus = accountStatus,
+                OpeningBalance = openingBalance,
+                TotalTopUps = totalTopUps,
+                TotalTransactions = totalTransactions,
+                TotalFees = 0m,
+                TotalDeposits = 0m,
+                TotalRefunds = 0m,
+                ClosingBalance = currentBalance,
+                DepositRefunded = 0m,
                 StartDate = startDate,
                 EndDate = endDate
             };
 
-            // ============================================================
-            // 3️⃣ RETURN REPORT DTO
-            // ============================================================
-            return new AccountUsageDetailsReportDto
+            // =========================================================
+            // 4) LATEST ACTIVE IDENTIFIERS
+            // =========================================================
+            var identifiers = await _context.RegisteredUserIdentifiers
+                .AsNoTracking()
+                .Where(id => id.RegisteredUserId == accId && id.IsActive == true)
+                .Select(id => new
+                {
+                    id.RegisteredUserId,
+                    id.RegisteredIdentifier,
+                    id.NumberPlateDetails,
+                    id.ActivationDate,
+                    id.RegisteredUserIdentifierId
+                })
+                .ToListAsync();
+
+            var latestIdentifiers = identifiers
+                .GroupBy(x => new
+                {
+                    x.RegisteredUserId,
+                    RegisteredIdentifier = x.RegisteredIdentifier ?? string.Empty
+                })
+                .Select(g => g
+                    .OrderByDescending(x => x.ActivationDate)
+                    .ThenByDescending(x => x.RegisteredUserIdentifierId)
+                    .First())
+                .ToList();
+
+            // =========================================================
+            // 5) TRANSACTION GROUPS BY IDENTIFIER
+            // =========================================================
+            var transactionGroups = await _context.Transactions
+                .AsNoTracking()
+                .Where(t =>
+                    t.RegisteredUserId == accId &&
+                    t.TransactionDateTime >= startDate &&
+                    t.TransactionDateTime < endExclusive)
+                .GroupBy(t => new
+                {
+                    t.RegisteredUserId,
+                    RegisteredIdentifier = t.RegisteredIdentifier ?? string.Empty
+                })
+                .Select(g => new
+                {
+                    g.Key.RegisteredUserId,
+                    g.Key.RegisteredIdentifier,
+                    LaneTransactionCount = g.Count(),
+                    LaneTransactionValue = g.Sum(x => (decimal?)x.NettAmount) ?? 0m
+                })
+                .ToListAsync();
+
+            // =========================================================
+            // 6) DETAILS
+            // =========================================================
+            var details = new List<AccountUsageDetailsItemDto>();
+
+            if (latestIdentifiers.Any())
             {
-                Summary = summary,
-                Details = details
-            };
+                foreach (var li in latestIdentifiers)
+                {
+                    var registeredIdentifier = li.RegisteredIdentifier ?? string.Empty;
+
+                    var trx = transactionGroups.FirstOrDefault(x =>
+                        x.RegisteredUserId == li.RegisteredUserId &&
+                        x.RegisteredIdentifier == registeredIdentifier);
+
+                    details.Add(new AccountUsageDetailsItemDto
+                    {
+                        EID_DeviceType = "E-ID",
+                        EID_DeviceNumber = li.RegisteredIdentifier ?? "N/A",
+                        VehicleRegNumber = li.NumberPlateDetails ?? "N/A",
+                        VehicleClass = "N/A",
+                        Balance = currentBalance,
+
+                        LaneTransactionCount = trx?.LaneTransactionCount ?? 0,
+                        LaneTransactionValue = trx?.LaneTransactionValue ?? 0m,
+
+                        // Put top-up on the first row only to avoid duplication
+                        ReceiptTopUp = details.Count == 0 ? totalTopUps : 0m,
+                        ReceiptDeposit = 0m,
+
+                        PaymentFees = 0m,
+                        PaymentRefunds = 0m,
+
+                        RefundAccount = 0m,
+                        RefundDeposit = 0m
+                    });
+                }
+            }
+            else
+            {
+                details.Add(new AccountUsageDetailsItemDto
+                {
+                    EID_DeviceType = "N/A",
+                    EID_DeviceNumber = "N/A",
+                    VehicleRegNumber = "N/A",
+                    VehicleClass = "N/A",
+                    Balance = currentBalance,
+
+                    LaneTransactionCount = transactionGroups.Sum(x => x.LaneTransactionCount),
+                    LaneTransactionValue = transactionGroups.Sum(x => x.LaneTransactionValue),
+
+                    ReceiptTopUp = totalTopUps,
+                    ReceiptDeposit = 0m,
+
+                    PaymentFees = 0m,
+                    PaymentRefunds = 0m,
+
+                    RefundAccount = 0m,
+                    RefundDeposit = 0m
+                });
+            }
+
+            response.Details = details;
+            return response;
         }
     }
 }

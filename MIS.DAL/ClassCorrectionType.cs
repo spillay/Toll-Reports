@@ -15,7 +15,7 @@ namespace MIS.DAL
         {
             List<Models.ClassCorrectionType> classCorrectionTypes = new List<Models.ClassCorrectionType>();
 
-            using (var db = new Models.MISDBContext())
+            using (var db = new Models.ApplicationDbContext())
             {
                 classCorrectionTypes = db.ClassCorrectionTypes.OrderBy(o => o.Description).ToList();
             }

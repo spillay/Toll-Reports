@@ -12,7 +12,7 @@ namespace MIS.DAL
     {
         public Models.SystemUserRole Save(Models.SystemUserRole SystemUserRole)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 dBContext.SystemUserRoles.Add(SystemUserRole);
                 dBContext.SaveChanges();
@@ -23,7 +23,7 @@ namespace MIS.DAL
 
         public void Update(Models.SystemUserRole SystemUserRole)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 dBContext.SystemUserRoles.Attach(SystemUserRole);
                 dBContext.Entry(SystemUserRole).State = EntityState.Modified;

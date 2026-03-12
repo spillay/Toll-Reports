@@ -16,166 +16,175 @@ namespace Toll.Reporting.Api.Repositories
         {
             _context = context;
         }
-
-        /// <summary>
-        /// Fetch paginated daily cashup records, grouped by Toll Operator + Shift,
-        /// with sums per operator per shift.
-        /// NettAmount  = sum of all NettAmount for the operator & shift (Lane Cash)
-        /// ActualAmount = sum of ActualAmount (can be used for Top-ups if mapped that way)
-        /// TotalDeclared = sum of Cash Declared from CollectorCashups
-        /// Difference = (NettAmount + ActualAmount) - TotalDeclared
-        /// </summary>
+        private const byte CashTransactionTypeId = 1;
         public async Task<PagedResult<DailyCashupDto>> GetDailyCashupAsync(
-            DateTime startDate,
-            DateTime endDate,
-            List<string>? operationalShift = null,
-            List<string>? tollOperators = null,
-            int page = 1,
-            int pageSize = 10)
+        DateTime startDate,
+        DateTime endDate,
+        List<int>? shiftIds = null,
+        List<long>? systemUserIds = null,
+        int page = 1,
+        int pageSize = 10)
         {
-            // base query (per transaction)
-            var baseQuery =
-                from su in _context.SystemUsers
-                join t in _context.Transactions
-                    on su.SystemUserId equals t.SystemUserId into tGroup
-                from t in tGroup.DefaultIfEmpty()
+                var start = startDate.Date;
+                var end = endDate.Date.AddDays(1).AddTicks(-1);
 
-                join s in _context.Shifts
-                    on t.ShiftId equals s.ShiftId into sGroup
-                from s in sGroup.DefaultIfEmpty()
 
-                join cc in _context.CollectorCashups
-                    on new { su.SystemUserId, t.ShiftId }
-                    equals new { cc.SystemUserId, cc.ShiftId } into ccGroup
-                from cc in ccGroup.DefaultIfEmpty()
+            // 1) Transactions base (ONLY rows with operator)
+            var txBase =
+            from t in _context.Transactions
+            where t.TransactionDateTime >= start
+                  && t.TransactionDateTime <= end
+                  && t.SystemUserId != null
+                  && t.TransactionTypeId == CashTransactionTypeId
+                  && (shiftIds == null || shiftIds.Count == 0 || shiftIds.Contains((int)t.ShiftId))
+                  && (systemUserIds == null || systemUserIds.Count == 0 || systemUserIds.Contains(t.SystemUserId.Value))
+            select new
+            {
+                SystemUserId = t.SystemUserId.Value,
+                ShiftId = (int)t.ShiftId,
+                ShiftDate = t.ShiftDate.Date,
+                NettAmount = t.NettAmount,
+                ActualAmount = (double?)t.ActualAmount ?? 0d
+            };
 
-                where t.TransactionDateTime >= startDate && t.TransactionDateTime <= endDate
-                select new
+            // 2) Lookup joins (SystemUser + Shift)
+            var txWithNames =
+                    from t in txBase
+                    join su in _context.SystemUsers on t.SystemUserId equals (long)su.SystemUserId
+                    join sh in _context.Shifts on (int)t.ShiftId equals (int)sh.ShiftId into shGroup
+                    from sh in shGroup.DefaultIfEmpty()
+                    select new
+                    {
+                        t.SystemUserId,
+                        t.ShiftId,
+                        t.ShiftDate,
+                        ShiftDescription = sh != null ? sh.Description : null,
+                        TollOperator = su.Username,
+                        t.NettAmount,
+                        t.ActualAmount
+                    };
+
+            // 3) Multi-select filters (same filters, now multi)
+            if (shiftIds != null && shiftIds.Any())
+                txWithNames = txWithNames.Where(x => shiftIds.Contains(x.ShiftId));
+
+            if (systemUserIds != null && systemUserIds.Any())
+                txWithNames = txWithNames.Where(x => systemUserIds.Contains(x.SystemUserId));
+
+            // 4) Aggregate transactions to DAILY grain
+            var txAgg =
+                    from x in txWithNames
+                    group x by new
+                    {
+                        x.SystemUserId,
+                        x.ShiftId,
+                        x.ShiftDate,
+                        x.ShiftDescription,
+                        x.TollOperator
+                    }
+                    into g
+                    select new
+                    {
+                        g.Key.SystemUserId,
+                        g.Key.ShiftId,
+                        g.Key.ShiftDate,
+                        g.Key.ShiftDescription,
+                        g.Key.TollOperator,
+                        NettAmount = g.Sum(v => v.NettAmount),
+                        ActualAmount = g.Sum(v => v.ActualAmount)
+                    };
+
+                // 5) Cashup aggregate (DAILY grain)
+                var cashupAgg =
+                    from cc in _context.CollectorCashups
+                    where cc.ShiftDate >= start && cc.ShiftDate <= end
+                    group cc by new
+                    {
+                        cc.SystemUserId,
+                        cc.ShiftId,
+                        ShiftDate = cc.ShiftDate.Date
+                    }
+                    into g
+                    select new
+                    {
+                        g.Key.SystemUserId,
+                        g.Key.ShiftId,
+                        g.Key.ShiftDate,
+                        TotalDeclared = g.Sum(x => x.TotalDeclared)    
+                    };
+
+                // 6) SAFE declared value via correlated subquery
+                var finalQuery =
+                    from t in txAgg
+                    let declared =
+                        cashupAgg
+                            .Where(c =>
+                                c.SystemUserId == t.SystemUserId &&
+                                c.ShiftId == t.ShiftId &&
+                                c.ShiftDate == t.ShiftDate)
+                            .Select(c => (double?)c.TotalDeclared)
+                            .FirstOrDefault() ?? 0d
+                    select new DailyCashupDto
+                    {
+                        ShiftDate = t.ShiftDate,
+                        ShiftDescription = t.ShiftDescription ?? "-- None --",
+                        TollOperator = t.TollOperator ?? "-- None --",
+                        NettAmount = t.NettAmount,
+                        ActualAmount = t.ActualAmount,
+                        TotalDeclared = declared,
+                        Difference = (t.NettAmount + t.ActualAmount) - declared
+                    };
+
+                // 7) Pagination
+                var totalCount = await finalQuery.CountAsync();
+
+                var items = await finalQuery
+                    .OrderBy(x => x.ShiftDate)
+                    .ThenBy(x => x.ShiftDescription)
+                    .ThenBy(x => x.TollOperator)
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToListAsync();
+
+                var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
+
+                return new PagedResult<DailyCashupDto>
                 {
-                    ShiftDescription = s.Description,
-                    TollOperator = su.Username,
-                    NettAmount = (double?)t.NettAmount,      // system NettAmount
-                    ActualAmount = (double?)t.ActualAmount,  // system ActualAmount (can be Top-up)
-                    TotalDeclared = (double?)cc.TotalDeclared,
-                    TransactionDate = (DateTime?)t.TransactionDateTime
+                    Items = items,
+                    TotalCount = totalCount,
+                    Page = page,
+                    PageSize = pageSize,
+                    TotalPages = totalPages
                 };
+            }
 
-            // dynamic filters
-            if (operationalShift != null && operationalShift.Any() && !operationalShift.Contains("-- All --"))
-                baseQuery = baseQuery.Where(x => operationalShift.Contains(x.ShiftDescription));
-
-            if (tollOperators != null && tollOperators.Any() && !tollOperators.Contains("-- All --"))
-                baseQuery = baseQuery.Where(x => tollOperators.Contains(x.TollOperator));
-
-            // group BY Toll Operator + Shift
-            var groupedQuery = baseQuery
-                .GroupBy(x => new { x.TollOperator, x.ShiftDescription })
-                .Select(g => new DailyCashupDto
+        public async Task<DailyCashupFilterOptionsDto> GetDailyCashupFilterOptionsAsync()
+        {
+            var shifts = await _context.Shifts
+                .Select(s => new FilterItemDto<int>
                 {
-                    ShiftDescription = g.Key.ShiftDescription ?? "-- None --",
-                    TollOperator = g.Key.TollOperator ?? "-- None --",
-
-                    // sums per operator + shift
-                    NettAmount = g.Sum(x => x.NettAmount ?? 0d),        // Lane Cash total
-                    ActualAmount = g.Sum(x => x.ActualAmount ?? 0d),    // Top-ups total
-                    TotalDeclared = g.Sum(x => x.TotalDeclared ?? 0d),  // Declared total
-
-                    // Expected = LaneCash + Top-ups, Difference = Expected - Declared
-                    Difference = (g.Sum(x => x.NettAmount ?? 0d) + g.Sum(x => x.ActualAmount ?? 0d))
-                                 - g.Sum(x => x.TotalDeclared ?? 0d),
-
-                    // any date inside the group (min used as shift date)
-                    ShiftDate = g.Min(x => x.TransactionDate) ?? startDate.Date
-                });
-
-            // count groups (not raw rows)
-            var totalCount = await groupedQuery.CountAsync();
-
-            // apply pagination on grouped result
-            var pagedItems = await groupedQuery
-                .OrderBy(x => x.ShiftDescription)
-                .ThenBy(x => x.TollOperator)
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
+                    Id = (int)s.ShiftId,
+                    Name = s.Description ?? ""
+                })
+                .Where(x => x.Name != "")
+                .OrderBy(x => x.Name)
                 .ToListAsync();
 
-            var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
-
-            return new PagedResult<DailyCashupDto>
-            {
-                Items = pagedItems,
-                TotalCount = totalCount,
-                Page = page,
-                PageSize = pageSize,
-                TotalPages = totalPages
-            };
-        }
-
-        /// <summary>
-        /// Fetch filter options dynamically for dropdowns (Shifts, Operators)
-        /// </summary>
-        public async Task<DailyCashupFilterOptionsDto> GetDailyCashupFilterOptionsAsync(
-            DateTime startDate,
-            DateTime endDate,
-            List<string>? operationalShift = null,
-            List<string>? tollOperators = null)
-        {
-            var query =
-                from su in _context.SystemUsers
-                join t in _context.Transactions
-                    on su.SystemUserId equals t.SystemUserId into tGroup
-                from t in tGroup.DefaultIfEmpty()
-                join s in _context.Shifts
-                    on t.ShiftId equals s.ShiftId into sGroup
-                from s in sGroup.DefaultIfEmpty()
-                where t.TransactionDateTime >= startDate && t.TransactionDateTime <= endDate
-                select new
+            var operators = await _context.SystemUsers
+                .Select(su => new FilterItemDto<long>
                 {
-                    Shift = s.Description,
-                    Operator = su.Username
-                };
-
-            if (operationalShift?.Any() == true && !operationalShift.Contains("-- All --"))
-                query = query.Where(x => operationalShift.Contains(x.Shift));
-
-            if (tollOperators?.Any() == true && !tollOperators.Contains("-- All --"))
-                query = query.Where(x => tollOperators.Contains(x.Operator));
-
-            var shifts = await query.Select(x => x.Shift)
-                                    .Where(x => !string.IsNullOrEmpty(x))
-                                    .Distinct()
-                                    .OrderBy(x => x)
-                                    .ToListAsync();
-
-            var operators = await query.Select(x => x.Operator)
-                                       .Where(x => !string.IsNullOrEmpty(x))
-                                       .Distinct()
-                                       .OrderBy(x => x)
-                                       .ToListAsync();
+                    Id = (long)su.SystemUserId,
+                    Name = su.Username ?? ""
+                })
+                .Where(x => x.Name != "")
+                .OrderBy(x => x.Name)
+                .ToListAsync();
 
             return new DailyCashupFilterOptionsDto
             {
                 Shifts = shifts,
                 TollOperators = operators
             };
-        }
-
-        public async Task<IEnumerable<string>> GetShiftsAsync()
-        {
-            return await _context.Shifts
-                                 .Select(s => s.Description)
-                                 .Distinct()
-                                 .OrderBy(s => s)
-                                 .ToListAsync();
-        }
-
-        public async Task<IEnumerable<string>> GetTollOperatorsAsync()
-        {
-            return await _context.SystemUsers
-                                 .Select(su => su.Username)
-                                 .Distinct()
-                                 .OrderBy(su => su)
-                                 .ToListAsync();
         }
     }
 }

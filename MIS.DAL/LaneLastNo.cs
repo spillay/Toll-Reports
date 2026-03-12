@@ -14,7 +14,7 @@ namespace MIS.DAL
         {
             List<Models.LaneLastNo> laneLastNos = new List<Models.LaneLastNo>();
 
-            using (var db = new Models.MISDBContext())
+            using (var db = new Models.ApplicationDbContext())
             {
                 laneLastNos = db.LaneLastNos.ToList();
             }

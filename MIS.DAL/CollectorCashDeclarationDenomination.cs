@@ -12,7 +12,7 @@ namespace MIS.DAL
     {
         public List<Models.CollectorCashDeclarationDenomination> Get(long CollectorCashDeclarationId)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 return dBContext.CollectorCashDeclarationDenominations
                     .Include(z => z.Denomination)

@@ -14,7 +14,7 @@ namespace MIS.DAL
         {
             List<Models.ControlCentre> controlCentres = new List<Models.ControlCentre>();
 
-            using (var db = new Models.MISDBContext())
+            using (var db = new Models.ApplicationDbContext())
             {
                 controlCentres = db.ControlCentres.OrderBy( o => o.ControlCentreName).ToList();
             }
@@ -24,7 +24,7 @@ namespace MIS.DAL
 
         public Models.ControlCentre Save(Models.ControlCentre ControlCentre)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 dBContext.ControlCentres.Add(ControlCentre);
                 dBContext.SaveChanges();
@@ -35,7 +35,7 @@ namespace MIS.DAL
 
         public void Update(Models.ControlCentre ControlCentre)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 dBContext.ControlCentres.Attach(ControlCentre);
                 dBContext.Entry(ControlCentre).State = EntityState.Modified;

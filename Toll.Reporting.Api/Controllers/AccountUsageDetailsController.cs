@@ -1,71 +1,78 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Toll.Reporting.Api.Repositories.Interfaces;
-using Microsoft.Extensions.Logging;
-using Toll.Reporting.Api.DTOs;
 
-namespace Toll.Reporting.Api.Controllers;
-
-[ApiController]
-[Route("api/[controller]")]
-public class AccountUsageDetailsController(
-    IAccountUsageDetailsRepository repository,
-    ILogger<AccountUsageDetailsController> logger
-) : ControllerBase
+namespace Toll.Reporting.Api.Controllers
 {
-    /// <summary>
-    /// Fetch Account Usage Details + Summary between startDate and endDate.
-    /// </summary>
-    [HttpGet("GetDetails")]
-    public async Task<IActionResult> GetDetails(DateTime? startDate, DateTime? endDate)
+    [ApiController]
+    [Route("api/[controller]")]
+    public class AccountUsageDetailsController : ControllerBase
     {
-        try
+        private readonly IAccountUsageDetailsRepository _repository;
+        private readonly ILogger<AccountUsageDetailsController> _logger;
+
+        public AccountUsageDetailsController(
+            IAccountUsageDetailsRepository repository,
+            ILogger<AccountUsageDetailsController> logger)
         {
-            // VALIDATION
-            if (!startDate.HasValue || !endDate.HasValue)
-            {
-                return BadRequest(new
-                {
-                    message = "StartDate and EndDate are required.",
-                    example = "/api/AccountUsageDetails/GetDetails?startDate=2025-01-01&endDate=2025-01-31"
-                });
-            }
-
-            logger.LogInformation("📊 Fetching Account Usage Details from {Start} to {End}", startDate, endDate);
-
-            // GET REPORT
-            var result = await repository.GetAccountUsageDetailsAsync(startDate.Value, endDate.Value);
-
-            if (result == null)
-            {
-                logger.LogWarning("⚠️ Repository returned NULL for the date range.");
-                return NotFound(new { message = "No data returned." });
-            }
-
-            if (result.Details == null || result.Details.Count == 0)
-            {
-                logger.LogWarning("⚠️ No details found between {Start} and {End}", startDate, endDate);
-            }
-
-            logger.LogInformation("✅ Summary + {Count} detail rows returned.", result.Details.Count);
-
-            // OK RESULT
-            return Ok(new
-            {
-                summary = result.Summary,
-                details = result.Details
-            });
+            _repository = repository;
+            _logger = logger;
         }
-        catch (Exception ex)
-        {
-            logger.LogError(ex,
-                "❌ Error fetching Account Usage Details between {Start} and {End}",
-                startDate, endDate);
 
-            return StatusCode(500, new
+        [HttpGet("SearchAccounts")]
+        public async Task<IActionResult> SearchAccounts([FromQuery] string q, [FromQuery] int take = 20)
+        {
+            try
             {
-                message = "Internal Server Error while generating the report.",
-                error = ex.Message
-            });
+                q = (q ?? string.Empty).Trim();
+
+                if (q.Length < 2)
+                    return Ok(new List<object>());
+
+                take = Math.Clamp(take, 1, 50);
+
+                var results = await _repository.SearchAccountsAsync(q, take);
+                return Ok(results);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error searching accounts for Account Usage Details. Query: {Query}", q);
+                return StatusCode(500, new { message = "Internal Server Error", error = ex.Message });
+            }
+        }
+
+        [HttpGet("GetDetails")]
+        public async Task<IActionResult> GetDetails(
+            [FromQuery] string? accountNumber,
+            [FromQuery] DateTime? startDate,
+            [FromQuery] DateTime? endDate)
+        {
+            try
+            {
+                accountNumber = (accountNumber ?? string.Empty).Trim();
+
+                if (string.IsNullOrWhiteSpace(accountNumber))
+                    return BadRequest(new { message = "AccountNumber is required." });
+
+                if (!startDate.HasValue || !endDate.HasValue)
+                    return BadRequest(new { message = "StartDate and EndDate are required." });
+
+                var result = await _repository.GetAccountUsageDetailsAsync(
+                    accountNumber,
+                    startDate.Value,
+                    endDate.Value);
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "Error fetching Account Usage Details for account {AccountNumber} between {StartDate} and {EndDate}.",
+                    accountNumber,
+                    startDate,
+                    endDate);
+
+                return StatusCode(500, new { message = "Internal Server Error", error = ex.Message });
+            }
         }
     }
 }

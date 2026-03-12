@@ -12,7 +12,7 @@ namespace MIS.DAL
     {
         public List<Models.ExchangeRate> GetLatestTo(byte CurrencyId, DateTime EffectiveDate)
         {
-            using (var db = new Models.MISDBContext())
+            using (var db = new Models.ApplicationDbContext())
             {
                 var exchangeRates = db.ExchangeRates.Where(y => y.ToCurrencyId == CurrencyId).GroupBy(x => new { x.FromCurrencyId })
                     .Select(r => new Models.ExchangeRate

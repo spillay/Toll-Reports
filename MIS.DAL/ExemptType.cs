@@ -12,7 +12,7 @@ namespace MIS.DAL
     {
         public List<Models.ExemptType> GetAll()
         {
-            using (var db = new Models.MISDBContext())
+            using (var db = new Models.ApplicationDbContext())
             {
                 return db.ExemptTypes.OrderBy(x => x.DisplayOrder).ToList();
             }
@@ -21,7 +21,7 @@ namespace MIS.DAL
 
         public Models.ExemptType Save(Models.ExemptType ExemptType)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 dBContext.ExemptTypes.Add(ExemptType);
                 dBContext.SaveChanges();
@@ -32,7 +32,7 @@ namespace MIS.DAL
 
         public void Update(Models.ExemptType ExemptType)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 dBContext.ExemptTypes.Attach(ExemptType);
                 dBContext.Entry(ExemptType).State = EntityState.Modified;

@@ -32,7 +32,7 @@
 
     var grandExpected = exportCoreItems.Sum(i => i.NominalTariff);
     var grandDeclared = exportCoreItems.Sum(i => i.NettAmount);
-    var grandDiff     = grandExpected - grandDeclared;
+    var grandDiff     =  grandExpected - grandDeclared ;
 
     var isLastPage = Model.totalPages > 0 && Model.page == Model.totalPages;
 
@@ -149,7 +149,7 @@
 
             <div class="col-md-3 d-flex align-items-end">
                 <button type="submit" class="btn btn-primary w-100">
-                    <i class="bi bi-funnel"></i> Filter
+                    <i class="bi bi-funnel"></i> Apply Filters
                 </button>
             </div>
         </form>
@@ -292,26 +292,24 @@
     </div>
 </div>
 
-<!-- ===== EXPORT LIBS ===== -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 
-<!-- ===== EXPORT SCRIPT (NO FETCH) ===== -->
 <script>
 document.addEventListener("DOMContentLoaded", () => {
 
-    // ===== checkbox helper =====
-    window.toggleAll = function(name, checked) {
+    // =====================================================
+    // Global checkbox helper
+    // =====================================================
+    window.toggleAll = function (name, checked) {
         document.querySelectorAll(`input[type="checkbox"][name="${name}"]`)
             .forEach(cb => cb.checked = checked);
     };
 
-    // ===== data from Razor =====
-    const exportData = @Html.Raw(JsonSerializer.Serialize(
-        Model.ExportItems ?? new List<MIS.Web.Models.VarientPerfomance.VarientPerfomanceModel>()
-    ));
-
+    // =====================================================
+    // Razor-backed values
+    // =====================================================
     const selectedShifts = @Html.Raw(JsonSerializer.Serialize(selectedShifts));
     const selectedOperators = @Html.Raw(JsonSerializer.Serialize(selectedOperators));
     const allShifts = @Html.Raw(JsonSerializer.Serialize(allShifts));
@@ -321,11 +319,17 @@ document.addEventListener("DOMContentLoaded", () => {
     const currentUserId = '@currentUser';
     const reportVersion = '@reportVersion';
 
-    const hasData = () => Array.isArray(exportData) && exportData.length > 0;
+    const startDateIso = '@Model.StartDate.ToString("yyyy-MM-ddTHH:mm:ss")';
+    const endDateIso = '@Model.EndDate.ToString("yyyy-MM-ddTHH:mm:ss")';
 
-    // ================================
-    // HELPERS
-    // ================================
+    const startDateDisplay = '@Model.StartDate.ToString("dd/MM/yyyy HH:mm")';
+    const endDateDisplay = '@Model.EndDate.ToString("dd/MM/yyyy HH:mm")';
+
+    const exportEndpoint = '@Url.Action("ExportVarientPerfomanceData", "VarientPerfomance")';
+
+    // =====================================================
+    // Generic helpers
+    // =====================================================
     function cleanList(arr) {
         if (!Array.isArray(arr)) return [];
         return arr
@@ -335,48 +339,91 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function labelAll(selectedList, allList) {
-        const s = cleanList(selectedList);
-        const a = cleanList(allList);
+        const selected = cleanList(selectedList);
+        const all = cleanList(allList);
 
-        if (s.length === 0) return "All";
-        if (a.length > 0 && s.length >= a.length) return "All";
-        return s.join(", ");
+        if (selected.length === 0) return "All";
+        if (all.length > 0 && selected.length >= all.length) return "All";
+
+        return selected.join(", ");
     }
 
-    // ✅ ONLY real operator rows (no "—" totals rows, no "TOTAL ..." rows)
+    function pick(obj, ...keys) {
+        for (const key of keys) {
+            if (obj && obj[key] !== undefined && obj[key] !== null) {
+                return obj[key];
+            }
+        }
+        return null;
+    }
+
+    function toMoney(value) {
+        const n = Number(value) || 0;
+        return n.toFixed(2);
+    }
+
+    function getSafeDate(value) {
+        if (!value) return "";
+        const d = new Date(value);
+        return isNaN(d.getTime()) ? "" : d.toLocaleDateString();
+    }
+
     function getCoreRows(data) {
-        return (data || []).filter(x =>
-            !(x.TollOperator === "—" ||
-              (x.ShiftDescription || "").toUpperCase().startsWith("TOTAL"))
-        );
-    }
+        return (Array.isArray(data) ? data : []).filter(row => {
+            const tollOperator = String(
+                pick(row, "TollOperator", "tollOperator") ?? ""
+            ).trim();
 
-    function toMoney(n) {
-        const v = Number(n) || 0;
-        return v.toFixed(2);
+            const shiftDescription = String(
+                pick(row, "ShiftDescription", "shiftDescription") ?? ""
+            ).trim().toUpperCase();
+
+            return !(tollOperator === "—" || shiftDescription.startsWith("TOTAL"));
+        });
     }
 
     function computeGrandTotals(rows) {
-        const expected = rows.reduce((a, b) => a + (Number(b.NominalTariff) || 0), 0);
-        const declared = rows.reduce((a, b) => a + (Number(b.NettAmount) || 0), 0);
-        const diff = expected - declared;
+        const expected = rows.reduce((sum, row) => {
+            return sum + (Number(pick(row, "NominalTariff", "nominalTariff")) || 0);
+        }, 0);
+
+        const declared = rows.reduce((sum, row) => {
+            return sum + (Number(pick(row, "NettAmount", "nettAmount")) || 0);
+        }, 0);
+
+        const diff = rows.reduce((sum, row) => {
+            const explicitDiff = pick(row, "Difference", "difference");
+
+            if (explicitDiff !== null) {
+                return sum + (Number(explicitDiff) || 0);
+            }
+
+            const nominal = Number(pick(row, "NominalTariff", "nominalTariff")) || 0;
+            const nett = Number(pick(row, "NettAmount", "nettAmount")) || 0;
+            return sum + (nominal - nett);
+        }, 0);
+
         return { expected, declared, diff };
     }
 
-    // ✅ Build table body rows ONLY (no shift totals)
     function buildTableBodyRows(rows) {
         return rows.map(row => {
-            const nominal = Number(row.NominalTariff) || 0;
-            const nett = Number(row.NettAmount) || 0;
+            const shiftDate = pick(row, "ShiftDate", "shiftDate");
+            const shiftDescription = pick(row, "ShiftDescription", "shiftDescription") || "";
+            const tollOperator = pick(row, "TollOperator", "tollOperator") || "";
 
-            // If Difference is missing/wrong, we compute it safely
-            const diffVal = Number(row.Difference);
-            const safeDiff = Number.isFinite(diffVal) ? diffVal : (nominal - nett);
+            const nominal = Number(pick(row, "NominalTariff", "nominalTariff")) || 0;
+            const nett = Number(pick(row, "NettAmount", "nettAmount")) || 0;
+
+            const explicitDiff = pick(row, "Difference", "difference");
+            const safeDiff = explicitDiff !== null
+                ? (Number(explicitDiff) || 0)
+                : (nominal - nett);
 
             return [
-                row.ShiftDate ? new Date(row.ShiftDate).toLocaleDateString() : "",
-                row.ShiftDescription || "",
-                row.TollOperator || "",
+                getSafeDate(shiftDate),
+                shiftDescription,
+                tollOperator,
                 toMoney(nominal),
                 toMoney(nett),
                 toMoney(safeDiff)
@@ -384,28 +431,95 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // ================================
-    // EXCEL EXPORT (one grand total only)
-    // ================================
-    document.getElementById("btnDownloadExcel")?.addEventListener("click", () => {
-        if (!hasData()) {
-            alert("No data to export.");
-            return;
+    function getExportFileStamp() {
+        return new Date().toISOString().replace(/[:.]/g, "-");
+    }
+
+    function buildExportQueryString() {
+        const params = new URLSearchParams();
+
+        params.append("startDate", startDateIso);
+        params.append("endDate", endDateIso);
+
+        cleanList(selectedShifts).forEach(value => params.append("operationalShift", value));
+        cleanList(selectedOperators).forEach(value => params.append("tollOperators", value));
+
+        return params.toString();
+    }
+
+    async function fetchExportData() {
+        const url = `${exportEndpoint}?${buildExportQueryString()}`;
+
+        const response = await fetch(url, {
+            method: "GET",
+            headers: {
+                "X-Requested-With": "XMLHttpRequest"
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Export request failed: ${response.status} ${response.statusText}`);
         }
 
+        const data = await response.json();
+
+        if (!Array.isArray(data)) {
+            throw new Error("Export response is invalid.");
+        }
+
+        console.log("Variant Performance export sample:", data[0]);
+
+        return data;
+    }
+
+    async function loadLogos() {
+        function loadImage(src) {
+            return new Promise(resolve => {
+                const img = new Image();
+                img.crossOrigin = "Anonymous";
+                img.onload = () => resolve(img);
+                img.onerror = () => resolve(null);
+                img.src = src;
+            });
+        }
+
+        const [leftLogo, rightLogo] = await Promise.all([
+            loadImage('/images/lCC Logo.jpg'),
+            loadImage('/images/ICT-Works Logo.jpg')
+        ]);
+
+        return { leftLogo, rightLogo };
+    }
+
+    function ensureExcelLibrary() {
+        if (typeof XLSX === "undefined") {
+            throw new Error("Excel library is not loaded.");
+        }
+    }
+
+    function ensurePdfLibrary() {
+        if (!window.jspdf || !window.jspdf.jsPDF) {
+            throw new Error("PDF library is not loaded.");
+        }
+    }
+
+    // =====================================================
+    // Excel export builder
+    // =====================================================
+    function buildExcelWorksheetData(exportData) {
         const operatorRows = getCoreRows(exportData);
         const { expected, declared, diff } = computeGrandTotals(operatorRows);
 
-        const ws_data = [];
+        const worksheetData = [];
 
-        ws_data.push(["FILTERS USED"]);
-        ws_data.push(["Start Date And Time", '@Model.StartDate.ToString("dd/MM/yyyy HH:mm")']);
-        ws_data.push(["End Date And Time", '@Model.EndDate.ToString("dd/MM/yyyy HH:mm")']);
-        ws_data.push(["Operational Shift", labelAll(selectedShifts, allShifts)]);
-        ws_data.push(["Toll Operator ID", labelAll(selectedOperators, allOperators)]);
-        ws_data.push([]);
+        worksheetData.push(["FILTERS USED"]);
+        worksheetData.push(["Start Date And Time", startDateDisplay]);
+        worksheetData.push(["End Date And Time", endDateDisplay]);
+        worksheetData.push(["Operational Shift", labelAll(selectedShifts, allShifts)]);
+        worksheetData.push(["Toll Operator ID", labelAll(selectedOperators, allOperators)]);
+        worksheetData.push([]);
 
-        ws_data.push([
+        worksheetData.push([
             "Operational Shift Date",
             "Operational Shift",
             "Toll Operator ID",
@@ -414,153 +528,77 @@ document.addEventListener("DOMContentLoaded", () => {
             "Cash Declared Difference"
         ]);
 
-        // ✅ rows only
-        buildTableBodyRows(operatorRows).forEach(r => ws_data.push(r));
+        buildTableBodyRows(operatorRows).forEach(row => worksheetData.push(row));
 
-        // ✅ one grand total at bottom
-        ws_data.push([]);
-        ws_data.push(["", "", "GRAND TOTAL", toMoney(expected), toMoney(declared), toMoney(diff)]);
-        ws_data.push([]);
-        ws_data.push(["Generated", reportGeneratedAt, "User", currentUserId, "Version", reportVersion]);
+        worksheetData.push([]);
+        worksheetData.push(["", "", "GRAND TOTAL", toMoney(expected), toMoney(declared), toMoney(diff)]);
+        worksheetData.push([]);
+        worksheetData.push(["Generated", reportGeneratedAt, "User", currentUserId, "Version", reportVersion]);
 
-        const ws = XLSX.utils.aoa_to_sheet(ws_data);
-        ws["!cols"] = Array(6).fill({ wch: 24 });
+        return worksheetData;
+    }
 
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Variant Performance");
+    // =====================================================
+    // PDF helpers
+    // =====================================================
+    function drawPdfHeader(doc, pageWidth, margin, leftLogo, rightLogo, reportName) {
+        const topY = 25;
 
-        XLSX.writeFile(wb, `Stuff_Performance_Report_${new Date().toISOString().replace(/[:.]/g, "-")}.xlsx`);
-    });
-
-    // ================================
-    // PDF EXPORT (GRAND TOTAL inside the table, once at the end)
-    // ================================
-    document.getElementById("btnDownloadPdf")?.addEventListener("click", async () => {
-        if (!hasData()) {
-            alert("No data to export.");
-            return;
+        if (leftLogo) {
+            doc.addImage(leftLogo, "JPEG", margin, topY, 80, 80);
         }
 
-        const operatorRows = getCoreRows(exportData);
-        const { expected, declared, diff } = computeGrandTotals(operatorRows);
+        if (rightLogo) {
+            doc.addImage(rightLogo, "JPEG", pageWidth - margin - 80, topY, 80, 80);
+        }
 
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+        let y = 60;
 
-        const pageWidth = doc.internal.pageSize.getWidth();
-        const pageHeight = doc.internal.pageSize.getHeight();
-        const margin = 50;
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(14);
+        doc.text("LEKKI CONCESSION COMPANY LIMITED", pageWidth / 2, y, { align: "center" });
 
-        const loadImage = src => new Promise(res => {
-            const img = new Image();
-            img.crossOrigin = "Anonymous";
-            img.onload = () => res(img);
-            img.onerror = () => res(null);
-            img.src = src;
+        y += 18;
+        doc.setFontSize(12);
+        doc.text("LEKKI-IKOYI LINK BRIDGE", pageWidth / 2, y, { align: "center" });
+
+        y += 26;
+        doc.setFontSize(16);
+        doc.text(reportName, pageWidth / 2, y, { align: "center" });
+
+        return y;
+    }
+
+    function drawPdfFilters(doc, margin, startY) {
+        let y = startY;
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+
+        doc.text("FILTERS USED:", margin, y);
+        y += 14;
+
+        const filters = [
+            ["Start Date And Time", startDateDisplay],
+            ["End Date And Time", endDateDisplay],
+            ["Operational Shift", labelAll(selectedShifts, allShifts)],
+            ["Toll Operator ID", labelAll(selectedOperators, allOperators)]
+        ];
+
+        filters.forEach(([key, value]) => {
+            doc.text(`${key}: ${value}`, margin, y);
+            y += 12;
         });
 
-        const [leftLogo, rightLogo] = await Promise.all([
-            loadImage('/images/lCC Logo.jpg'),
-            loadImage('/images/ICT-Works Logo.jpg')
-        ]);
+        return y;
+    }
 
-        function drawCenteredHeader(reportName) {
-            const topY = 25;
-
-            if (leftLogo) doc.addImage(leftLogo, "JPEG", margin, topY, 80, 80);
-            if (rightLogo) doc.addImage(rightLogo, "JPEG", pageWidth - margin - 80, topY, 80, 80);
-
-            let y = 60;
-
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(14);
-            doc.text("LEKKI CONCESSION COMPANY LIMITED", pageWidth / 2, y, { align: "center" });
-
-            y += 18;
-            doc.setFontSize(12);
-            doc.text("LEKKI-IKOYI LINK BRIDGE", pageWidth / 2, y, { align: "center" });
-
-            y += 26;
-            doc.setFontSize(16);
-            doc.text(reportName || "REPORT NAME", pageWidth / 2, y, { align: "center" });
-
-            return y;
-        }
-
-        function drawFilters(startY) {
-            let y = startY;
-            doc.setFont("helvetica", "normal");
-            doc.setFontSize(10);
-
-            doc.text("FILTERS USED:", margin, y);
-            y += 14;
-
-            const filters = [
-                ["Start Date And Time", '@Model.StartDate.ToString("dd/MM/yyyy HH:mm")'],
-                ["End Date And Time", '@Model.EndDate.ToString("dd/MM/yyyy HH:mm")'],
-                ["Operational Shift", labelAll(selectedShifts, allShifts)],
-                ["Toll Operator ID", labelAll(selectedOperators, allOperators)]
-            ];
-
-            filters.forEach(([k, v]) => {
-                doc.text(`${k}: ${v}`, margin, y);
-                y += 12;
-            });
-
-            return y;
-        }
-
-        // ✅ Table body rows only
-        const tableBody = buildTableBodyRows(operatorRows);
-
-        // ✅ Append ONE grand total row at the end (inside the table)
-        // We use a marker "##GRAND_TOTAL##" so we can style it easily.
-        tableBody.push(["", "##GRAND_TOTAL##", "", toMoney(expected), toMoney(declared), toMoney(diff)]);
-
-        const headerBottomY = drawCenteredHeader("STAFF PERFORMANCE REPORT");
-        const filtersBottomY = drawFilters(headerBottomY + 35);
-
-        doc.autoTable({
-            head: [[
-                "Operational Shift Date",
-                "Operational Shift",
-                "Toll Operator ID",
-                "Cash Expected",
-                "Cash Declared",
-                "Cash Declared Difference"
-            ]],
-            body: tableBody,
-            startY: filtersBottomY + 10,
-            theme: "grid",
-            headStyles: { fillColor: [41, 128, 185], textColor: 255 },
-            styles: { fontSize: 9, halign: "center", cellPadding: 4 },
-            margin: { left: margin, right: margin },
-
-            // ✅ Keep same format but emphasize the GRAND TOTAL row
-            didParseCell: function (data) {
-                const row = data.row?.raw;
-                if (!row) return;
-
-                // row[1] is the "Operational Shift" column
-                const isGrand = row[1] === "##GRAND_TOTAL##";
-
-                if (isGrand) {
-                    // Replace marker with real label
-                    if (data.column.index === 1) data.cell.text = ["GRAND TOTAL"];
-
-                    // Emphasize row (without changing your overall design)
-                    data.cell.styles.fontStyle = "bold";
-                    data.cell.styles.fillColor = [245, 245, 245]; // subtle grey
-                }
-            }
-        });
-
-        // Page i of X
-        const totalPages = doc.internal.getNumberOfPages();
+    function addPdfFooter(doc, pageWidth, pageHeight, margin, totalPages) {
         for (let i = 1; i <= totalPages; i++) {
             doc.setPage(i);
 
             const footerY = pageHeight - 30;
+
             doc.setFont("helvetica", "normal");
             doc.setFontSize(10);
 
@@ -572,9 +610,146 @@ document.addEventListener("DOMContentLoaded", () => {
             doc.setFontSize(9);
             doc.text(`Reports Module Version Number: ${reportVersion}`, margin, footerY + 14);
         }
+    }
 
-        doc.save(`Stuff_Performance_Report_${new Date().toISOString().replace(/[:.]/g, "-")}.pdf`);
+    function buildPdfTableBody(exportData) {
+        const operatorRows = getCoreRows(exportData);
+        const { expected, declared, diff } = computeGrandTotals(operatorRows);
+
+        const tableBody = buildTableBodyRows(operatorRows);
+        tableBody.push(["", "##GRAND_TOTAL##", "", toMoney(expected), toMoney(declared), toMoney(diff)]);
+
+        return tableBody;
+    }
+
+    // =====================================================
+    // Excel export event
+    // =====================================================
+    document.getElementById("btnDownloadExcel")?.addEventListener("click", async () => {
+        try {
+            ensureExcelLibrary();
+
+            const exportData = await fetchExportData();
+
+            if (exportData.length === 0) {
+                alert("No data to export.");
+                return;
+            }
+
+            const worksheetData = buildExcelWorksheetData(exportData);
+            const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+
+            worksheet["!cols"] = [
+                { wch: 22 },
+                { wch: 22 },
+                { wch: 18 },
+                { wch: 18 },
+                { wch: 18 },
+                { wch: 24 }
+            ];
+
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Variant Performance");
+
+            XLSX.writeFile(
+                workbook,
+                `Staff_Performance_Report_${getExportFileStamp()}.xlsx`
+            );
+        } catch (error) {
+            console.error("Excel export failed:", error);
+            alert("Excel export failed. Please try again.");
+        }
     });
 
+    // =====================================================
+    // PDF export event
+    // =====================================================
+    document.getElementById("btnDownloadPdf")?.addEventListener("click", async () => {
+        try {
+            ensurePdfLibrary();
+
+            const exportData = await fetchExportData();
+
+            if (exportData.length === 0) {
+                alert("No data to export.");
+                return;
+            }
+
+            const tableBody = buildPdfTableBody(exportData);
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({
+                orientation: "landscape",
+                unit: "pt",
+                format: "a4"
+            });
+
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
+            const margin = 50;
+
+            const { leftLogo, rightLogo } = await loadLogos();
+
+            const headerBottomY = drawPdfHeader(
+                doc,
+                pageWidth,
+                margin,
+                leftLogo,
+                rightLogo,
+                "STAFF PERFORMANCE REPORT"
+            );
+
+            const filtersBottomY = drawPdfFilters(doc, margin, headerBottomY + 35);
+
+            doc.autoTable({
+                head: [[
+                    "Operational Shift Date",
+                    "Operational Shift",
+                    "Toll Operator ID",
+                    "Cash Expected",
+                    "Cash Declared",
+                    "Cash Declared Difference"
+                ]],
+                body: tableBody,
+                startY: filtersBottomY + 10,
+                theme: "grid",
+                headStyles: {
+                    fillColor: [41, 128, 185],
+                    textColor: 255
+                },
+                styles: {
+                    fontSize: 9,
+                    halign: "center",
+                    cellPadding: 4
+                },
+                margin: {
+                    left: margin,
+                    right: margin
+                },
+                didParseCell: function (data) {
+                    const row = data.row?.raw;
+                    if (!row) return;
+
+                    const isGrandTotal = row[1] === "##GRAND_TOTAL##";
+
+                    if (isGrandTotal) {
+                        if (data.column.index === 1) {
+                            data.cell.text = ["GRAND TOTAL"];
+                        }
+
+                        data.cell.styles.fontStyle = "bold";
+                        data.cell.styles.fillColor = [245, 245, 245];
+                    }
+                }
+            });
+
+            const totalPages = doc.internal.getNumberOfPages();
+            addPdfFooter(doc, pageWidth, pageHeight, margin, totalPages);
+
+            doc.save(`Staff_Performance_Report_${getExportFileStamp()}.pdf`);
+        } catch (error) {
+            console.error("PDF export failed:", error);
+            alert("PDF export failed. Please try again.");
+        }
+    });
 });
 </script>

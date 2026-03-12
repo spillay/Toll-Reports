@@ -12,7 +12,7 @@ namespace MIS.DAL
     {
         public Models.CollectorCashDeclaration Save(Models.CollectorCashDeclaration CollectorCashDeclaration)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 dBContext.CollectorCashDeclarations.Add(CollectorCashDeclaration);
                 dBContext.SaveChanges();
@@ -22,7 +22,7 @@ namespace MIS.DAL
 
         public Models.CollectorCashDeclaration Get(long CollectorCashDeclarationId)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 return dBContext.CollectorCashDeclarations
                     .Include(z => z.SystemUser)
@@ -34,7 +34,7 @@ namespace MIS.DAL
 
         public List<Models.CollectorCashDeclaration> GetList(DateTime ShiftDate, byte ShiftId)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 return dBContext.CollectorCashDeclarations
                     .Include(z => z.SystemUser)
@@ -46,7 +46,7 @@ namespace MIS.DAL
 
         public List<Models.CollectorCashDeclaration> GetForCashup(Models.CollectorCashup CollectorCashup)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 return dBContext.CollectorCashDeclarations
                     .Include(z => z.SystemUser)
@@ -59,7 +59,7 @@ namespace MIS.DAL
 
         public List<Models.CollectorCashDeclaration> Update(List<Models.CollectorCashDeclaration> CollectorCashDeclarations)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 dBContext.CollectorCashDeclarations.AttachRange(CollectorCashDeclarations);
                 foreach(var item in CollectorCashDeclarations)
@@ -71,7 +71,7 @@ namespace MIS.DAL
 
         public List<Models.CollectorCashDeclaration> GetCashDeclarationsVerifiedBy(DateTime ShiftDate, byte ShiftId, long VerifiedById)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 return dBContext.CollectorCashDeclarations
                     .Include(z => z.SystemUser)

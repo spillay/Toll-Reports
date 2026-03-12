@@ -910,60 +910,98 @@ namespace TollReportingSystem.Data
                         .HasConstraintName("FK_RegisterUserAccountMovement_RegisteredUserTopUp");
                 });
 
-                modelBuilder.Entity<RegisteredUser>(entity =>
-                {
-                    entity.HasKey(e => e.RegisterUserId);
+            //modelBuilder.Entity<RegisteredUser>(entity =>
+            //    {
+            //        entity.HasKey(e => e.RegisterUserId);
 
-                    entity.ToTable("RegisteredUser");
+            //        entity.ToTable("RegisteredUser");
 
-                    entity.Property(e => e.ActivationDate).HasColumnType("date");
+            //        entity.Property(e => e.ActivationDate).HasColumnType("date");
 
-                    entity.Property(e => e.BalanceChangedOn).HasColumnType("datetime");
+            //        entity.Property(e => e.BalanceChangedOn).HasColumnType("datetime");
 
-                    entity.Property(e => e.BalanceVisibilityUfd).HasColumnName("BalanceVisibilityUFD");
+            //        entity.Property(e => e.BalanceVisibilityUfd).HasColumnName("BalanceVisibilityUFD");
 
-                    entity.Property(e => e.CompanyName)
-                        .HasMaxLength(255)
-                        .IsUnicode(false);
+            //        entity.Property(e => e.CompanyName)
+            //            .HasMaxLength(255)
+            //            .IsUnicode(false);
 
-                    entity.Property(e => e.ExpiryDate).HasColumnType("date");
+            //        entity.Property(e => e.ExpiryDate).HasColumnType("date");
 
-                    entity.Property(e => e.FirstName)
-                        .HasMaxLength(255)
-                        .IsUnicode(false);
+            //        entity.Property(e => e.FirstName)
+            //            .HasMaxLength(255)
+            //            .IsUnicode(false);
 
-                    entity.Property(e => e.IdNumber)
-                        .HasMaxLength(50)
-                        .IsUnicode(false);
+            //        entity.Property(e => e.IdNumber)
+            //            .HasMaxLength(50)
+            //            .IsUnicode(false);
 
-                    entity.Property(e => e.IsActive)
-                        .IsRequired()
-                        .HasDefaultValueSql("((1))");
+            //        entity.Property(e => e.IsActive)
+            //            .IsRequired()
+            //            .HasDefaultValueSql("((1))");
 
-                    entity.Property(e => e.IsPrepaid)
-                        .IsRequired()
-                        .HasDefaultValueSql("((1))");
+            //        entity.Property(e => e.IsPrepaid)
+            //            .IsRequired()
+            //            .HasDefaultValueSql("((1))");
 
-                    entity.Property(e => e.LastName)
-                        .HasMaxLength(255)
-                        .IsUnicode(false);
+            //        entity.Property(e => e.LastName)
+            //            .HasMaxLength(255)
+            //            .IsUnicode(false);
 
-                    entity.Property(e => e.Reference)
-                        .IsRequired()
-                        .HasMaxLength(11)
-                        .IsUnicode(false);
+            //        entity.Property(e => e.Reference)
+            //            .IsRequired()
+            //            .HasMaxLength(11)
+            //            .IsUnicode(false);
 
-                    entity.Property(e => e.RegistrationNumber)
-                        .HasMaxLength(50)
-                        .IsUnicode(false);
+            //        entity.Property(e => e.RegistrationNumber)
+            //            .HasMaxLength(50)
+            //            .IsUnicode(false);
 
-                    entity.Property(e => e.RowVersion)
-                        .IsRequired()
-                        .IsRowVersion()
-                        .IsConcurrencyToken();
-                });
+            //        entity.Property(e => e.RowVersion)
+            //            .IsRequired()
+            //            .IsRowVersion()
+            //            .IsConcurrencyToken();
+            //    });
+            modelBuilder.Entity<RegisteredUser>(entity =>
+            {
+                entity.HasKey(e => e.RegisterUserId);
+                entity.ToTable("RegisteredUser");
 
-                modelBuilder.Entity<RegisteredUserAddress>(entity =>
+                // Dates
+                entity.Property(e => e.ActivationDate).HasColumnType("date");
+                entity.Property(e => e.ExpiryDate).HasColumnType("date");
+                entity.Property(e => e.BalanceChangedOn).HasColumnType("datetime");
+
+                // Column name fix
+                entity.Property(e => e.BalanceVisibilityUfd).HasColumnName("BalanceVisibilityUFD");
+
+                // Strings that exist in your table
+                entity.Property(e => e.CompanyName).HasMaxLength(255).IsUnicode(false);
+                entity.Property(e => e.FirstName).HasMaxLength(255).IsUnicode(false);
+                entity.Property(e => e.LastName).HasMaxLength(255).IsUnicode(false);
+
+                // Defaults (don’t mark IsRequired if DB column allows null)
+                entity.Property(e => e.IsActive).HasDefaultValueSql("((1))");
+                entity.Property(e => e.IsPrepaid).HasDefaultValueSql("((1))");
+
+                // RowVersion
+                entity.Property(e => e.RowVersion)
+                    .IsRequired()
+                    .IsRowVersion()
+                    .IsConcurrencyToken();
+
+                // ✅ Ignore columns that DO NOT exist in the DB table (per your SSMS)
+                entity.Ignore(e => e.IdNumber);
+                entity.Ignore(e => e.Reference);
+                entity.Ignore(e => e.RegistrationNumber);
+
+                // ✅ Also ignore these because they are in your entity class + your error logs
+                entity.Ignore(e => e.EntityId);
+                entity.Ignore(e => e.EntityTypeId);
+                entity.Ignore(e => e.TransactionTypeId);
+            });
+
+            modelBuilder.Entity<RegisteredUserAddress>(entity =>
                 {
                     entity.HasKey(e => new { e.RegisteredUserId, e.AddressTypeId });
 
@@ -1125,45 +1163,85 @@ namespace TollReportingSystem.Data
                         .HasConstraintName("FK_RegisteredUserPlazaTransactionSetting_TollPlaza");
                 });
 
-                modelBuilder.Entity<RegisteredUserTopUp>(entity =>
-                {
-                    entity.ToTable("RegisteredUserTopUp");
+            //modelBuilder.Entity<RegisteredUserTopUp>(entity =>
+            //    {
+            //        entity.ToTable("RegisteredUserTopUp");
 
-                    entity.Property(e => e.Description)
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .IsUnicode(false);
 
-                    entity.Property(e => e.RechargedOn)
-                        .HasColumnType("datetime")
-                        .HasDefaultValueSql("(getdate())");
+            //        entity.Property(e => e.Description)
+            //            .IsRequired()
+            //            .HasMaxLength(255)
+            //            .IsUnicode(false);
 
-                    entity.HasOne(d => d.PaymentIdentifier)
-                        .WithMany(p => p.RegisteredUserTopUps)
-                        .HasForeignKey(d => d.PaymentIdentifierId)
-                        .OnDelete(DeleteBehavior.ClientSetNull)
-                        .HasConstraintName("FK_RegisteredUserTopUp_PaymentIdentifier");
+            //        entity.Property(e => e.RechargedOn)
+            //            .HasColumnType("datetime")
+            //            .HasDefaultValueSql("(getdate())");
 
-                    entity.HasOne(d => d.PaymentMethod)
-                        .WithMany(p => p.RegisteredUserTopUps)
-                        .HasForeignKey(d => d.PaymentMethodId)
-                        .OnDelete(DeleteBehavior.ClientSetNull)
-                        .HasConstraintName("FK_RegisteredUserTopUp_PaymentMethod");
+            //        entity.HasOne(d => d.PaymentIdentifier)
+            //            .WithMany(p => p.RegisteredUserTopUps)
+            //            .HasForeignKey(d => d.PaymentIdentifierId)
+            //            .OnDelete(DeleteBehavior.ClientSetNull)
+            //            .HasConstraintName("FK_RegisteredUserTopUp_PaymentIdentifier");
 
-                    entity.HasOne(d => d.RechargePoint)
-                        .WithMany(p => p.RegisteredUserTopUps)
-                        .HasForeignKey(d => d.RechargePointId)
-                        .OnDelete(DeleteBehavior.ClientSetNull)
-                        .HasConstraintName("FK_RegisteredUserTopUp_RechargePoint");
+            //        entity.HasOne(d => d.PaymentMethod)
+            //            .WithMany(p => p.RegisteredUserTopUps)
+            //            .HasForeignKey(d => d.PaymentMethodId)
+            //            .OnDelete(DeleteBehavior.ClientSetNull)
+            //            .HasConstraintName("FK_RegisteredUserTopUp_PaymentMethod");
 
-                    entity.HasOne(d => d.RegisterUser)
-                        .WithMany(p => p.RegisteredUserTopUps)
-                        .HasForeignKey(d => d.RegisterUserId)
-                        .OnDelete(DeleteBehavior.ClientSetNull)
-                        .HasConstraintName("FK_RegisteredUserTopUp_RegisteredUser");
-                });
+            //        entity.HasOne(d => d.RechargePoint)
+            //            .WithMany(p => p.RegisteredUserTopUps)
+            //            .HasForeignKey(d => d.RechargePointId)
+            //            .OnDelete(DeleteBehavior.ClientSetNull)
+            //            .HasConstraintName("FK_RegisteredUserTopUp_RechargePoint");
 
-                modelBuilder.Entity<Role>(entity =>
+            //        entity.HasOne(d => d.RegisterUser)
+            //            .WithMany(p => p.RegisteredUserTopUps)
+            //            .HasForeignKey(d => d.RegisterUserId)
+            //            .OnDelete(DeleteBehavior.ClientSetNull)
+            //            .HasConstraintName("FK_RegisteredUserTopUp_RegisteredUser");
+
+            //    });
+            modelBuilder.Entity<RegisteredUserTopUp>(entity =>
+            {
+                entity.ToTable("RegisteredUserTopUp");
+                entity.HasKey(e => e.RegisteredUserTopUpId);
+
+                entity.Property(e => e.Description)
+                    .IsRequired()
+                    .HasMaxLength(255)
+                    .IsUnicode(false);
+
+                entity.Property(e => e.RechargedOn)
+                    .HasColumnType("datetime")
+                    .HasDefaultValueSql("(getdate())");
+
+                entity.Property(e => e.Amount).HasPrecision(18, 2);
+
+                // ✅ Ignore columns that DO NOT exist in DB table (per your SSMS)
+                entity.Ignore(e => e.TransactionTypeId);
+                entity.Ignore(e => e.PaymentIdentifierId);
+                entity.Ignore(e => e.RechargePointId);
+
+                // ✅ Keep only relationships whose FK columns exist in DB table
+                entity.HasOne(d => d.PaymentMethod)
+                    .WithMany(p => p.RegisteredUserTopUps)
+                    .HasForeignKey(d => d.PaymentMethodId)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("FK_RegisteredUserTopUp_PaymentMethod");
+
+                entity.HasOne(d => d.RegisterUser)
+                    .WithMany(p => p.RegisteredUserTopUps)
+                    .HasForeignKey(d => d.RegisterUserId)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("FK_RegisteredUserTopUp_RegisteredUser");
+
+                // ❌ REMOVE these completely:
+                // entity.HasOne(d => d.PaymentIdentifier)...
+                // entity.HasOne(d => d.RechargePoint)...
+            });
+
+            modelBuilder.Entity<Role>(entity =>
                 {
                     entity.ToTable("Role");
 

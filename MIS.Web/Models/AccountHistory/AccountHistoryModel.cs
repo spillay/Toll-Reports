@@ -1,38 +1,46 @@
 ﻿using Newtonsoft.Json;
 using System;
+using System.Collections.Generic;
 
 namespace MIS.Web.Models.AccountHistory
 {
     public class AccountHistoryModel
     {
-        [JsonProperty("LaneName")]
+        [JsonProperty("laneName")]
         public string? LaneName { get; set; }
 
-        [JsonProperty("TransactionType")]
+        [JsonProperty("transactionType")]
         public string? TransactionType { get; set; }
 
-        [JsonProperty("TransactionAmount")]
+        [JsonProperty("transactionAmount")]
         public decimal TransactionAmount { get; set; }
 
-        [JsonProperty("TopUpAmount")]
+        [JsonProperty("topUpAmount")]
         public decimal TopUpAmount { get; set; }
 
-        [JsonProperty("UserBalance")]
+        [JsonProperty("userBalance")]
         public decimal UserBalance { get; set; }
 
-        [JsonProperty("PaymentMethod")]
+        [JsonProperty("paymentMethod")]
         public string? PaymentMethod { get; set; }
 
-        [JsonProperty("TransactionDateTime")]
+        [JsonProperty("transactionDateTime")]
         public DateTime? TransactionDateTime { get; set; }
 
-        [JsonProperty("RegisteredIdentifier")]
+        [JsonProperty("registeredIdentifier")]
         public string? RegisteredIdentifier { get; set; }
 
-        [JsonProperty("NumberPlateDetails")]
+        // JSON is "numberPlate" - name can stay, mapping is correct
+        [JsonProperty("numberPlate")]
         public string? NumberPlateDetails { get; set; }
 
-        [JsonProperty("Description")]
+        [JsonProperty("description")]
         public string? Description { get; set; }
+    }
+    public class AccountSearchItem
+    {
+        public string? AccountNumber { get; set; }
+        public string? Description { get; set; }
+        public decimal Balance { get; set; }
     }
 }

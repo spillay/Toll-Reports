@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 
 namespace Toll.Reporting.Api.DTOs
 {
@@ -11,7 +12,7 @@ namespace Toll.Reporting.Api.DTOs
         public string? Operator { get; set; }
         public string? AccountNumber { get; set; }
         public string? AccountName { get; set; }
-        public double AmountPaid { get; set; }
+        public decimal AmountPaid { get; set; }
         public string? MethodOfPayment { get; set; }
 
         public List<string>? ShiftOptions { get; set; }

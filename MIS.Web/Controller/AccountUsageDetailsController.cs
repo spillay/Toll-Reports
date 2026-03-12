@@ -17,25 +17,38 @@ namespace MIS.Web.Controllers
             _service = service;
         }
 
+        [HttpGet]
+        public async Task<IActionResult> SearchAccounts(string q, int take = 20)
+        {
+            var results = await _service.SearchAccountsAsync(q, take);
+            return Json(results);
+        }
+
+        [HttpGet]
         public async Task<IActionResult> Index(AccountUsageDetailsInputModel filters)
         {
-            // Default date range (last 30 days)
-            DateTime start = filters.StartDate ?? DateTime.Now.AddDays(-30);
-            DateTime end = filters.EndDate ?? DateTime.Now;
+            var accountNumber = (filters.AccountNumber ?? string.Empty).Trim();
+            var start = filters.StartDate ?? DateTime.Now.AddDays(-30);
+            var end = filters.EndDate ?? DateTime.Now;
 
-            // Call API (returns Summary + Details)
-            var apiResponse = await _service.GetAccountUsageDetailsAsync(start, end);
-
-            // Build Model for Razor Page
-            var model = new PageAccountUsageDetailsModel
-            {
-                Summary = apiResponse?.Summary ?? new AccountUsageSummaryModel(),
-                Items = apiResponse?.Items ?? new List<AccountUsageDetailsModel>()
-            };
-
-            // Send date values back to view
+            ViewBag.AccountNumber = accountNumber;
             ViewBag.StartDate = start;
             ViewBag.EndDate = end;
+
+            if (string.IsNullOrWhiteSpace(accountNumber))
+            {
+                return View(new PageAccountUsageDetailsModel
+                {
+                    Header = new AccountUsageDetailsHeaderModel(),
+                    Items = new()
+                });
+            }
+
+            var model = await _service.GetAccountUsageDetailsAsync(accountNumber, start, end)
+                        ?? new PageAccountUsageDetailsModel();
+
+            model.Header ??= new AccountUsageDetailsHeaderModel();
+            model.Items ??= new();
 
             return View(model);
         }

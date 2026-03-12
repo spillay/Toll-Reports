@@ -11,7 +11,7 @@ namespace MIS.DAL
     {
         public Models.CollectorCashupShortagePayment Create(Models.CollectorCashupShortagePayment CollectorCashupShortagePayment)
         {
-            using (var dbContext = new Models.MISDBContext())
+            using (var dbContext = new Models.ApplicationDbContext())
             {
                 dbContext.CollectorCashupShortagePayments.Add(CollectorCashupShortagePayment);
                 dbContext.SaveChanges();
@@ -22,7 +22,7 @@ namespace MIS.DAL
 
         public Models.CollectorCashupShortagePayment Update(Models.CollectorCashupShortagePayment CollectorCashupShortagePayment)
         {
-            using (var dbContext = new Models.MISDBContext())
+            using (var dbContext = new Models.ApplicationDbContext())
             {
                 dbContext.CollectorCashupShortagePayments.Attach(CollectorCashupShortagePayment);
                 dbContext.Entry(CollectorCashupShortagePayment).State = EntityState.Modified;
@@ -35,7 +35,7 @@ namespace MIS.DAL
 
         public List<Models.CollectorCashupShortagePayment> GetByCollectorCashupId(long CollectorCashupId)
         {
-            using (var dbContext = new Models.MISDBContext())
+            using (var dbContext = new Models.ApplicationDbContext())
             {
                 return dbContext.CollectorCashupShortagePayments.Where(z => z.CollectorCashupId == CollectorCashupId).ToList();
             }
@@ -43,7 +43,7 @@ namespace MIS.DAL
 
         public Models.CollectorCashupShortagePayment Get(long CollectorCashupShortagePaymentId)
         {
-            using (var dbContext = new Models.MISDBContext())
+            using (var dbContext = new Models.ApplicationDbContext())
             {
                 return dbContext.CollectorCashupShortagePayments
                         .Include(x => x.CollectorCashup)

@@ -12,7 +12,7 @@ namespace MIS.DAL
     {
         public void Save(Models.TransactionClassCorrection TransactionClassCorrection)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 dBContext.TransactionClassCorrections.Add(TransactionClassCorrection);
                 dBContext.SaveChanges();
@@ -21,7 +21,7 @@ namespace MIS.DAL
 
         public void Update(Models.TransactionClassCorrection TransactionClassCorrection)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 dBContext.TransactionClassCorrections.Attach(TransactionClassCorrection);
                 dBContext.Entry(TransactionClassCorrection).State = EntityState.Modified;
@@ -31,7 +31,7 @@ namespace MIS.DAL
 
         public List<Models.TransactionClassCorrection> Update(List<Models.TransactionClassCorrection> TransactionClassCorrection)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 dBContext.TransactionClassCorrections.AttachRange(TransactionClassCorrection);
                 foreach(var item in TransactionClassCorrection)
@@ -45,7 +45,7 @@ namespace MIS.DAL
         public List<Models.TransactionClassCorrection> Get(long SystemUserId, DateTime ShiftDate, byte ShiftId,bool ClassCorrected)
         {
             List<Models.TransactionClassCorrection> classCorrections = new List<Models.TransactionClassCorrection>(); 
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 classCorrections = dBContext.TransactionClassCorrections
                     .Where(z => z.Transaction.ShiftDate == ShiftDate 
@@ -59,7 +59,7 @@ namespace MIS.DAL
         public List<Models.TransactionClassCorrection> Get(DateTime ShiftDate,  bool ClassCorrected)
         {
             List<Models.TransactionClassCorrection> classCorrections = new List<Models.TransactionClassCorrection>();
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 classCorrections = dBContext.TransactionClassCorrections.Include(x => x.ClassCorrectionType).Include(x => x.ClassCorrected).Include(x => x.AllocatedTo).
                     Include(x => x.Transaction).Include(v => v.Transaction.SystemUser).Include(v => v.Transaction.ManualTollClass).
@@ -73,7 +73,7 @@ namespace MIS.DAL
         public List<Models.TransactionClassCorrection> Get(DateTime ShiftDate, byte? ShiftId, byte? TollPlazaId, byte? VirtualPlazaId, byte? LaneId, byte? ClassCorrectionTypeId, bool ClassCorrected)
         {
             List<Models.TransactionClassCorrection> classCorrections = new List<Models.TransactionClassCorrection>();
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 classCorrections = dBContext.TransactionClassCorrections.Include(x => x.ClassCorrectionType)
                     .Include(x => x.AllocatedTo)
@@ -106,7 +106,7 @@ namespace MIS.DAL
         public List<Models.TransactionClassCorrection> GetForCashup(Models.CollectorCashup CollectorCashup)
         {
             List<Models.TransactionClassCorrection> classCorrections = new List<Models.TransactionClassCorrection>();
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 classCorrections = dBContext.TransactionClassCorrections
                     .Include(z => z.Transaction)

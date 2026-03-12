@@ -3,7 +3,7 @@
 
 @{
     var reportVersion   = "3.0.0.0";
-    var currentUserId   = User.Identity?.Name ?? "Lucky";
+    var currentUserId = User.FindFirst("firstName")?.Value ?? (User.Identity?.Name ?? "Lucky");
     var reportGenerated = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
     var items           = Model.items ?? new List<MIS.Web.Models.Transaction.TransactionModel>();
 
@@ -226,7 +226,7 @@
                 </tr>
                 <tr>
                     <td colspan="4">
-                        <small class="text-muted">Version: <strong>@reportVersion</strong></small>
+                        <small class="text-muted">Reports Module Version Number: <strong>@reportVersion</strong></small>
                     </td>
                 </tr>
             </table>

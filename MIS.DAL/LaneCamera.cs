@@ -14,7 +14,7 @@ namespace MIS.DAL
         {
             List<Models.LaneCamera> LaneCameras = new List<Models.LaneCamera>();
 
-            using (var db = new Models.MISDBContext())
+            using (var db = new Models.ApplicationDbContext())
             {
                 LaneCameras = db.LaneCameras.OrderBy(o => o.LaneId).ToList();
             }
@@ -24,7 +24,7 @@ namespace MIS.DAL
 
         public Models.LaneCamera Save(Models.LaneCamera LaneCamera)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 dBContext.LaneCameras.Add(LaneCamera);
                 dBContext.SaveChanges();
@@ -35,7 +35,7 @@ namespace MIS.DAL
 
         public void Update(Models.LaneCamera LaneCamera)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 dBContext.LaneCameras.Attach(LaneCamera);
                 dBContext.Entry(LaneCamera).State = EntityState.Modified;

@@ -12,7 +12,7 @@ namespace MIS.DAL
     {
         public Models.CashupShortagePaymentMethod Create(Models.CashupShortagePaymentMethod CashupShortagePaymentMethod)
         {
-            using (var dbContext = new Models.MISDBContext())
+            using (var dbContext = new Models.ApplicationDbContext())
             {
                 dbContext.CashupShortagePaymentMethods.Add(CashupShortagePaymentMethod);
                 dbContext.SaveChanges();

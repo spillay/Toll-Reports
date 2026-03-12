@@ -14,7 +14,7 @@ namespace MIS.DAL
         {
             List<Models.Shift> shifts = new List<Models.Shift>();
 
-            using (var db = new Models.MISDBContext())
+            using (var db = new Models.ApplicationDbContext())
             {
                 shifts = db.Shifts.OrderBy(o => o.ShiftId).ThenBy(o => o.StartTimeHour).ThenBy(o => o.EndTimeHour).ThenBy(o => o.Description).ToList();
             }
@@ -24,7 +24,7 @@ namespace MIS.DAL
 
         public Models.Shift Save(Models.Shift Shift)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 dBContext.Shifts.Add(Shift);
                 dBContext.SaveChanges();
@@ -35,7 +35,7 @@ namespace MIS.DAL
 
         public void Update(Models.Shift Shift)
         {
-            using (Models.MISDBContext dBContext = new Models.MISDBContext())
+            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
             {
                 dBContext.Shifts.Attach(Shift);
                 dBContext.Entry(Shift).State = EntityState.Modified;

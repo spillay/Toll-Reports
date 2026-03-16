@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using TollReportingSystem.Data;
 
 namespace MIS.DAL
 {
@@ -11,7 +12,7 @@ namespace MIS.DAL
     {
         public Models.CollectorCashupCashSurplusAllocatedToDiscrepancy Create(Models.CollectorCashupCashSurplusAllocatedToDiscrepancy CollectorCashupCashSurplusAllocatedToDiscrepancy)
         {
-            using (var dbContext = new Models.ApplicationDbContext())
+            using (var dbContext = new ApplicationDbContext())
             {
                 dbContext.CollectorCashupCashSurplusAllocatedToDiscrepancies.Add(CollectorCashupCashSurplusAllocatedToDiscrepancy);
                 dbContext.SaveChanges();

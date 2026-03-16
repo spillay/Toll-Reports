@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using MIS.Models;
+using TollReportingSystem.Data;
 
 namespace MIS.DAL
 {
@@ -14,7 +15,7 @@ namespace MIS.DAL
         {
             List<Models.TollPlaza> tollPlazas = new List<Models.TollPlaza>();
 
-            using (var db = new Models.ApplicationDbContext())
+            using (var db = new ApplicationDbContext())
             {
                 tollPlazas = db.TollPlazas.OrderBy(o => o.PlazaName).Include(x => x.ControlCentre).ToList();
             }
@@ -24,7 +25,7 @@ namespace MIS.DAL
 
         public Models.TollPlaza Save(Models.TollPlaza TollPlaza)
         {
-            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
+            using (ApplicationDbContext dBContext = new ApplicationDbContext())
             {
                 dBContext.TollPlazas.Add(TollPlaza);
                 dBContext.SaveChanges();
@@ -35,7 +36,7 @@ namespace MIS.DAL
 
         public void Update(Models.TollPlaza TollPlaza)
         {
-            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
+            using (ApplicationDbContext dBContext = new ApplicationDbContext())
             {
                 dBContext.TollPlazas.Attach(TollPlaza);
                 dBContext.Entry(TollPlaza).State = EntityState.Modified;

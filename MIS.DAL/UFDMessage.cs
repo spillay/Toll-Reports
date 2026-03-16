@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using MIS.Models;
+using TollReportingSystem.Data;
 
 namespace MIS.DAL
 {
@@ -14,7 +15,7 @@ namespace MIS.DAL
         {
             List<Models.Ufdmessage> ufdMessages = new List<Models.Ufdmessage>();
 
-            using (var db = new Models.ApplicationDbContext())
+            using (var db = new ApplicationDbContext())
             {
                 ufdMessages = db.Ufdmessages.OrderBy(o => o.UfdmessageId).ToList();
             }
@@ -24,7 +25,7 @@ namespace MIS.DAL
 
         public Models.Ufdmessage Save(Models.Ufdmessage UFDMessage)
         {
-            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
+            using (ApplicationDbContext dBContext = new ApplicationDbContext())
             {
                 dBContext.Ufdmessages.Add(UFDMessage);
                 dBContext.SaveChanges();
@@ -35,7 +36,7 @@ namespace MIS.DAL
 
         public void Update(Models.Ufdmessage UFDMessage)
         {
-            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
+            using (ApplicationDbContext dBContext = new ApplicationDbContext())
             {
                 dBContext.Ufdmessages.Attach(UFDMessage);
                 dBContext.Entry(UFDMessage).State = EntityState.Modified;

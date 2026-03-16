@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using MIS.Models;
+using TollReportingSystem.Data;
 
 namespace MIS.DAL
 {
@@ -14,7 +15,7 @@ namespace MIS.DAL
         {
             List<Models.LaneDefaultValue> laneDefaultValues = new List<Models.LaneDefaultValue>();
 
-            using (var db = new Models.ApplicationDbContext())
+            using (var db = new ApplicationDbContext())
             {
                 laneDefaultValues = db.LaneDefaultValues.OrderBy(o => o.LaneDefaultValueId).ToList();
             }
@@ -24,7 +25,7 @@ namespace MIS.DAL
 
         public Models.LaneDefaultValue Save(Models.LaneDefaultValue LaneDefaultValue)
         {
-            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
+            using (ApplicationDbContext dBContext = new ApplicationDbContext())
             {
                 dBContext.LaneDefaultValues.Add(LaneDefaultValue);
                 dBContext.SaveChanges();
@@ -35,7 +36,7 @@ namespace MIS.DAL
 
         public void Update(Models.LaneDefaultValue LaneDefaultValue)
         {
-            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
+            using (ApplicationDbContext dBContext = new ApplicationDbContext())
             {
                 dBContext.LaneDefaultValues.Attach(LaneDefaultValue);
                 dBContext.Entry(LaneDefaultValue).State = EntityState.Modified;

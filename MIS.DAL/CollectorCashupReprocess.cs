@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using MIS.Models;
+using TollReportingSystem.Data;
 
 namespace MIS.DAL
 {
@@ -12,7 +13,7 @@ namespace MIS.DAL
     {
         public Models.CollectorCashupReprocess Create(Models.CollectorCashupReprocess CollectorCashupReprocess)
         {
-            using (var dbContext = new Models.ApplicationDbContext())
+            using (var dbContext = new ApplicationDbContext())
             {
                 dbContext.CollectorCashupReprocesses.Add(CollectorCashupReprocess);
                 dbContext.SaveChanges();
@@ -23,7 +24,7 @@ namespace MIS.DAL
 
         public Models.CollectorCashupReprocess Update(Models.CollectorCashupReprocess CollectorCashupReprocess)
         {
-            using (var dbContext = new Models.ApplicationDbContext())
+            using (var dbContext = new ApplicationDbContext())
             {
                 dbContext.CollectorCashupReprocesses.Attach(CollectorCashupReprocess);
                 dbContext.Entry(CollectorCashupReprocess).State = EntityState.Modified;

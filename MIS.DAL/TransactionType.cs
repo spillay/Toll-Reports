@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using MIS.Models;
+using TollReportingSystem.Data;
 
 namespace MIS.DAL
 {
@@ -14,7 +15,7 @@ namespace MIS.DAL
         {
             List<Models.TransactionType> transactionTypes = new List<Models.TransactionType>();
 
-            using (var db = new Models.ApplicationDbContext())
+            using (var db = new ApplicationDbContext())
             {
                 transactionTypes = db.TransactionTypes.OrderBy(o => o.Description).ToList();
             }

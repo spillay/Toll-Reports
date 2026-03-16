@@ -1,11 +1,13 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 
 namespace MIS.Web.Models.AccountUsageSummary
 {
     public class PageAccountUsageSummaryModel : PageModel
     {
-        public List<AccountUsageSummaryModel>? Items { get; set; }
-        public AccountUsageSummarySummaryModel? Summary { get; set; }
+        public List<AccountUsageSummaryModel> Items { get; set; } = new();
+        public AccountUsageSummarySummaryModel Summary { get; set; } = new();
+        public AccountUsageSummaryInputModel Filters { get; set; } = new();
     }
 
     public class AccountUsageSummarySummaryModel

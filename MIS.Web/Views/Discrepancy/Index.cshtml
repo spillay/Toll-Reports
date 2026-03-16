@@ -317,7 +317,45 @@
                 </nav>
             </div>
         }
+        <!-- ====== SUMMARY (LAST PAGE WHEN PRINTING) ====== -->
+        <div class="print-page-break"></div>
 
+        @if (Model.totalPages <= 1 || Model.page == Model.totalPages)
+        {
+            <div class="card mt-4 border">
+                <div class="card-body">
+                    <h5 class="mb-3 fw-bold">Summary</h5>
+
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <div class="small text-muted">Total Count</div>
+                            <div class="fw-bold">@summaryCount</div>
+                        </div>
+
+                        <div class="col-md-3">
+                            <div class="small text-muted">Total Difference</div>
+                            <div class="fw-bold">@totalDifference.ToString("N2")</div>
+                        </div>
+
+                        <div class="col-md-2">
+                            <div class="small text-muted">Operator Correct</div>
+                            <div class="fw-bold">@operatorCorrect</div>
+                        </div>
+
+                        <div class="col-md-2">
+                            <div class="small text-muted">AVC Correct</div>
+                            <div class="fw-bold">@avcCorrect</div>
+                        </div>
+
+                        <div class="col-md-2">
+                            <div class="small text-muted">Both Incorrect</div>
+                            <div class="fw-bold">@bothIncorrect</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
         <!-- ====== FOOTER ====== -->
         <div class="mt-4 border-top pt-3">
             <table class="table table-borderless mb-0">
@@ -335,45 +373,7 @@
             </table>
         </div>
 
-        <!-- ====== SUMMARY (LAST PAGE WHEN PRINTING) ====== -->
-        <div class="print-page-break"></div>
-
-        @if (Model.totalPages <= 1 || Model.page == Model.totalPages)
-        {
-            <div class="card mt-4 border">
-                <div class="card-body">
-                <h5 class="mb-3 fw-bold">Summary</h5>
-
-                <div class="row g-3">
-                    <div class="col-md-3">
-                        <div class="small text-muted">Total Count</div>
-                        <div class="fw-bold">@summaryCount</div>
-                    </div>
-
-                    <div class="col-md-3">
-                        <div class="small text-muted">Total Difference</div>
-                        <div class="fw-bold">@totalDifference.ToString("N2")</div>
-                    </div>
-
-                    <div class="col-md-2">
-                        <div class="small text-muted">Operator Correct</div>
-                        <div class="fw-bold">@operatorCorrect</div>
-                    </div>
-
-                    <div class="col-md-2">
-                        <div class="small text-muted">AVC Correct</div>
-                        <div class="fw-bold">@avcCorrect</div>
-                    </div>
-
-                    <div class="col-md-2">
-                        <div class="small text-muted">Both Incorrect</div>
-                        <div class="fw-bold">@bothIncorrect</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        }
-    </div>
+        
 </div>
 
 @functions {
@@ -420,325 +420,433 @@
 <script>
     document.addEventListener("DOMContentLoaded", () => {
 
-        // ==========================
-        // DATA + META
-        // ==========================
-        const data = @Html.Raw(JsonSerializer.Serialize(
-                        Model.ExportItems ?? new List<MIS.Web.Models.Discrepancy.DiscrepancyModel>()
-                ));
-
-        const reportGeneratedAt = '@DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")';
-
-        // ✅ Safe user name (fallback avoids blank exports)
-        const currentUserId = '@(User.FindFirst("firstName")?.Value ?? "Unknown User")';
-
-        const reportVersion = "3.0.0.0";
-        const reportNamePdf = "DISCREPANCY REPORT";
-        const reportNameFooter = "Discrepancy Report";
-
-        const fileStamp = () => new Date().toISOString().replace(/[:.]/g, "-");
-        const hasData = () => Array.isArray(data) && data.length > 0;
-
-        // ==========================
-        // FILTERS (All collapsing)
-        // ==========================
-        const allShifts         = @Html.Raw(JsonSerializer.Serialize(Model.Filters?.Shifts ?? new List<string>()));
-        const allOperators      = @Html.Raw(JsonSerializer.Serialize(Model.Filters?.TollOperators ?? new List<string>()));
-        const allLanes          = @Html.Raw(JsonSerializer.Serialize(Model.Filters?.Lanes ?? new List<string>()));
-        const allPaymentMethods = @Html.Raw(JsonSerializer.Serialize(Model.Filters?.PaymentMethods ?? new List<string>()));
-        const allTakenActions   = @Html.Raw(JsonSerializer.Serialize(Model.Filters?.TakenActions ?? new List<string>()));
-
-        const selectedShifts         = @Html.Raw(JsonSerializer.Serialize(Model.Filters?.SelectedShifts ?? new List<string>()));
-        const selectedOperators      = @Html.Raw(JsonSerializer.Serialize(Model.Filters?.SelectedTollOperators ?? new List<string>()));
-        const selectedLanes          = @Html.Raw(JsonSerializer.Serialize(Model.Filters?.SelectedLanes ?? new List<string>()));
-        const selectedPaymentMethods = @Html.Raw(JsonSerializer.Serialize(Model.Filters?.SelectedPaymentMethods ?? new List<string>()));
-        const selectedTakenActions   = @Html.Raw(JsonSerializer.Serialize(Model.Filters?.SelectedTakenActions ?? new List<string>()));
-
-        function cleanList(arr) {
-            if (!Array.isArray(arr)) return [];
-            return arr
-                .filter(x => x !== null && x !== undefined)
-                .map(x => String(x).trim())
-                .filter(x => x.length > 0);
-        }
-
-        // ✅ if none selected OR selected covers all => "All"
-        function labelAll(selectedList, allList) {
-            const selected = cleanList(selectedList);
-            const all = cleanList(allList);
-
-            if (selected.length === 0) return "All";
-            if (all.length > 0 && selected.length >= all.length) return "All";
-
-            return selected.join(", ");
-        }
-
-        const filtersUsed = {
-            "Start Date": "@(Model.Filters?.StartDate.ToString("dd/MM/yyyy HH:mm") ?? "")",
-            "End Date": "@(Model.Filters?.EndDate.ToString("dd/MM/yyyy HH:mm") ?? "")",
-            "Shift": labelAll(selectedShifts, allShifts),
-            "Toll Operator": labelAll(selectedOperators, allOperators),
-            "Lane": labelAll(selectedLanes, allLanes),
-            "Payment Method": labelAll(selectedPaymentMethods, allPaymentMethods),
-            "Taken Action": labelAll(selectedTakenActions, allTakenActions)
-        };
-
-        // ==========================
-        // HELPERS
-        // ==========================
-        const toNum = v => Number(v || 0);
-
-        function safeStr(v) {
-            return (v === null || v === undefined) ? "" : String(v);
-        }
-
-        function loadImage(src) {
-            return new Promise(resolve => {
-                const img = new Image();
-                img.crossOrigin = "Anonymous";
-                img.onload = () => resolve(img);
-                img.onerror = () => resolve(null);
-                img.src = src;
-            });
-        }
-
-        // ✅ Landing-page style centered header
-        // Returns the bottom Y position (so you can start filters below it)
-        function drawCenteredHeader(doc, pageWidth, margin, leftLogo, rightLogo, reportTitle) {
-            const topY = 25;
-
-            if (leftLogo)  doc.addImage(leftLogo,  "JPEG", margin, topY, 80, 80);
-            if (rightLogo) doc.addImage(rightLogo, "JPEG", pageWidth - margin - 80, topY, 80, 80);
-
-            let y = 60;
-
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(14);
-            doc.text("LEKKI CONCESSION COMPANY LIMITED", pageWidth / 2, y, { align: "center" });
-
-            y += 18;
-            doc.setFontSize(12);
-            doc.text("LEKKI-IKOYI LINK BRIDGE", pageWidth / 2, y, { align: "center" });
-
-            y += 26;
-            doc.setFontSize(16);
-            doc.text(reportTitle || "REPORT NAME", pageWidth / 2, y, { align: "center" });
-
-            return y;
-        }
-
-        function drawFiltersBlock(doc, margin, startY, filters) {
-            let y = startY;
-
-            doc.setFont("helvetica", "normal");
-            doc.setFontSize(10);
-
-            doc.text("FILTERS USED:", margin, y);
-            y += 14;
-
-            Object.entries(filters).forEach(([k, v]) => {
-                doc.text(`${k}: ${safeStr(v)}`, margin, y);
-                y += 12;
-            });
-
-            return y;
-        }
-
-        function addSummaryPage(doc, margin, totalCount, totalDiff) {
-            doc.addPage();
-
-            const y0 = 100;
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(14);
-            doc.text("SUMMARY", margin, y0);
-
-            doc.setFont("helvetica", "normal");
-            doc.setFontSize(11);
-            doc.text(`Total Record Count: ${totalCount}`, margin, y0 + 25);
-            doc.text(`Total Difference Value: ${totalDiff.toFixed(2)}`, margin, y0 + 45);
-        }
-
-        function addFooters(doc, pageWidth, pageHeight, margin) {
-            const totalPages = doc.internal.getNumberOfPages();
-
-            for (let i = 1; i <= totalPages; i++) {
-                doc.setPage(i);
-
-                const footerY = pageHeight - 30;
-
-                doc.setFont("helvetica", "normal");
-                doc.setFontSize(10);
-
-                doc.text(reportNameFooter, margin, footerY);
-                doc.text(`Date: ${reportGeneratedAt}`, pageWidth / 2.2, footerY);
-                doc.text(`User: ${currentUserId}`, pageWidth / 1.5, footerY);
-                doc.text(`Page ${i} of ${totalPages}`, pageWidth - margin, footerY, { align: "right" });
-
-                doc.setFontSize(9);
-                doc.text(`Reports Module Version Number: ${reportVersion}`, margin, footerY + 14);
-            }
-        }
-
-        // ==========================
-        // TABLE BUILDERS
-        // ==========================
-        const headers = [
-            "Lane", "Sequence", "Date", "Time", "Shift", "Operator",
-            "Payment", "Collector", "AVC", "Final", "Tariff", "Updated", "Diff", "Action"
-        ];
-
-        function buildRows(items) {
-            return items.map(t => {
-                const collector = safeStr(t.Toll_Collector_Class).trim();
-                const avc       = safeStr(t.AVC_Class).trim();
-                const hide      = collector.toLowerCase() === avc.toLowerCase();
-
-                const tariff  = toNum(t.Tariff);
-                const updated = toNum(t.Updated_Tariff);
-                const diff    = updated - tariff;
-
-                return [
-                    safeStr(t.Lane_Nr),
-                    safeStr(t.Trx_Sequence_Nr),
-                    safeStr(t.Trx_Date),
-                    safeStr(t.Trx_Time),
-                    safeStr(t.Operational_Shift),
-                    safeStr(t.Toll_Operator_ID),
-                    safeStr(t.Method_of_Payment),
-                    hide ? "" : collector,
-                    hide ? "" : avc,
-                    safeStr(t.Final_Class),
-                    tariff.toFixed(2),
-                    updated.toFixed(2),
-                    diff.toFixed(2),
-                    safeStr(t.TakenAction)
-                ];
-            });
-        }
-
-        // ==========================
-        // PDF EXPORT
-        // ==========================
-        document.getElementById("btnDownloadPdf")?.addEventListener("click", async () => {
-
-            if (!hasData()) {
-                alert("No data available to export.");
-                return;
-            }
-
-            if (!window.jspdf) {
-                alert("jsPDF not loaded. Check layout scripts.");
-                return;
-            }
-
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
-
-            const pageWidth  = doc.internal.pageSize.getWidth();
-            const pageHeight = doc.internal.pageSize.getHeight();
-            const margin     = 50;
-
-            // Load logos once
-            const [leftLogo, rightLogo] = await Promise.all([
-                loadImage("/images/lCC Logo.jpg"),
-                loadImage("/images/ICT-Works Logo.jpg")
-            ]);
-
-            // ✅ Header (centered)
-            const headerBottomY = drawCenteredHeader(doc, pageWidth, margin, leftLogo, rightLogo, reportNamePdf);
-
-            // ✅ Filters
-            const filtersBottomY = drawFiltersBlock(doc, margin, headerBottomY + 35, filtersUsed);
-
-            // ✅ Table
-            const rows = buildRows(data);
-
-            doc.autoTable({
-                head: [headers],
-                body: rows,
-                startY: filtersBottomY + 10,
-                theme: "grid",
-                styles: { fontSize: 9, halign: "center" },
-                headStyles: { fillColor: [41, 128, 185], textColor: 255 }
-            });
-
-            // ✅ Summary page
-            const totalCount = data.length;
-            const totalDiff  = data.reduce((s, x) => s + (toNum(x.Updated_Tariff) - toNum(x.Tariff)), 0);
-            addSummaryPage(doc, margin, totalCount, totalDiff);
-
-            addFooters(doc, pageWidth, pageHeight, margin);
-
-            doc.save(`Discrepancy_Report_${fileStamp()}.pdf`);
-        });
-
-        // ==========================
-        // EXCEL EXPORT
-        // ==========================
-        document.getElementById("btnDownloadExcel")?.addEventListener("click", () => {
-
-            if (!hasData()) {
-                alert("No data available to export.");
-                return;
-            }
-
-            if (!window.XLSX) {
-                alert("XLSX not loaded. Check layout scripts.");
-                return;
-            }
-
-            // Filters block
-            const filterRows = [];
-            filterRows.push(["FILTERS USED"]);
-            Object.entries(filtersUsed).forEach(([k, v]) => filterRows.push([k, v]));
-            filterRows.push([]);
-
-            // Data rows (numeric cells kept numeric for Excel)
-            const rows = data.map(t => {
-                const collector = safeStr(t.Toll_Collector_Class).trim();
-                const avc       = safeStr(t.AVC_Class).trim();
-                const hide      = collector.toLowerCase() === avc.toLowerCase();
-
-                const tariff  = toNum(t.Tariff);
-                const updated = toNum(t.Updated_Tariff);
-                const diff    = updated - tariff;
-
-                return [
-                    safeStr(t.Lane_Nr),
-                    safeStr(t.Trx_Sequence_Nr),
-                    safeStr(t.Trx_Date),
-                    safeStr(t.Trx_Time),
-                    safeStr(t.Operational_Shift),
-                    safeStr(t.Toll_Operator_ID),
-                    safeStr(t.Method_of_Payment),
-                    hide ? "" : collector,
-                    hide ? "" : avc,
-                    safeStr(t.Final_Class),
-                    tariff,
-                    updated,
-                    diff,
-                    safeStr(t.TakenAction)
-                ];
-            });
-
-            // Totals + meta
-            const totalCount = data.length;
-            const totalDiff  = data.reduce((s, x) => s + (toNum(x.Updated_Tariff) - toNum(x.Tariff)), 0);
-
-            rows.push([]);
-            rows.push(["Total Record Count", totalCount]);
-            rows.push(["Total Difference Value", totalDiff.toFixed(2)]);
-            rows.push([]);
-            rows.push(["Generated", reportGeneratedAt, "User", currentUserId, "Version", reportVersion]);
-
-            const ws = XLSX.utils.aoa_to_sheet([...filterRows, headers, ...rows]);
-            ws["!cols"] = Array(headers.length).fill({ wch: 18 });
-
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Discrepancy Report");
-
-            XLSX.writeFile(wb, `Discrepancy_Report_${fileStamp()}.xlsx`);
-        });
+    // ==========================
+    // DATA + META
+    // ==========================
+    const data = @Html.Raw(JsonSerializer.Serialize(
+                Model.ExportItems ?? new List<MIS.Web.Models.Discrepancy.DiscrepancyModel>()
+            ));
+
+    const reportGeneratedAt = '@DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")';
+    const currentUserId = '@(User.FindFirst("firstName")?.Value ?? "Unknown User")';
+    const reportVersion = "3.0.0.0";
+
+    const reportNamePdf = "DISCREPANCY REPORT";
+    const reportNameFooter = "Discrepancy Report";
+    const fileNamePrefix = "Discrepancy_Report";
+
+    const fileStamp = () => new Date().toISOString().replace(/[:.]/g, "-");
+    const hasData = () => Array.isArray(data) && data.length > 0;
+
+    // ==========================
+    // FILTERS
+    // ==========================
+    const allShifts = @Html.Raw(JsonSerializer.Serialize(Model.Filters?.Shifts ?? new List<string>()));
+    const allOperators = @Html.Raw(JsonSerializer.Serialize(Model.Filters?.TollOperators ?? new List<string>()));
+    const allLanes = @Html.Raw(JsonSerializer.Serialize(Model.Filters?.Lanes ?? new List<string>()));
+    const allPaymentMethods = @Html.Raw(JsonSerializer.Serialize(Model.Filters?.PaymentMethods ?? new List<string>()));
+    const allTakenActions = @Html.Raw(JsonSerializer.Serialize(Model.Filters?.TakenActions ?? new List<string>()));
+
+    const selectedShifts = @Html.Raw(JsonSerializer.Serialize(Model.Filters?.SelectedShifts ?? new List<string>()));
+    const selectedOperators = @Html.Raw(JsonSerializer.Serialize(Model.Filters?.SelectedTollOperators ?? new List<string>()));
+    const selectedLanes = @Html.Raw(JsonSerializer.Serialize(Model.Filters?.SelectedLanes ?? new List<string>()));
+    const selectedPaymentMethods = @Html.Raw(JsonSerializer.Serialize(Model.Filters?.SelectedPaymentMethods ?? new List<string>()));
+    const selectedTakenActions = @Html.Raw(JsonSerializer.Serialize(Model.Filters?.SelectedTakenActions ?? new List<string>()));
+
+    function cleanList(arr) {
+    if (!Array.isArray(arr)) return [];
+
+    return arr
+    .filter(x => x !== null && x !== undefined)
+    .map(x => String(x).trim())
+    .filter(x => x.length > 0);
+    }
+
+    function labelAll(selectedList, allList) {
+    const selected = cleanList(selectedList);
+    const all = cleanList(allList);
+
+    if (selected.length === 0) return "All";
+    if (all.length > 0 && selected.length >= all.length) return "All";
+
+    return selected.join(", ");
+    }
+
+    const filtersUsed = {
+    "Start Date": "@(Model.Filters?.StartDate.ToString("dd/MM/yyyy HH:mm") ?? "")",
+    "End Date": "@(Model.Filters?.EndDate.ToString("dd/MM/yyyy HH:mm") ?? "")",
+    "Shift": labelAll(selectedShifts, allShifts),
+    "Toll Operator": labelAll(selectedOperators, allOperators),
+    "Lane": labelAll(selectedLanes, allLanes),
+    "Payment Method": labelAll(selectedPaymentMethods, allPaymentMethods),
+    "Taken Action": labelAll(selectedTakenActions, allTakenActions)
+    };
+
+    // ==========================
+    // HELPERS
+    // ==========================
+    function toNum(value) {
+    const n = Number(value);
+    return isNaN(n) ? 0 : n;
+    }
+
+    function safeStr(value) {
+    return value === null || value === undefined ? "" : String(value);
+    }
+
+    function equalsIgnoreCase(a, b) {
+    return safeStr(a).trim().toLowerCase() === safeStr(b).trim().toLowerCase();
+    }
+
+    function loadImage(src) {
+    return new Promise(resolve => {
+    const img = new Image();
+    img.crossOrigin = "Anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
+    });
+    }
+
+    function getSummary(items) {
+    return {
+    totalCount: items.length,
+    totalDifference: items.reduce((sum, item) => sum + toNum(item.TariffDifference), 0),
+    operatorCorrect: items.filter(item => equalsIgnoreCase(item.TakenAction, "AVC Error")).length,
+    avcCorrect: items.filter(item => equalsIgnoreCase(item.TakenAction, "Toll Collector Error")).length,
+    bothIncorrect: items.filter(item => equalsIgnoreCase(item.TakenAction, "Both Incorrect")).length
+    };
+    }
+
+    function getDisplayClasses(item) {
+    const collector = safeStr(item.Toll_Collector_Class).trim();
+    const avc = safeStr(item.AVC_Class).trim();
+    const hideClasses = collector.toLowerCase() === avc.toLowerCase();
+
+    return {
+    collector: hideClasses ? "" : collector,
+    avc: hideClasses ? "" : avc
+    };
+    }
+
+    // ==========================
+    // PDF HELPERS
+    // ==========================
+    function drawCenteredHeader(doc, pageWidth, margin, leftLogo, rightLogo, reportTitle) {
+    const topY = 25;
+
+    if (leftLogo) {
+    doc.addImage(leftLogo, "JPEG", margin, topY, 80, 80);
+    }
+
+    if (rightLogo) {
+    doc.addImage(rightLogo, "JPEG", pageWidth - margin - 80, topY, 80, 80);
+    }
+
+    let y = 60;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text("LEKKI CONCESSION COMPANY LIMITED", pageWidth / 2, y, { align: "center" });
+
+    y += 18;
+    doc.setFontSize(12);
+    doc.text("LEKKI-IKOYI LINK BRIDGE", pageWidth / 2, y, { align: "center" });
+
+    y += 26;
+    doc.setFontSize(16);
+    doc.text(reportTitle || "REPORT NAME", pageWidth / 2, y, { align: "center" });
+
+    return y;
+    }
+
+    function drawWrappedText(doc, text, x, y, maxWidth, lineHeight) {
+    const lines = doc.splitTextToSize(safeStr(text), maxWidth);
+    lines.forEach(line => {
+    doc.text(line, x, y);
+    y += lineHeight;
+    });
+    return y;
+    }
+
+    function drawFiltersBlock(doc, margin, startY, filters, pageWidth) {
+    let y = startY;
+    const maxWidth = pageWidth - (margin * 2);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.text("FILTERS USED:", margin, y);
+    y += 14;
+
+    doc.setFont("helvetica", "normal");
+
+    Object.entries(filters).forEach(([key, value]) => {
+    y = drawWrappedText(doc, `${key}: ${safeStr(value)}`, margin, y, maxWidth, 12);
+    y += 2;
+    });
+
+    return y;
+    }
+
+    function addSummaryPage(doc, margin, summary) {
+    doc.addPage();
+
+    const y0 = 100;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text("SUMMARY", margin, y0);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
+
+    doc.text(`Total Record Count: ${summary.totalCount}`, margin, y0 + 25);
+    doc.text(`Total Difference Value: ${summary.totalDifference.toFixed(2)}`, margin, y0 + 45);
+    doc.text(`Operator Correct: ${summary.operatorCorrect}`, margin, y0 + 65);
+    doc.text(`AVC Correct: ${summary.avcCorrect}`, margin, y0 + 85);
+    doc.text(`Both Incorrect: ${summary.bothIncorrect}`, margin, y0 + 105);
+    }
+
+    function addFooters(doc, pageWidth, pageHeight, margin) {
+    const totalPages = doc.internal.getNumberOfPages();
+
+    for (let pageNumber = 1; pageNumber <= totalPages; pageNumber++) {
+    doc.setPage(pageNumber);
+
+    const footerY = pageHeight - 30;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+
+    doc.text(reportNameFooter, margin, footerY);
+    doc.text(`Date: ${reportGeneratedAt}`, pageWidth / 2.2, footerY);
+    doc.text(`User: ${currentUserId}`, pageWidth / 1.5, footerY);
+    doc.text(`Page ${pageNumber} of ${totalPages}`, pageWidth - margin, footerY, { align: "right" });
+
+    doc.setFontSize(9);
+    doc.text(`Reports Module Version Number: ${reportVersion}`, margin, footerY + 14);
+    }
+    }
+
+    // ==========================
+    // EXPORT TABLE DEFINITIONS
+    // Matches on-screen table order
+    // ==========================
+    const headers = [
+    "Lane",
+    "Sequence",
+    "Date",
+    "Time",
+    "Shift",
+    "Operator",
+    "Payment",
+    "Toll Collector",
+    "AVC",
+    "Updated Tariff",
+    "Tariff",
+    "Final Class",
+    "Difference",
+    "Taken Action"
+    ];
+
+    function buildPdfRows(items) {
+    return items.map(item => {
+    const displayClasses = getDisplayClasses(item);
+
+    return [
+    safeStr(item.Lane_Nr),
+    safeStr(item.Trx_Sequence_Nr),
+    safeStr(item.Trx_Date),
+    safeStr(item.Trx_Time),
+    safeStr(item.Operational_Shift),
+    safeStr(item.Toll_Operator_ID),
+    safeStr(item.Method_of_Payment),
+    displayClasses.collector,
+    displayClasses.avc,
+    toNum(item.Updated_Tariff).toFixed(2),
+    toNum(item.Tariff).toFixed(2),
+    safeStr(item.Final_Class),
+    toNum(item.TariffDifference).toFixed(2),
+    safeStr(item.TakenAction)
+    ];
+    });
+    }
+
+    function buildExcelRows(items) {
+    return items.map(item => {
+    const displayClasses = getDisplayClasses(item);
+
+    return [
+    safeStr(item.Lane_Nr),
+    safeStr(item.Trx_Sequence_Nr),
+    safeStr(item.Trx_Date),
+    safeStr(item.Trx_Time),
+    safeStr(item.Operational_Shift),
+    safeStr(item.Toll_Operator_ID),
+    safeStr(item.Method_of_Payment),
+    displayClasses.collector,
+    displayClasses.avc,
+    toNum(item.Updated_Tariff),
+    toNum(item.Tariff),
+    safeStr(item.Final_Class),
+    toNum(item.TariffDifference),
+    safeStr(item.TakenAction)
+    ];
+    });
+    }
+
+    // ==========================
+    // PDF EXPORT
+    // ==========================
+    document.getElementById("btnDownloadPdf")?.addEventListener("click", async () => {
+    if (!hasData()) {
+    alert("No data available to export.");
+    return;
+    }
+
+    if (!window.jspdf) {
+    alert("jsPDF not loaded. Check layout scripts.");
+    return;
+    }
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({
+    orientation: "landscape",
+    unit: "pt",
+    format: "a4"
+    });
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 50;
+
+    const [leftLogo, rightLogo] = await Promise.all([
+    loadImage("/images/lCC Logo.jpg"),
+    loadImage("/images/ICT-Works Logo.jpg")
+    ]);
+
+    const headerBottomY = drawCenteredHeader(
+    doc,
+    pageWidth,
+    margin,
+    leftLogo,
+    rightLogo,
+    reportNamePdf
+    );
+
+    const filtersBottomY = drawFiltersBlock(
+    doc,
+    margin,
+    headerBottomY + 35,
+    filtersUsed,
+    pageWidth
+    );
+
+    const rows = buildPdfRows(data);
+
+    doc.autoTable({
+    head: [headers],
+    body: rows,
+    startY: filtersBottomY + 10,
+    theme: "grid",
+    styles: {
+    fontSize: 8,
+    halign: "center",
+    valign: "middle",
+    cellPadding: 3,
+    overflow: "linebreak"
+    },
+    headStyles: {
+    fillColor: [41, 128, 185],
+    textColor: 255,
+    fontStyle: "bold"
+    },
+    margin: {
+    left: margin,
+    right: margin
+    }
+    });
+
+    const summary = getSummary(data);
+    addSummaryPage(doc, margin, summary);
+
+    addFooters(doc, pageWidth, pageHeight, margin);
+
+    doc.save(`${fileNamePrefix}_${fileStamp()}.pdf`);
+    });
+
+    // ==========================
+    // EXCEL EXPORT
+    // ==========================
+    document.getElementById("btnDownloadExcel")?.addEventListener("click", () => {
+    if (!hasData()) {
+    alert("No data available to export.");
+    return;
+    }
+
+    if (!window.XLSX) {
+    alert("XLSX not loaded. Check layout scripts.");
+    return;
+    }
+
+    const summary = getSummary(data);
+
+    const sheetRows = [];
+
+    // Title
+    sheetRows.push([reportNameFooter.toUpperCase()]);
+    sheetRows.push([]);
+
+    // Filters
+    sheetRows.push(["FILTERS USED"]);
+    Object.entries(filtersUsed).forEach(([key, value]) => {
+    sheetRows.push([key, value]);
+    });
+    sheetRows.push([]);
+
+    // Table
+    sheetRows.push(headers);
+    buildExcelRows(data).forEach(row => sheetRows.push(row));
+
+    // Summary
+    sheetRows.push([]);
+    sheetRows.push(["SUMMARY"]);
+    sheetRows.push(["Total Record Count", summary.totalCount]);
+    sheetRows.push(["Total Difference Value", summary.totalDifference]);
+    sheetRows.push(["Operator Correct", summary.operatorCorrect]);
+    sheetRows.push(["AVC Correct", summary.avcCorrect]);
+    sheetRows.push(["Both Incorrect", summary.bothIncorrect]);
+
+    // Footer meta
+    sheetRows.push([]);
+    sheetRows.push(["Generated", reportGeneratedAt]);
+    sheetRows.push(["User", currentUserId]);
+    sheetRows.push(["Reports Module Version Number", reportVersion]);
+
+    const ws = XLSX.utils.aoa_to_sheet(sheetRows);
+
+    ws["!cols"] = [
+    { wch: 12 }, // Lane
+    { wch: 14 }, // Sequence
+    { wch: 14 }, // Date
+    { wch: 12 }, // Time
+    { wch: 14 }, // Shift
+    { wch: 18 }, // Operator
+    { wch: 18 }, // Payment
+    { wch: 18 }, // Toll Collector
+    { wch: 18 }, // AVC
+    { wch: 16 }, // Updated Tariff
+    { wch: 14 }, // Tariff
+    { wch: 14 }, // Final Class
+    { wch: 14 }, // Difference
+    { wch: 20 }  // Taken Action
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Discrepancy Report");
+
+    XLSX.writeFile(wb, `${fileNamePrefix}_${fileStamp()}.xlsx`);
+    });
 
     });
 </script>

@@ -14,18 +14,21 @@ namespace MIS.Web.Controllers
         private readonly IAccountHistoryService _service;
         private readonly ILogger<AccountHistoryController> _logger;
 
-        public AccountHistoryController(IAccountHistoryService service, ILogger<AccountHistoryController> logger)
+        public AccountHistoryController(
+            IAccountHistoryService service,
+            ILogger<AccountHistoryController> logger)
         {
             _service = service;
             _logger = logger;
         }
 
-        [HttpGet("search")]
+        [HttpGet]
         public async Task<IActionResult> SearchAccounts(string q, int take = 20)
         {
             var results = await _service.SearchAccountsAsync(q, take);
             return Json(results);
         }
+
         [HttpGet]
         public async Task<IActionResult> Index(
             string? accountNumber = null,
@@ -37,32 +40,33 @@ namespace MIS.Web.Controllers
 
             try
             {
-              
-                accountNumber = (accountNumber ?? "").Trim();
+                accountNumber = (accountNumber ?? string.Empty).Trim();
 
-                //  Account first
+                // Account must be selected first
                 if (string.IsNullOrWhiteSpace(accountNumber))
                 {
-                    model.Operational = operational;
+                    model.AccountNumber = accountNumber;
                     model.StartDate = startDate;
                     model.EndDate = endDate;
+                    model.Operational = operational;
 
                     TempData["Warning"] = "Please select an Account Number first.";
                     return View(model);
                 }
 
-                // ✅ If user sets one date, require both
-                if ((startDate.HasValue && !endDate.HasValue) || (!startDate.HasValue && endDate.HasValue))
+                // If one date is provided, both are required
+                if ((startDate.HasValue && !endDate.HasValue) ||
+                    (!startDate.HasValue && endDate.HasValue))
                 {
-                    TempData["Warning"] = "Please provide BOTH Start Date and End Date, or leave both empty.";
                     model.AccountNumber = accountNumber;
                     model.StartDate = startDate;
                     model.EndDate = endDate;
                     model.Operational = operational;
+
+                    TempData["Warning"] = "Please provide BOTH Start Date and End Date, or leave both empty.";
                     return View(model);
                 }
 
-                // Fetch from API
                 model = await _service.GetAccountHistoryAsync(
                     accountNumber,
                     startDate,
@@ -70,7 +74,6 @@ namespace MIS.Web.Controllers
                     operational
                 );
 
-                // Push filters back to UI (service already does some, but keep consistent)
                 model.AccountNumber = accountNumber;
                 model.StartDate = startDate;
                 model.EndDate = endDate;

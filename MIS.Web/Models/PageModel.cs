@@ -27,7 +27,6 @@ namespace MIS.Web.Models
         {
             if (pageSize <= 0)
                 pageSize = 50;
-
             return (int)Math.Ceiling((double)totalCount / pageSize);
         }
     }

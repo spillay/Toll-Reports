@@ -2,82 +2,94 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using MIS.Models;
+using TollReportingSystem.Data;
 
 namespace MIS.DAL
 {
     public class CollectorCashDeclaration
     {
-        public Models.CollectorCashDeclaration Save(Models.CollectorCashDeclaration CollectorCashDeclaration)
+        public Models.CollectorCashDeclaration Save(Models.CollectorCashDeclaration collectorCashDeclaration)
         {
-            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
+            using (var dbContext = new ApplicationDbContext())
             {
-                dBContext.CollectorCashDeclarations.Add(CollectorCashDeclaration);
-                dBContext.SaveChanges();
+                dbContext.CollectorCashDeclarations.Add(collectorCashDeclaration);
+                dbContext.SaveChanges();
             }
-            return CollectorCashDeclaration;
+
+            return collectorCashDeclaration;
         }
 
-        public Models.CollectorCashDeclaration Get(long CollectorCashDeclarationId)
+        public Models.CollectorCashDeclaration Get(long collectorCashDeclarationId)
         {
-            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
+            using (var dbContext = new ApplicationDbContext())
             {
-                return dBContext.CollectorCashDeclarations
+                return dbContext.CollectorCashDeclarations
                     .Include(z => z.SystemUser)
                     .Include(z => z.VerifiedBy)
                     .Include(z => z.Shift)
-                    .Where(x => x.CollectorCashDeclarationId == CollectorCashDeclarationId).FirstOrDefault();
+                    .Where(x => x.CollectorCashDeclarationId == collectorCashDeclarationId)
+                    .FirstOrDefault();
             }
         }
 
-        public List<Models.CollectorCashDeclaration> GetList(DateTime ShiftDate, byte ShiftId)
+        public List<Models.CollectorCashDeclaration> GetList(DateTime shiftDate, byte shiftId)
         {
-            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
+            using (var dbContext = new ApplicationDbContext())
             {
-                return dBContext.CollectorCashDeclarations
+                return dbContext.CollectorCashDeclarations
                     .Include(z => z.SystemUser)
                     .Include(z => z.VerifiedBy)
                     .Include(z => z.Shift)
-                    .Where(x => x.ShiftDate == ShiftDate && x.ShiftId == ShiftId).ToList();
+                    .Where(x => x.ShiftDate == shiftDate && x.ShiftId == shiftId)
+                    .ToList();
             }
         }
 
-        public List<Models.CollectorCashDeclaration> GetForCashup(Models.CollectorCashup CollectorCashup)
+        public List<Models.CollectorCashDeclaration> GetForCashup(Models.CollectorCashup collectorCashup)
         {
-            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
+            using (var dbContext = new ApplicationDbContext())
             {
-                return dBContext.CollectorCashDeclarations
+                return dbContext.CollectorCashDeclarations
                     .Include(z => z.SystemUser)
                     .Include(z => z.VerifiedBy)
                     .Include(z => z.Shift)
-                    .Where(x => x.ShiftDate == CollectorCashup.ShiftDate && x.ShiftId == CollectorCashup.ShiftId && x.SystemUserId == CollectorCashup.SystemUserId &&
-                        (!x.AllocatedToCollectorCashupId.HasValue | x.AllocatedToCollectorCashupId == CollectorCashup.CollectorCashupId)).ToList();
+                    .Where(x =>
+                        x.ShiftDate == collectorCashup.ShiftDate &&
+                        x.ShiftId == collectorCashup.ShiftId &&
+                        x.SystemUserId == collectorCashup.SystemUserId &&
+                        (!x.AllocatedToCollectorCashupId.HasValue || x.AllocatedToCollectorCashupId == collectorCashup.CollectorCashupId))
+                    .ToList();
             }
         }
 
-        public List<Models.CollectorCashDeclaration> Update(List<Models.CollectorCashDeclaration> CollectorCashDeclarations)
+        public List<Models.CollectorCashDeclaration> Update(List<Models.CollectorCashDeclaration> collectorCashDeclarations)
         {
-            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
+            using (var dbContext = new ApplicationDbContext())
             {
-                dBContext.CollectorCashDeclarations.AttachRange(CollectorCashDeclarations);
-                foreach(var item in CollectorCashDeclarations)
-                    dBContext.Entry(item).State = EntityState.Modified;
-                dBContext.SaveChanges();
+                dbContext.CollectorCashDeclarations.AttachRange(collectorCashDeclarations);
+
+                foreach (var item in collectorCashDeclarations)
+                {
+                    dbContext.Entry(item).State = EntityState.Modified;
+                }
+
+                dbContext.SaveChanges();
             }
-            return CollectorCashDeclarations;
+
+            return collectorCashDeclarations;
         }
 
-        public List<Models.CollectorCashDeclaration> GetCashDeclarationsVerifiedBy(DateTime ShiftDate, byte ShiftId, long VerifiedById)
+        public List<Models.CollectorCashDeclaration> GetCashDeclarationsVerifiedBy(DateTime shiftDate, byte shiftId, long verifiedById)
         {
-            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
+            using (var dbContext = new ApplicationDbContext())
             {
-                return dBContext.CollectorCashDeclarations
+                return dbContext.CollectorCashDeclarations
                     .Include(z => z.SystemUser)
                     .Include(z => z.VerifiedBy)
                     .Include(z => z.Shift)
-                    .Where(x => x.ShiftDate == ShiftDate && x.ShiftId == ShiftId && x.VerifiedById == VerifiedById).ToList();
+                    .Where(x => x.ShiftDate == shiftDate && x.ShiftId == shiftId && x.VerifiedById == verifiedById)
+                    .ToList();
             }
         }
     }

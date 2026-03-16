@@ -264,44 +264,57 @@
         // =========================================================
 
         // -----------------------------
+        // Razor values -> safe JS values
+        // -----------------------------
+        const reportMeta = {
+        currentUserId: '@currentUserId',
+        generatedAt: '@reportGeneratedAt',
+        version: '@reportVersion',
+        accountNumber: '@(!string.IsNullOrWhiteSpace(Model?.AccountNumber) ? Model.AccountNumber : "N/A")',
+        startDate: '@(Model?.StartDate?.ToString("dd/MM/yyyy HH:mm") ?? "N/A")',
+        endDate: '@(Model?.EndDate?.ToString("dd/MM/yyyy HH:mm") ?? "N/A")',
+        operational: '@(Model?.Operational.HasValue == true ? (Model.Operational.Value ? "Yes" : "No") : "N/A")'
+        };
+
+        // -----------------------------
         // Shared DOM helpers
         // -----------------------------
         function getHiddenAccountValue() {
-            return ($("#AccountNumber").val() || "").toString().trim();
+        return ($("#AccountNumber").val() || "").toString().trim();
         }
 
         function hasSelectedAccount() {
-            return getHiddenAccountValue().length > 0;
+        return getHiddenAccountValue().length > 0;
         }
 
         function setFiltersEnabled(enabled) {
-            $("#startDateInput").prop("disabled", !enabled);
-            $("#endDateInput").prop("disabled", !enabled);
-            $("#operationalSelect").prop("disabled", !enabled);
+        $("#startDateInput").prop("disabled", !enabled);
+        $("#endDateInput").prop("disabled", !enabled);
+        $("#operationalSelect").prop("disabled", !enabled);
 
-            // Business rule:
-            // If no account is selected, clear dependent filters
-            if (!enabled) {
-                $("#startDateInput").val("");
-                $("#endDateInput").val("");
-                $("#operationalSelect").val("");
-            }
+        // Business rule:
+        // If no account is selected, clear dependent filters
+        if (!enabled) {
+        $("#startDateInput").val("");
+        $("#endDateInput").val("");
+        $("#operationalSelect").val("");
+        }
         }
 
         // -----------------------------
         // Image helper for PDF logos
         // -----------------------------
         function loadImage(url) {
-            return new Promise((resolve, reject) => {
-                const img = new Image();
-                img.onload = function () {
-                    resolve(img);
-                };
-                img.onerror = function () {
-                    reject(new Error("Failed to load image: " + url));
-                };
-                img.src = url;
-            });
+        return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = function () {
+        resolve(img);
+        };
+        img.onerror = function () {
+        reject(new Error("Failed to load image: " + url));
+        };
+        img.src = url;
+        });
         }
 
         // -----------------------------
@@ -309,292 +322,302 @@
         // Uses hidden input for actual submitted value
         // -----------------------------
         function initializeAccountSearch() {
-            const $accountSearch = $("#accountSearch");
-            const $accountNumber = $("#AccountNumber");
-            const existingAccount = ($accountNumber.val() || "").trim();
+        const $accountSearch = $("#accountSearch");
+        const $accountNumber = $("#AccountNumber");
+        const existingAccount = ($accountNumber.val() || "").trim();
 
-            if (!$accountSearch.length) {
-                console.error("Account search dropdown (#accountSearch) was not found.");
-                return;
-            }
+        if (!$accountSearch.length) {
+        console.error("Account search dropdown (#accountSearch) was not found.");
+        return;
+        }
 
-            $accountSearch.select2({
-                placeholder: "Search account number / name...",
-                allowClear: true,
-                width: "100%",
-                minimumInputLength: 2,
-                dropdownParent: $accountSearch.closest(".account-search-wrap"),
-                ajax: {
-                    url: '@Url.Action("SearchAccounts", "AccountHistory")',
-                    dataType: "json",
-                    delay: 300,
-                    data: function (params) {
-                        return {
-                            q: params.term || "",
-                            take: 20
-                        };
-                    },
-                    processResults: function (data) {
-                        return {
-                            results: $.map(data || [], function (item) {
-                                const accountNumber = item.accountNumber || item.AccountNumber || "";
-                                const description = item.description || item.Description || "";
+        $accountSearch.select2({
+        placeholder: "Search account number / name...",
+        allowClear: true,
+        width: "100%",
+        minimumInputLength: 2,
+        dropdownParent: $accountSearch.closest(".account-search-wrap"),
+        ajax: {
+        url: '@Url.Action("SearchAccounts", "AccountHistory")',
+        dataType: "json",
+        delay: 300,
+        data: function (params) {
+        return {
+        q: params.term || "",
+        take: 20
+        };
+        },
+        processResults: function (data) {
+        return {
+        results: $.map(data || [], function (item) {
+        const accountNumber = item.accountNumber || item.AccountNumber || "";
+        const description = item.description || item.Description || "";
 
-                                return {
-                                    id: accountNumber,
-                                    text: description && description.trim() !== ""
-                                        ? description
-                                        : accountNumber,
-                                    accountNumber: accountNumber,
-                                    description: description
-                                };
-                            })
-                        };
-                    },
-                    cache: true
-                },
+        return {
+        id: accountNumber,
+        text: description && description.trim() !== ""
+        ? description
+        : accountNumber,
+        accountNumber: accountNumber,
+        description: description
+        };
+        })
+        };
+        },
+        cache: true,
+        error: function (xhr, status, error) {
+        console.error("Account search failed:", {
+        status: xhr.status,
+        statusText: xhr.statusText,
+        responseText: xhr.responseText,
+        error: error
+        });
+        }
+        },
 
-                // What appears after selection
-                templateSelection: function (item) {
-                    return item.text || item.id || "";
-                },
+        templateSelection: function (item) {
+        return item.text || item.id || "";
+        },
 
-                // What appears in the dropdown list
-                templateResult: function (item) {
-                    if (item.loading) return item.text;
+        templateResult: function (item) {
+        if (item.loading) return item.text;
 
-                    const acc = item.accountNumber || item.id || "";
-                    const desc = item.description || item.text || "";
+        const acc = item.accountNumber || item.id || "";
+        const desc = item.description || item.text || "";
 
-                    if (desc && desc !== acc) {
-                        return $("<span>").text(desc + " (" + acc + ")");
-                    }
+        if (desc && desc !== acc) {
+        return $("<span>").text(desc + " (" + acc + ")");
+        }
 
-                    return $("<span>").text(acc);
-                },
+        return $("<span>").text(acc);
+        },
 
-                escapeMarkup: function (markup) {
-                    return markup;
-                }
-            });
+        escapeMarkup: function (markup) {
+        return markup;
+        }
+        });
 
-            // When an account is selected, copy it into hidden input
-            $accountSearch.on("select2:select", function (e) {
-                const selected = e.params.data;
-                const selectedValue = (selected && selected.id) ? selected.id : "";
+        // When account is selected
+        $accountSearch.on("select2:select", function (e) {
+        const selected = e.params.data;
+        const selectedValue = selected && selected.id ? selected.id : "";
 
-                $accountNumber.val(selectedValue);
-                setFiltersEnabled(hasSelectedAccount());
-            });
+        $accountNumber.val(selectedValue);
+        setFiltersEnabled(hasSelectedAccount());
+        });
 
-            // When cleared, also clear hidden input
-            $accountSearch.on("select2:clear", function () {
-                $accountNumber.val("");
-                setFiltersEnabled(false);
-            });
+        // When cleared
+        $accountSearch.on("select2:clear", function () {
+        $accountNumber.val("");
+        setFiltersEnabled(false);
+        });
 
-            // Rehydrate existing selected value on page load
-            // Useful when page reloads after filter submit
-            if (existingAccount) {
-                const option = new Option(existingAccount, existingAccount, true, true);
-                $accountSearch.append(option).trigger("change");
-                $accountNumber.val(existingAccount);
-            }
+        // Backup sync on normal change
+        $accountSearch.on("change", function () {
+        const selected = $(this).select2("data");
+        const account = selected && selected.length
+        ? (selected[0].accountNumber || selected[0].id || "")
+        : "";
+
+        $accountNumber.val(account);
+        });
+
+        // Rehydrate existing selected value on page load
+        if (existingAccount) {
+        const option = new Option(existingAccount, existingAccount, true, true);
+        $accountSearch.append(option).trigger("change");
+        $accountNumber.val(existingAccount);
+        setFiltersEnabled(true);
+        } else {
+        setFiltersEnabled(false);
+        }
         }
 
         // -----------------------------
         // Form validation
         // -----------------------------
         function validateAccountOnSubmit(e) {
-            if (!hasSelectedAccount()) {
-                e.preventDefault();
-                alert("Please select an Account Number first.");
-                $("#accountSearch").focus();
-                return false;
-            }
+        if (!hasSelectedAccount()) {
+        e.preventDefault();
+        alert("Please select an Account Number first.");
+        $("#accountSearch").focus();
+        return false;
+        }
 
-            console.log("Submitting accountNumber:", getHiddenAccountValue());
-            return true;
+        console.log("Submitting accountNumber:", getHiddenAccountValue());
+        return true;
         }
 
         // -----------------------------
         // PDF Export
         // -----------------------------
         async function exportAccountHistoryPdf() {
-            try {
-                const table = document.querySelector("#accountHistoryTable");
-                if (!table) {
-                    alert("Account history table was not found.");
-                    return;
-                }
+        try {
+        const table = document.querySelector("#accountHistoryTable");
+        if (!table) {
+        alert("Account history table was not found.");
+        return;
+        }
 
-                const { jsPDF } = window.jspdf;
-                const doc = new jsPDF({
-                    orientation: "landscape",
-                    unit: "pt",
-                    format: "a4"
-                });
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({
+        orientation: "landscape",
+        unit: "pt",
+        format: "a4"
+        });
 
-                const pageWidth = doc.internal.pageSize.getWidth();
-                const pageHeight = doc.internal.pageSize.getHeight();
-                const margin = 40;
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const margin = 40;
 
-                const logoWidth = 90;
-                const logoHeight = 45;
-                const headerTop = 25;
+        const logoWidth = 90;
+        const logoHeight = 45;
+        const headerTop = 25;
 
-                const leftLogoUrl = "/images/lCC Logo.jpg";
-                const rightLogoUrl = "/images/ICT-Works Logo.jpg";
+        const leftLogoUrl = "/images/lCC Logo.jpg";
+        const rightLogoUrl = "/images/ICT-Works Logo.jpg";
 
-                // Load both logos safely
-                let leftLogo = null;
-                let rightLogo = null;
+        let leftLogo = null;
+        let rightLogo = null;
 
-                try {
-                    [leftLogo, rightLogo] = await Promise.all([
-                        loadImage(leftLogoUrl),
-                        loadImage(rightLogoUrl)
-                    ]);
-                } catch (logoError) {
-                    console.warn("Logo loading failed. PDF will continue without one or more logos.", logoError);
-                }
+        try {
+        [leftLogo, rightLogo] = await Promise.all([
+        loadImage(leftLogoUrl),
+        loadImage(rightLogoUrl)
+        ]);
+        } catch (logoError) {
+        console.warn("Logo loading failed. PDF will continue without one or more logos.", logoError);
+        }
 
-                function drawHeader() {
-                    // Logos
-                    if (leftLogo) {
-                        doc.addImage(leftLogo, "JPEG", margin, headerTop, logoWidth, logoHeight);
-                    }
+        function drawHeader() {
+        if (leftLogo) {
+        doc.addImage(leftLogo, "JPEG", margin, headerTop, logoWidth, logoHeight);
+        }
 
-                    if (rightLogo) {
-                        doc.addImage(rightLogo, "JPEG", pageWidth - margin - logoWidth, headerTop, logoWidth, logoHeight);
-                    }
+        if (rightLogo) {
+        doc.addImage(rightLogo, "JPEG", pageWidth - margin - logoWidth, headerTop, logoWidth, logoHeight);
+        }
 
-                    // Titles
-                    doc.setFont("helvetica", "bold");
-                    doc.setFontSize(13);
-                    doc.text("LEKKI CONCESSION COMPANY (LCC)", pageWidth / 2, headerTop + 15, { align: "center" });
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(13);
+        doc.text("LEKKI CONCESSION COMPANY (LCC)", pageWidth / 2, headerTop + 15, { align: "center" });
 
-                    doc.setFontSize(11);
-                    doc.text("MIS REPORTING SYSTEM", pageWidth / 2, headerTop + 30, { align: "center" });
+        doc.setFontSize(11);
+        doc.text("MIS REPORTING SYSTEM", pageWidth / 2, headerTop + 30, { align: "center" });
 
-                    doc.setFontSize(14);
-                    doc.text("ACCOUNT HISTORY REPORT", pageWidth / 2, headerTop + 52, { align: "center" });
+        doc.setFontSize(14);
+        doc.text("ACCOUNT HISTORY REPORT", pageWidth / 2, headerTop + 52, { align: "center" });
 
-                    // Meta data
-                    let y = headerTop + 85;
+        let y = headerTop + 85;
 
-                    doc.setFont("helvetica", "normal");
-                    doc.setFontSize(9);
-                    doc.text("Generated By: @currentUserId", margin, y); y += 12;
-                    doc.text("Generated On: @reportGeneratedAt", margin, y); y += 12;
-                    doc.text("Version: @reportVersion", margin, y); y += 18;
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+        doc.text("Generated By: " + reportMeta.currentUserId, margin, y); y += 12;
+        doc.text("Generated On: " + reportMeta.generatedAt, margin, y); y += 12;
+        doc.text("Version: " + reportMeta.version, margin, y); y += 18;
 
-                    doc.setFont("helvetica", "bold");
-                    doc.text("Filters Used:", margin, y); y += 12;
+        doc.setFont("helvetica", "bold");
+        doc.text("Filters Used:", margin, y); y += 12;
 
-                    doc.setFont("helvetica", "normal");
-                    doc.text("Account: @(!string.IsNullOrWhiteSpace(Model?.AccountNumber) ? Model.AccountNumber : "N/A")", margin, y); y += 12;
-                    doc.text("Start Date: @(Model?.StartDate?.ToString("dd/MM/yyyy HH:mm") ?? "N/A")", margin, y); y += 12;
-                    doc.text("End Date: @(Model?.EndDate?.ToString("dd/MM/yyyy HH:mm") ?? "N/A")", margin, y); y += 12;
-                    doc.text("Operational: @(Model?.Operational.HasValue == true ? (Model.Operational.Value ? "Yes" : "No") : "N/A")", margin, y);
+        doc.setFont("helvetica", "normal");
+        doc.text("Account: " + reportMeta.accountNumber, margin, y); y += 12;
+        doc.text("Start Date: " + reportMeta.startDate, margin, y); y += 12;
+        doc.text("End Date: " + reportMeta.endDate, margin, y); y += 12;
+        doc.text("Operational: " + reportMeta.operational, margin, y);
 
-                    return y + 14;
-                }
+        return y + 14;
+        }
 
-                const tableStartY = drawHeader();
+        const tableStartY = drawHeader();
 
-                doc.autoTable({
-                    html: "#accountHistoryTable",
-                    startY: tableStartY,
-                    theme: "grid",
-                    margin: { left: margin, right: margin },
+        doc.autoTable({
+        html: "#accountHistoryTable",
+        startY: tableStartY,
+        theme: "grid",
+        margin: { left: margin, right: margin },
+        headStyles: {
+        fillColor: [41, 128, 185],
+        textColor: 255
+        },
+        styles: {
+        fontSize: 8,
+        halign: "center",
+        valign: "middle"
+        },
+        didDrawPage: function () {
+        drawHeader();
 
-                    headStyles: {
-                        fillColor: [41, 128, 185],
-                        textColor: 255
-                    },
+        const footerY = pageHeight - 30;
+        const pageNumber = doc.internal.getNumberOfPages();
 
-                    styles: {
-                        fontSize: 8,
-                        halign: "center",
-                        valign: "middle"
-                    },
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
 
-                    didDrawPage: function (data) {
-                        // Redraw header on every page for consistency
-                        drawHeader();
+        doc.text("Account History Report", margin, footerY);
+        doc.text("Printed On: " + reportMeta.generatedAt, pageWidth / 2, footerY, { align: "center" });
+        doc.text("Page " + pageNumber, pageWidth - margin, footerY, { align: "right" });
+        }
+        });
 
-                        const footerY = pageHeight - 30;
-                        const pageNumber = doc.internal.getNumberOfPages();
-
-                        doc.setFont("helvetica", "normal");
-                        doc.setFontSize(9);
-
-                        doc.text("Account History Report", margin, footerY);
-                        doc.text("Printed On: @reportGeneratedAt", pageWidth / 2, footerY, { align: "center" });
-                        doc.text("Page " + pageNumber, pageWidth - margin, footerY, { align: "right" });
-                    }
-                });
-
-                const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-                doc.save("Account_History_" + timestamp + ".pdf");
-            } catch (error) {
-                console.error("PDF export failed:", error);
-                alert("An error occurred while exporting the PDF.");
-            }
+        const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+        doc.save("Account_History_" + timestamp + ".pdf");
+        } catch (error) {
+        console.error("PDF export failed:", error);
+        alert("An error occurred while exporting the PDF.");
+        }
         }
 
         // -----------------------------
         // Excel Export
         // -----------------------------
         function exportAccountHistoryExcel() {
-            try {
-                const table = document.querySelector("#accountHistoryTable");
-                if (!table) {
-                    alert("Account history table was not found.");
-                    return;
-                }
+        try {
+        const table = document.querySelector("#accountHistoryTable");
+        if (!table) {
+        alert("Account history table was not found.");
+        return;
+        }
 
-                const workbook = XLSX.utils.book_new();
-                const worksheet = XLSX.utils.table_to_sheet(table);
+        const workbook = XLSX.utils.book_new();
+        const worksheet = XLSX.utils.table_to_sheet(table);
 
-                XLSX.utils.book_append_sheet(workbook, worksheet, "AccountHistory");
+        XLSX.utils.book_append_sheet(workbook, worksheet, "AccountHistory");
 
-                const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-                XLSX.writeFile(workbook, "Account_History_" + timestamp + ".xlsx");
-            } catch (error) {
-                console.error("Excel export failed:", error);
-                alert("An error occurred while exporting Excel.");
-            }
+        const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+        XLSX.writeFile(workbook, "Account_History_" + timestamp + ".xlsx");
+        } catch (error) {
+        console.error("Excel export failed:", error);
+        alert("An error occurred while exporting Excel.");
+        }
         }
 
         // -----------------------------
         // Wire page events
         // -----------------------------
         function bindPageEvents() {
-            $("#accountForm").on("submit", validateAccountOnSubmit);
+        $("#accountForm").on("submit", validateAccountOnSubmit);
 
-            document.getElementById("btnExportPdf")?.addEventListener("click", exportAccountHistoryPdf);
-            document.getElementById("btnExportExcel")?.addEventListener("click", exportAccountHistoryExcel);
+        document.getElementById("btnExportPdf")?.addEventListener("click", exportAccountHistoryPdf);
+        document.getElementById("btnExportExcel")?.addEventListener("click", exportAccountHistoryExcel);
         }
 
         // -----------------------------
         // Page startup
         // -----------------------------
         $(document).ready(function () {
-            if (!window.jQuery) {
-                console.error("jQuery is not loaded.");
-                return;
-            }
+        if (!window.jQuery) {
+        console.error("jQuery is not loaded.");
+        return;
+        }
 
-            if (!$.fn.select2) {
-                console.error("Select2 is not loaded.");
-                return;
-            }
+        if (!$.fn.select2) {
+        console.error("Select2 is not loaded.");
+        return;
+        }
 
-            initializeAccountSearch();
-            setFiltersEnabled(hasSelectedAccount());
-            bindPageEvents();
+        initializeAccountSearch();
+        setFiltersEnabled(hasSelectedAccount());
+        bindPageEvents();
         });
     </script>
 }

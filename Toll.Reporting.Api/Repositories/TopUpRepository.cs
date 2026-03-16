@@ -20,7 +20,8 @@ namespace Toll.Reporting.Api.Repositories
 
         private static List<string>? NormalizeList(List<string>? values)
         {
-            if (values == null) return null;
+            if (values == null)
+                return null;
 
             var normalized = values
                 .Where(v => !string.IsNullOrWhiteSpace(v))
@@ -78,6 +79,9 @@ namespace Toll.Reporting.Api.Repositories
                     SystemUser = su
                 };
 
+            // -------------------------
+            // FILTERS
+            // -------------------------
             if (shifts != null)
             {
                 query = query.Where(x => shifts.Contains(x.TopUp.RechargeShift.ToString()));
@@ -85,18 +89,19 @@ namespace Toll.Reporting.Api.Repositories
 
             if (operatorIds != null)
             {
-                // Filtering by unique ID (matches filter-options returning SystemUserId strings)
+                // Filter by SystemUserId as string
                 query = query.Where(x => operatorIds.Contains(x.TopUp.SystemUserId.ToString()));
             }
 
             if (lanes != null)
             {
-                query = query.Where(x => lanes.Contains(x.TopUp.RechargeStation));
+                query = query.Where(x =>
+                    x.TopUp.RechargeStation != null &&
+                    lanes.Contains(x.TopUp.RechargeStation));
             }
 
             if (paymentMethods != null)
             {
-                // Trim DB value to avoid trailing-space mismatches
                 query = query.Where(x =>
                     x.Payment != null &&
                     x.Payment.Description != null &&
@@ -109,8 +114,14 @@ namespace Toll.Reporting.Api.Repositories
                 bool isNumeric = long.TryParse(acc, out var accId);
 
                 query = query.Where(x =>
-                    (x.User != null && x.User.RegisteredUserIdentifiers.Any(i => i.RegisteredIdentifier == acc))
-                    || (isNumeric && x.User != null && x.User.RegisterUserId == accId)
+                    (x.User != null &&
+                     x.User.RegisteredUserIdentifiers.Any(i => i.RegisteredIdentifier == acc))
+                    || (x.User != null &&
+                        !string.IsNullOrWhiteSpace(x.User.AccNr) &&
+                        x.User.AccNr == acc)
+                    || (isNumeric &&
+                        x.User != null &&
+                        x.User.RegisterUserId == accId)
                 );
             }
 
@@ -137,16 +148,19 @@ namespace Toll.Reporting.Api.Repositories
                         ? x.SystemUser.Username
                         : x.TopUp.SystemUserId.ToString(),
 
-                    AccountNumber = x.User != null && x.User.RegisteredUserIdentifiers.Any()
-                        ? x.User.RegisteredUserIdentifiers
-                            .OrderBy(i => i.RegisteredIdentifier)
-                            .Select(i => i.RegisteredIdentifier)
-                            .FirstOrDefault()
+                    AccountNumber = x.User != null && !string.IsNullOrWhiteSpace(x.User.AccNr)
+                        ? x.User.AccNr
                         : (x.User != null ? x.User.RegisterUserId.ToString() : string.Empty),
 
-                    AccountName = x.User != null ? (x.User.CompanyName ?? string.Empty) : string.Empty,
+                    AccountName = x.User != null
+                        ? (x.User.CompanyName ?? string.Empty)
+                        : string.Empty,
+
                     AmountPaid = (decimal)x.TopUp.Amount,
-                    MethodOfPayment = x.Payment != null ? (x.Payment.Description ?? string.Empty) : string.Empty
+
+                    MethodOfPayment = x.Payment != null
+                        ? (x.Payment.Description ?? string.Empty)
+                        : string.Empty
                 })
                 .ToListAsync();
 

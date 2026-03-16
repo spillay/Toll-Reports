@@ -2,9 +2,9 @@
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using Toll.Reporting.Api.Repositories;
+using Toll.Reporting.Api.Repositories.Interfaces;
 
 namespace Toll.Reporting.Api.Controllers
 {
@@ -21,16 +21,14 @@ namespace Toll.Reporting.Api.Controllers
             _logger = logger;
         }
 
-
-        // Multi-select stays the same:
         [HttpGet("details")]
         public async Task<IActionResult> GetDailyCashup(
-        [FromQuery] DateTime startDate,
-        [FromQuery] DateTime endDate,
-        [FromQuery] List<int>? shiftIds,
-        [FromQuery] List<long>? systemUserIds,
-        [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 10)
+            [FromQuery] DateTime startDate,
+            [FromQuery] DateTime endDate,
+            [FromQuery] List<int>? shiftIds,
+            [FromQuery] List<long>? systemUserIds,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 10)
         {
             var result = await _repo.GetDailyCashupAsync(
                 startDate,
@@ -38,20 +36,16 @@ namespace Toll.Reporting.Api.Controllers
                 shiftIds,
                 systemUserIds,
                 page,
-                pageSize
-            );
+                pageSize);
 
             return Ok(result);
         }
 
-        // ONE endpoint that returns all filters (global, not date filtered)
         [HttpGet("filters")]
         public async Task<IActionResult> GetFilters()
         {
             var options = await _repo.GetDailyCashupFilterOptionsAsync();
             return Ok(options);
         }
-
-       
     }
 }

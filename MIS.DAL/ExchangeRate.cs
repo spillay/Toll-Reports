@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using MIS.Models;
+using TollReportingSystem.Data;
 
 namespace MIS.DAL
 {
@@ -12,7 +13,7 @@ namespace MIS.DAL
     {
         public List<Models.ExchangeRate> GetLatestTo(byte CurrencyId, DateTime EffectiveDate)
         {
-            using (var db = new Models.ApplicationDbContext())
+            using (var db = new ApplicationDbContext())
             {
                 var exchangeRates = db.ExchangeRates.Where(y => y.ToCurrencyId == CurrencyId).GroupBy(x => new { x.FromCurrencyId })
                     .Select(r => new Models.ExchangeRate

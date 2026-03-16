@@ -1,11 +1,8 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using MIS.Models;
-
+using TollReportingSystem.Data;
 
 namespace MIS.DAL
 {
@@ -15,9 +12,11 @@ namespace MIS.DAL
         {
             List<Models.ClassCorrectionType> classCorrectionTypes = new List<Models.ClassCorrectionType>();
 
-            using (var db = new Models.ApplicationDbContext())
+            using (var db = new ApplicationDbContext())
             {
-                classCorrectionTypes = db.ClassCorrectionTypes.OrderBy(o => o.Description).ToList();
+                classCorrectionTypes = db.ClassCorrectionTypes
+                    .OrderBy(o => o.Description)
+                    .ToList();
             }
 
             return classCorrectionTypes;

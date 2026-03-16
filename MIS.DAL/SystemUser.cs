@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using MIS.Models;
+using TollReportingSystem.Data;
 
 namespace MIS.DAL
 {
@@ -13,7 +14,7 @@ namespace MIS.DAL
         public Models.SystemUser GetUserByUsername(string UserName)
         {
             Models.SystemUser systemUser = new Models.SystemUser();
-            using (var db = new Models.ApplicationDbContext())
+            using (var db = new ApplicationDbContext())
             {
                 systemUser = db.SystemUsers.Include(x => x.SystemUserRoles).Where(z => z.Username == UserName).FirstOrDefault();
             }
@@ -24,7 +25,7 @@ namespace MIS.DAL
         public List<Models.SystemUser> GetUsers(string FirstName, string LastName, string UserName)
         {
             List<Models.SystemUser> systemUser = new List<Models.SystemUser>();
-            using (var db = new Models.ApplicationDbContext())
+            using (var db = new ApplicationDbContext())
             {
                 systemUser = db.SystemUsers.Include(x => x.SystemUserRoles).
                     Include(x => x.SystemUserRoles).
@@ -45,7 +46,7 @@ namespace MIS.DAL
         public List<Models.SystemUser> GetUsers(short RoleId)
         {
             List<Models.SystemUser> systemUser = new List<Models.SystemUser>();
-            using (var db = new Models.ApplicationDbContext())
+            using (var db = new ApplicationDbContext())
             {
                 systemUser = db.SystemUsers.
                     Include(c => c.SystemUserRoles.Where(o => o.RoleId == RoleId && o.IsActive)).
@@ -61,7 +62,7 @@ namespace MIS.DAL
 
         public Models.SystemUser Save(Models.SystemUser SystemUser)
         {
-            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
+            using (ApplicationDbContext dBContext = new ApplicationDbContext())
             {
                 dBContext.SystemUsers.Add(SystemUser);
                 dBContext.SaveChanges();
@@ -72,7 +73,7 @@ namespace MIS.DAL
 
         public void Update(Models.SystemUser SystemUser)
         {
-            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
+            using (ApplicationDbContext dBContext = new ApplicationDbContext())
             {
                 dBContext.SystemUsers.Attach(SystemUser);
                 dBContext.Entry(SystemUser).State = EntityState.Modified;

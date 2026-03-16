@@ -145,7 +145,7 @@
                 </div>
 
                 <div class="col-md-3 d-flex align-items-end">
-                    <button type="submit" class="btn btn-primary w-100 shadow-sm">Filter</button>
+                    <button type="submit" class="btn btn-primary w-100 shadow-sm">Apply Filters</button>
                 </div>
             </form>
 
@@ -267,7 +267,7 @@
 
       const groupByLabel = @Html.Raw(JsonSerializer.Serialize(groupByLabel));
       const reportGeneratedAt = '@DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")';
-      const currentUserId = '@(User.Identity?.Name ?? "Lucky")';
+      const currentUserId = '@currentUserId';
       const reportVersion = '@reportVersion';
 
       //  Consistent header color you requested

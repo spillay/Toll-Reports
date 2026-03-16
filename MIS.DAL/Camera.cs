@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using MIS.Models;
+using TollReportingSystem.Data;
 
 namespace MIS.DAL
 {
@@ -14,7 +15,7 @@ namespace MIS.DAL
         {
             List<Models.Camera> Cameras = new List<Models.Camera>();
 
-            using (var db = new Models.ApplicationDbContext())
+            using (var db = new ApplicationDbContext())
             {
                 Cameras = db.Cameras.OrderBy(o => o.CameraId).ToList();
             }
@@ -24,7 +25,7 @@ namespace MIS.DAL
 
         public Models.Camera Save(Models.Camera Camera)
         {
-            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
+            using (ApplicationDbContext dBContext = new ApplicationDbContext())
             {
                 dBContext.Cameras.Add(Camera);
                 dBContext.SaveChanges();
@@ -35,7 +36,7 @@ namespace MIS.DAL
 
         public void Update(Models.Camera Camera)
         {
-            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
+            using (ApplicationDbContext dBContext = new ApplicationDbContext())
             {
                 dBContext.Cameras.Attach(Camera);
                 dBContext.Entry(Camera).State = EntityState.Modified;

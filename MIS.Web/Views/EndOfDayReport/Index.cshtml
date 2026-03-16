@@ -5,7 +5,7 @@
     ViewData["Title"] = "End Of Day Report";
 
     string generatedAt = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
-    var userId = User.FindFirst("firstName")?.Value ?? (User.Identity?.Name ?? "Lucky");
+    var userId = User.FindFirst("firstName")?.Value ?? "Unknown User";
 
     string version = "3.0.0.0";
 

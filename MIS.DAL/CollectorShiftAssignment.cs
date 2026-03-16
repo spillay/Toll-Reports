@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using MIS.Models;
+using TollReportingSystem.Data;
 
 namespace MIS.DAL
 {
@@ -14,7 +15,7 @@ namespace MIS.DAL
         {
             Models.CollectorShiftAssignment collectorShiftAssignment = new Models.CollectorShiftAssignment();
 
-            using (var db = new Models.ApplicationDbContext())
+            using (var db = new ApplicationDbContext())
             {
                 collectorShiftAssignment = db.CollectorShiftAssignments.Where(x => x.SystemUserId == SystemUserId && x.ShiftDate == Shiftdate && x.ShiftId == ShiftId).FirstOrDefault();
             }
@@ -26,7 +27,7 @@ namespace MIS.DAL
         {
             List<Models.CollectorShiftAssignment> collectorShiftAssignment = new List<Models.CollectorShiftAssignment>();
 
-            using (var db = new Models.ApplicationDbContext())
+            using (var db = new ApplicationDbContext())
             {
                 collectorShiftAssignment = db.CollectorShiftAssignments.Where(x => x.ShiftDate == Shiftdate && x.ShiftId == ShiftId)
                     .Include(x => x.SystemUser)
@@ -40,7 +41,7 @@ namespace MIS.DAL
         {
             List<Models.SystemUser> systemUsers = new List<Models.SystemUser>();
 
-            using (var db = new Models.ApplicationDbContext())
+            using (var db = new ApplicationDbContext())
             {
 
                 systemUsers = db.SystemUsers.Include(x => x.SystemUserRoles).Where(x => x.IsActive && 
@@ -56,7 +57,7 @@ namespace MIS.DAL
 
         public void Save(Models.CollectorShiftAssignment CollectorShiftAssignment)
         {
-            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
+            using (ApplicationDbContext dBContext = new ApplicationDbContext())
             {
                 dBContext.CollectorShiftAssignments.Add(CollectorShiftAssignment);
                 dBContext.SaveChanges();
@@ -65,7 +66,7 @@ namespace MIS.DAL
 
         public void Delete(Models.CollectorShiftAssignment CollectorShiftAssignment)
         {
-            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
+            using (ApplicationDbContext dBContext = new ApplicationDbContext())
             {
                 dBContext.CollectorShiftAssignments.Attach(CollectorShiftAssignment);
                 dBContext.CollectorShiftAssignments.Remove(CollectorShiftAssignment);
@@ -77,7 +78,7 @@ namespace MIS.DAL
         {
             Models.CollectorShiftAssignment collectorShiftAssignment = new Models.CollectorShiftAssignment();
 
-            using (var db = new Models.ApplicationDbContext())
+            using (var db = new ApplicationDbContext())
             {
                 collectorShiftAssignment = db.CollectorShiftAssignments.Where(x => x.SystemUserId == SystemUserId && x.ShiftDate == Shiftdate && x.ShiftId == ShiftId).First();
                 collectorShiftAssignment.ShiftStatusId = (byte)Common.Enums.ShiftStatus.Closed;

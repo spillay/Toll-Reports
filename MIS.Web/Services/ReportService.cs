@@ -4,6 +4,7 @@ using MIS.Web.Models.Transaction;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
@@ -22,24 +23,60 @@ namespace MIS.Web.Services
         }
 
         /* ============================================================
-         *  HELPER: Build Query String Safely
+         * HELPER: Append single query parameter
          * ============================================================ */
-        private string BuildQuery(Dictionary<string, string?> values)
+        private void AppendQueryParam(StringBuilder sb, string key, string? value)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                if (sb.Length > 0)
+                    sb.Append("&");
+
+                sb.Append($"{key}={Uri.EscapeDataString(value)}");
+            }
+        }
+
+        /* ============================================================
+         * HELPER: Append repeated query parameters for multi-select filters
+         * Example:
+         * operationalShift=Day&operationalShift=Night
+         * ============================================================ */
+        private void AppendQueryList(StringBuilder sb, string key, IEnumerable<string>? values)
+        {
+            if (values == null) return;
+
+            foreach (var value in values.Where(v => !string.IsNullOrWhiteSpace(v)))
+            {
+                if (sb.Length > 0)
+                    sb.Append("&");
+
+                sb.Append($"{key}={Uri.EscapeDataString(value)}");
+            }
+        }
+
+        /* ============================================================
+         * HELPER: Build transaction query string
+         * ============================================================ */
+        private string BuildTransactionQuery(TransactionInputModel model, bool exportAll = false)
         {
             var sb = new StringBuilder();
 
-            foreach (var kv in values)
-            {
-                if (!string.IsNullOrWhiteSpace(kv.Value))
-                {
-                    sb.Append($"{kv.Key}={Uri.EscapeDataString(kv.Value)}&");
-                }
-            }
+            AppendQueryParam(sb, "startDate", model.StartDate.ToString("yyyy-MM-ddTHH:mm:ss"));
+            AppendQueryParam(sb, "endDate", model.EndDate.ToString("yyyy-MM-ddTHH:mm:ss"));
+            AppendQueryParam(sb, "page", model.page.ToString());
+            AppendQueryParam(sb, "pageSize", model.pageSize.ToString());
 
-            return sb.ToString().TrimEnd('&');
+            if (exportAll)
+                AppendQueryParam(sb, "exportAll", "true");
+
+            // Use selected filter values, not filter option lists
+            AppendQueryList(sb, "operationalShift", model.SelectedShifts);
+            AppendQueryList(sb, "tollOperators", model.SelectedTollOperators);
+            AppendQueryList(sb, "laneNames", model.SelectedLanes);
+            AppendQueryList(sb, "paymentMethods", model.SelectedPaymentMethods);
+
+            return sb.ToString();
         }
-
-
 
         /* ============================================================
          * 1. GET TRANSACTION DETAILS (Paginated)
@@ -51,18 +88,7 @@ namespace MIS.Web.Services
                 string baseUrl = _config["BaseApiUrl:Link"];
                 string endpoint = _config["ApiSettings:TransactionEndpoint"];
 
-                var query = BuildQuery(new Dictionary<string, string?>
-                {
-                    { "startDate", model.StartDate.ToString("yyyy-MM-ddTHH:mm:ss") },
-                    { "endDate",   model.EndDate.ToString("yyyy-MM-ddTHH:mm:ss") },
-                    { "page",      model.page.ToString() },
-                    { "pageSize",  model.pageSize.ToString() },
-                    { "operationalShift", model.Shift },
-                    { "tollOperators",    model.TollOperatorID },
-                    { "laneNames",        model.lane_Nr },
-                    { "paymentMethods",   model.PaymentMethod }
-                });
-
+                string query = BuildTransactionQuery(model);
                 string url = $"{baseUrl}{endpoint}?{query}";
 
                 Console.WriteLine($"[TransactionService] GET: {url}");
@@ -75,7 +101,7 @@ namespace MIS.Web.Services
                     return new PageTransactionModel { items = new List<TransactionModel>() };
                 }
 
-                var json = await response.Content.ReadAsStringAsync();
+                string json = await response.Content.ReadAsStringAsync();
                 var data = JsonConvert.DeserializeObject<PageTransactionModel>(json);
 
                 return data ?? new PageTransactionModel { items = new List<TransactionModel>() };
@@ -87,32 +113,44 @@ namespace MIS.Web.Services
             }
         }
 
+        /* ============================================================
+         * 2. GET TRANSACTION EXPORT (All rows)
+         * ============================================================ */
         public async Task<PageTransactionModel> GetTransactionExportAsync(TransactionInputModel model)
         {
-            string baseUrl = _config["BaseApiUrl:Link"];
-            string endpoint = _config["ApiSettings:TransactionEndpoint"];
+            try
+            {
+                string baseUrl = _config["BaseApiUrl:Link"];
+                string endpoint = _config["ApiSettings:TransactionEndpoint"];
 
-            string url = $"{baseUrl}{endpoint}?startDate={model.StartDate:yyyy-MM-ddTHH:mm:ss}&endDate={model.EndDate:yyyy-MM-ddTHH:mm:ss}&exportAll=true";
+                string query = BuildTransactionQuery(model, exportAll: true);
+                string url = $"{baseUrl}{endpoint}?{query}";
 
-            if (!string.IsNullOrEmpty(model.Shift))
-                url += $"&operationalShift={Uri.EscapeDataString(model.Shift)}";
+                Console.WriteLine($"[TransactionService] EXPORT GET: {url}");
 
-            if (!string.IsNullOrEmpty(model.TollOperatorID))
-                url += $"&tollOperators={Uri.EscapeDataString(model.TollOperatorID)}";
+                var response = await _httpClient.GetAsync(url);
 
-            if (!string.IsNullOrEmpty(model.lane_Nr))
-                url += $"&laneNames={Uri.EscapeDataString(model.lane_Nr)}";
+                if (!response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"[WARN] Transaction export API returned {response.StatusCode}");
+                    return new PageTransactionModel { items = new List<TransactionModel>() };
+                }
 
-            if (!string.IsNullOrEmpty(model.PaymentMethod))
-                url += $"&paymentMethods={Uri.EscapeDataString(model.PaymentMethod)}";
+                string json = await response.Content.ReadAsStringAsync();
 
-            var response = await _httpClient.GetAsync(url);
-            string json = await response.Content.ReadAsStringAsync();
-
-            return JsonConvert.DeserializeObject<PageTransactionModel>(json)
-                ?? new PageTransactionModel { items = new List<TransactionModel>() };
+                return JsonConvert.DeserializeObject<PageTransactionModel>(json)
+                       ?? new PageTransactionModel { items = new List<TransactionModel>() };
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ERROR] GetTransactionExportAsync → {ex.Message}");
+                return new PageTransactionModel { items = new List<TransactionModel>() };
+            }
         }
 
+        /* ============================================================
+         * 3. GET TRANSACTION FILTER OPTIONS
+         * ============================================================ */
         public async Task<TransactionInputModel> GetTransactionFilterOptionsAsync(TransactionInputModel model)
         {
             try
@@ -120,13 +158,11 @@ namespace MIS.Web.Services
                 string baseUrl = _config["BaseApiUrl:Link"];
                 string endpoint = _config["ApiSettings:TransactionFilterOptionsEndpoint"];
 
-                var query = BuildQuery(new Dictionary<string, string?>
-                {
-                    { "startDate", model.StartDate.ToString("yyyy-MM-ddTHH:mm:ss") },
-                    { "endDate",   model.EndDate.ToString("yyyy-MM-ddTHH:mm:ss") }
-                });
+                var sb = new StringBuilder();
+                AppendQueryParam(sb, "startDate", model.StartDate.ToString("yyyy-MM-ddTHH:mm:ss"));
+                AppendQueryParam(sb, "endDate", model.EndDate.ToString("yyyy-MM-ddTHH:mm:ss"));
 
-                string url = $"{baseUrl}{endpoint}?{query}";
+                string url = $"{baseUrl}{endpoint}?{sb}";
 
                 Console.WriteLine($"[TransactionService] Filter Options GET: {url}");
 

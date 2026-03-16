@@ -25,7 +25,9 @@ namespace MIS.Web.Services
             _logger = logger;
         }
 
-        // ✅ 1) MAIN REPORT DATA (ID-based multi-select filters)
+        // =========================================================
+        // 1) MAIN REPORT DATA
+        // =========================================================
         public async Task<PageDailyCashupModel> GetDailyCashupAsync(
             DateTime startDate,
             DateTime endDate,
@@ -34,11 +36,9 @@ namespace MIS.Web.Services
             int page = 1,
             int pageSize = 10)
         {
-            // Base url + endpoint
-            var baseUrl = (_config["BaseApiUrl:Link"] ?? "").TrimEnd('/');
-            var endpoint = (_config["ApiSettings:DailyCashupEndpoint"] ?? "").TrimStart('/');
+            var baseUrl = (_config["BaseApiUrl:Link"] ?? string.Empty).TrimEnd('/');
+            var endpoint = (_config["ApiSettings:DailyCashupEndpoint"] ?? string.Empty).TrimStart('/');
 
-            //  Build querystring (repeat params for list values)
             var query = new List<string>
             {
                 $"startDate={Uri.EscapeDataString(startDate.ToString("yyyy-MM-dd"))}",
@@ -47,14 +47,12 @@ namespace MIS.Web.Services
                 $"pageSize={pageSize}"
             };
 
-            // shiftIds=1&shiftIds=2...
             if (shiftIds != null && shiftIds.Count > 0)
             {
                 foreach (var id in shiftIds)
                     query.Add($"shiftIds={Uri.EscapeDataString(id.ToString())}");
             }
 
-            // systemUserIds=10&systemUserIds=11...
             if (systemUserIds != null && systemUserIds.Count > 0)
             {
                 foreach (var id in systemUserIds)
@@ -65,69 +63,74 @@ namespace MIS.Web.Services
 
             try
             {
-                _logger.LogInformation("➡️ Calling DailyCashup API: {Url}", url);
+                _logger.LogInformation("Calling DailyCashup API: {Url}", url);
 
                 using var response = await _httpClient.GetAsync(url);
                 var body = await response.Content.ReadAsStringAsync();
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    _logger.LogWarning("⚠️ DailyCashup returned {Code}: {Body}", response.StatusCode, body);
+                    _logger.LogWarning("DailyCashup returned {Code}: {Body}", response.StatusCode, body);
                     return BuildEmptyPageModel(startDate, endDate, shiftIds, systemUserIds, page, pageSize);
                 }
 
-                // The API returns: { items: [], totalCount, page, pageSize, totalPages }
-                var api = JsonConvert.DeserializeObject<ApiPagedResult<DailyCashupModel>>(body)
-                          ?? new ApiPagedResult<DailyCashupModel>();
+                var api = JsonConvert.DeserializeObject<ApiDailyCashupResultDto>(body)
+                          ?? new ApiDailyCashupResultDto();
 
                 var model = new PageDailyCashupModel
                 {
                     StartDate = startDate,
                     EndDate = endDate,
+
                     Items = api.Items ?? new List<DailyCashupModel>(),
+                    FullItems = api.FullItems ?? new List<DailyCashupModel>(),
+                    ShiftTotals = api.ShiftTotals ?? new List<DailyCashupShiftTotalModel>(),
+                    GrandTotal = api.GrandTotal ?? new DailyCashupGrandTotalModel(),
+
                     SelectedShiftIds = shiftIds ?? new List<int>(),
-                    SelectedSystemUserIds = systemUserIds ?? new List<long>()
+                    SelectedSystemUserIds = systemUserIds ?? new List<long>(),
+
+                    page = api.Page,
+                    pageSize = api.PageSize,
+                    totalPages = api.TotalPages,
+                    totalCount = api.TotalCount
                 };
 
-                //  Consistency: set pagination props ONLY if they exist on PageDailyCashupModel
-                TrySet(model, "page", api.Page);
-                TrySet(model, "Page", api.Page);
+                _logger.LogInformation(
+                    "DailyCashup loaded successfully. Items={ItemCount}, FullItems={FullCount}, ShiftTotals={ShiftTotalCount}",
+                    model.Items.Count,
+                    model.FullItems.Count,
+                    model.ShiftTotals.Count);
 
-                TrySet(model, "pageSize", api.PageSize);
-                TrySet(model, "PageSize", api.PageSize);
-
-                TrySet(model, "totalPages", api.TotalPages);
-                TrySet(model, "TotalPages", api.TotalPages);
-
-                TrySet(model, "totalCount", api.TotalCount);
-                TrySet(model, "TotalCount", api.TotalCount);
-
-                _logger.LogInformation("✅ DailyCashup: {Count} records received", model.Items?.Count ?? 0);
                 return model;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "🔥 Failed to call DailyCashup endpoint");
+                _logger.LogError(ex, "Failed to call DailyCashup endpoint");
                 return BuildEmptyPageModel(startDate, endDate, shiftIds, systemUserIds, page, pageSize);
             }
         }
 
-        // 2) ONE FILTER ENDPOINT (NOT DATE FILTERED)
+        // =========================================================
+        // 2) FILTER OPTIONS
+        // =========================================================
         public async Task<(List<CheckItemModel<int>> Shifts, List<CheckItemModel<long>> Operators)> GetFiltersAsync()
         {
-            var baseUrl = (_config["BaseApiUrl:Link"] ?? "").TrimEnd('/');
-            var url = $"{baseUrl}/api/DailyCashup/filters";
+            var baseUrl = (_config["BaseApiUrl:Link"] ?? string.Empty).TrimEnd('/');
+            var filtersEndpoint = (_config["ApiSettings:DailyCashupFiltersEndpoint"] ?? "api/DailyCashup/filters").TrimStart('/');
+
+            var url = $"{baseUrl}/{filtersEndpoint}";
 
             try
             {
-                _logger.LogInformation("➡️ Calling DailyCashup Filters API: {Url}", url);
+                _logger.LogInformation("Calling DailyCashup Filters API: {Url}", url);
 
                 using var response = await _httpClient.GetAsync(url);
                 var body = await response.Content.ReadAsStringAsync();
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    _logger.LogWarning("⚠️ Filters returned {Code}: {Body}", response.StatusCode, body);
+                    _logger.LogWarning("DailyCashup filters returned {Code}: {Body}", response.StatusCode, body);
                     return (new List<CheckItemModel<int>>(), new List<CheckItemModel<long>>());
                 }
 
@@ -144,10 +147,10 @@ namespace MIS.Web.Services
                     });
                 }
 
-                var ops = new List<CheckItemModel<long>>();
+                var operators = new List<CheckItemModel<long>>();
                 foreach (var o in dto.TollOperators)
                 {
-                    ops.Add(new CheckItemModel<long>
+                    operators.Add(new CheckItemModel<long>
                     {
                         Id = o.Id,
                         Name = o.Name,
@@ -155,17 +158,18 @@ namespace MIS.Web.Services
                     });
                 }
 
-                return (shifts, ops);
+                return (shifts, operators);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "🔥 Exception calling /api/DailyCashup/filters");
+                _logger.LogError(ex, "Exception calling DailyCashup filters endpoint");
                 return (new List<CheckItemModel<int>>(), new List<CheckItemModel<long>>());
             }
         }
 
-        // Helpers
-
+        // =========================================================
+        // HELPERS
+        // =========================================================
         private static PageDailyCashupModel BuildEmptyPageModel(
             DateTime startDate,
             DateTime endDate,
@@ -174,55 +178,42 @@ namespace MIS.Web.Services
             int page,
             int pageSize)
         {
-            var model = new PageDailyCashupModel
+            return new PageDailyCashupModel
             {
                 StartDate = startDate,
                 EndDate = endDate,
+
                 Items = new List<DailyCashupModel>(),
+                FullItems = new List<DailyCashupModel>(),
+                ShiftTotals = new List<DailyCashupShiftTotalModel>(),
+                GrandTotal = new DailyCashupGrandTotalModel(),
+
                 SelectedShiftIds = shiftIds ?? new List<int>(),
-                SelectedSystemUserIds = systemUserIds ?? new List<long>()
+                SelectedSystemUserIds = systemUserIds ?? new List<long>(),
+
+                page = page,
+                pageSize = pageSize,
+                totalPages = 0,
+                totalCount = 0
             };
-
-            // Set pagination if model supports it
-            TrySet(model, "page", page);
-            TrySet(model, "Page", page);
-
-            TrySet(model, "pageSize", pageSize);
-            TrySet(model, "PageSize", pageSize);
-
-            TrySet(model, "totalPages", 0);
-            TrySet(model, "TotalPages", 0);
-
-            TrySet(model, "totalCount", 0);
-            TrySet(model, "TotalCount", 0);
-
-            return model;
         }
 
-        private static void TrySet(object target, string propName, object value)
+        // =========================================================
+        // API DTOS FOR DESERIALIZATION
+        // =========================================================
+        private class ApiDailyCashupResultDto
         {
-            if (target == null) return;
+            [JsonProperty("fullItems")]
+            public List<DailyCashupModel>? FullItems { get; set; }
 
-            var prop = target.GetType().GetProperty(propName);
-            if (prop == null || !prop.CanWrite) return;
-
-            try
-            {
-                // Handle nullable conversions
-                var targetType = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
-                var safeValue = Convert.ChangeType(value, targetType);
-                prop.SetValue(target, safeValue);
-            }
-            catch
-            {
-              
-            }
-        }
-
-        private class ApiPagedResult<T>
-        {
             [JsonProperty("items")]
-            public List<T>? Items { get; set; }
+            public List<DailyCashupModel>? Items { get; set; }
+
+            [JsonProperty("shiftTotals")]
+            public List<DailyCashupShiftTotalModel>? ShiftTotals { get; set; }
+
+            [JsonProperty("grandTotal")]
+            public DailyCashupGrandTotalModel? GrandTotal { get; set; }
 
             [JsonProperty("totalCount")]
             public int TotalCount { get; set; }
@@ -252,7 +243,7 @@ namespace MIS.Web.Services
             public T Id { get; set; } = default!;
 
             [JsonProperty("name")]
-            public string Name { get; set; } = "";
+            public string Name { get; set; } = string.Empty;
         }
     }
 }

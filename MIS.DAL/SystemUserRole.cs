@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using MIS.Models;
+using TollReportingSystem.Data;
 
 namespace MIS.DAL
 {
@@ -12,7 +13,7 @@ namespace MIS.DAL
     {
         public Models.SystemUserRole Save(Models.SystemUserRole SystemUserRole)
         {
-            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
+            using (ApplicationDbContext dBContext = new ApplicationDbContext())
             {
                 dBContext.SystemUserRoles.Add(SystemUserRole);
                 dBContext.SaveChanges();
@@ -23,7 +24,7 @@ namespace MIS.DAL
 
         public void Update(Models.SystemUserRole SystemUserRole)
         {
-            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
+            using (ApplicationDbContext dBContext = new ApplicationDbContext())
             {
                 dBContext.SystemUserRoles.Attach(SystemUserRole);
                 dBContext.Entry(SystemUserRole).State = EntityState.Modified;

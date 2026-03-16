@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using MIS.Models;
+using TollReportingSystem.Data;
 
 namespace MIS.DAL
 {
@@ -17,7 +18,7 @@ namespace MIS.DAL
         {
             List<Models.RegisteredUser> RegisteredUsers = new List<Models.RegisteredUser>();
 
-            using (var db = new Models.ApplicationDbContext())
+            using (var db = new ApplicationDbContext())
             {
                 RegisteredUsers = db.RegisteredUsers.OrderBy(o => o.RegistrationNumber).ToList();
             }
@@ -30,7 +31,7 @@ namespace MIS.DAL
         {
             List<Models.RegisteredUser> registeredUsers = new List<Models.RegisteredUser>();
 
-            using (var db = new Models.ApplicationDbContext())
+            using (var db = new ApplicationDbContext())
             {
                 registeredUsers = db.RegisteredUsers
                                 .Include(r => r.RegisteredUserIdentifiers)

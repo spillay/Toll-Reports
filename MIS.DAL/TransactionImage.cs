@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using MIS.Models;
+using TollReportingSystem.Data;
 
 namespace MIS.DAL
 {
@@ -12,7 +13,7 @@ namespace MIS.DAL
     {
         public void Save(List<Models.TransactionImage> TransactionImage)
         {
-            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
+            using (ApplicationDbContext dBContext = new ApplicationDbContext())
             {
                 dBContext.TransactionImages.AddRange(TransactionImage);
                 dBContext.SaveChanges();
@@ -21,7 +22,7 @@ namespace MIS.DAL
 
         public void Save(Models.TransactionImage TransactionImages)
         {
-            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
+            using (ApplicationDbContext dBContext = new ApplicationDbContext())
             {
                 dBContext.TransactionImages.Add(TransactionImages);
                 dBContext.SaveChanges();
@@ -32,7 +33,7 @@ namespace MIS.DAL
         {
             List<Models.TransactionImage> images = new List<Models.TransactionImage>();
 
-            using (var db = new Models.ApplicationDbContext())
+            using (var db = new ApplicationDbContext())
             {
                 images = db.TransactionImages.Where(x => x.LaneId == LaneId && x.TransactionNumber == TransactionNumber).OrderBy(o => o.LaneTransactionImageId).ToList();
             }

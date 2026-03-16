@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using MIS.Models;
+using TollReportingSystem.Data;
 
 namespace MIS.DAL
 {
@@ -12,7 +13,7 @@ namespace MIS.DAL
     {
         public List<Models.Country> GetAll()
         {
-            using (var db = new Models.ApplicationDbContext())
+            using (var db = new ApplicationDbContext())
             {
                 return db.Countries.OrderBy(x => x.CountryId).ToList();
             }
@@ -21,7 +22,7 @@ namespace MIS.DAL
 
         public Models.Country Save(Models.Country Country)
         {
-            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
+            using (ApplicationDbContext dBContext = new ApplicationDbContext())
             {
                 dBContext.Countries.Add(Country);
                 dBContext.SaveChanges();
@@ -32,7 +33,7 @@ namespace MIS.DAL
 
         public void Update(Models.Country Country)
         {
-            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
+            using (ApplicationDbContext dBContext = new ApplicationDbContext())
             {
                 dBContext.Countries.Attach(Country);
                 dBContext.Entry(Country).State = EntityState.Modified;

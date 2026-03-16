@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using MIS.Models;
+using TollReportingSystem.Data;
 
 namespace MIS.DAL
 {
@@ -14,7 +15,7 @@ namespace MIS.DAL
         {
             List<Models.LaneDisplayMessage> laneDefaultValues = new List<Models.LaneDisplayMessage>();
 
-            using (var db = new Models.ApplicationDbContext())
+            using (var db = new ApplicationDbContext())
             {
                 laneDefaultValues = db.LaneDisplayMessages.OrderBy(o => o.LaneDisplayMessageId).ToList();
             }
@@ -24,7 +25,7 @@ namespace MIS.DAL
 
         public Models.LaneDisplayMessage Save(Models.LaneDisplayMessage LaneDisplayMessage)
         {
-            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
+            using (ApplicationDbContext dBContext = new ApplicationDbContext())
             {
                 dBContext.LaneDisplayMessages.Add(LaneDisplayMessage);
                 dBContext.SaveChanges();
@@ -35,7 +36,7 @@ namespace MIS.DAL
 
         public void Update(Models.LaneDisplayMessage LaneDisplayMessage)
         {
-            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
+            using (ApplicationDbContext dBContext = new ApplicationDbContext())
             {
                 dBContext.LaneDisplayMessages.Attach(LaneDisplayMessage);
                 dBContext.Entry(LaneDisplayMessage).State = EntityState.Modified;

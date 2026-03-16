@@ -23,59 +23,51 @@ namespace MIS.Web.Controllers
         public async Task<IActionResult> Index(
             DateTime? startDate,
             DateTime? endDate,
-
-            // Multi-select checklist values come in as repeated query params:
             [FromQuery] List<int>? shiftIds,
             [FromQuery] List<long>? systemUserIds,
-
             int page = 1,
             int pageSize = 20)
         {
-            //  Default date range (consistent with your reports)
-            var start = (startDate ?? DateTime.Now.AddDays(-7));
-            var end = (endDate ?? DateTime.Now);
+            var start = (startDate ?? DateTime.Today.AddDays(-7)).Date;
+            var end = (endDate ?? DateTime.Today).Date;
 
-            //  Ensure non-null lists
             shiftIds ??= new List<int>();
             systemUserIds ??= new List<long>();
 
-            // 1) Get global filter options (NOT date filtered)
+            // 1) Load filter options
             var (shiftOptions, operatorOptions) = await _service.GetFiltersAsync();
 
-            // 2) Mark selected options (so checkboxes stay checked)
-            if (shiftOptions != null && shiftOptions.Count > 0 && shiftIds.Count > 0)
-            {
-                foreach (var opt in shiftOptions)
-                    opt.Selected = shiftIds.Contains(opt.Id);
-            }
-
-            if (operatorOptions != null && operatorOptions.Count > 0 && systemUserIds.Count > 0)
-            {
-                foreach (var opt in operatorOptions)
-                    opt.Selected = systemUserIds.Contains(opt.Id);
-            }
-
-            // 3) Fetch report data (ID-based filtering)
-            var data = await _service.GetDailyCashupAsync(
+            // 2) Load report data
+            var model = await _service.GetDailyCashupAsync(
                 start,
                 end,
                 shiftIds,
                 systemUserIds,
                 page,
-                pageSize
-            );
+                pageSize);
 
-            // 4) Attach filters + selections to the model (consistent)
-            data.StartDate = start;
-            data.EndDate = end;
+            // 3) Attach filter options
+            model.ShiftOptions = shiftOptions ?? new List<CheckItemModel<int>>();
+            model.TollOperatorOptions = operatorOptions ?? new List<CheckItemModel<long>>();
 
-            data.ShiftOptions = shiftOptions ?? new List<CheckItemModel<int>>();
-            data.TollOperatorOptions = operatorOptions ?? new List<CheckItemModel<long>>();
+            // 4) Persist selected filters
+            model.SelectedShiftIds = shiftIds;
+            model.SelectedSystemUserIds = systemUserIds;
+            model.StartDate = start;
+            model.EndDate = end;
 
-            data.SelectedShiftIds = shiftIds;
-            data.SelectedSystemUserIds = systemUserIds;
+            // 5) Mark selected options
+            foreach (var opt in model.ShiftOptions)
+            {
+                opt.Selected = shiftIds.Contains(opt.Id);
+            }
 
-            return View(data);
+            foreach (var opt in model.TollOperatorOptions)
+            {
+                opt.Selected = systemUserIds.Contains(opt.Id);
+            }
+
+            return View(model);
         }
     }
 }

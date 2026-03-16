@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using TollReportingSystem.Data;
 
 namespace MIS.DAL
 {
@@ -10,7 +11,7 @@ namespace MIS.DAL
     {
         public void Save(Models.TransactionVehicleCharacteristic TransactionVehicleCharacteristic)
         {
-            using (Models.ApplicationDbContext dBContext = new Models.ApplicationDbContext())
+            using (ApplicationDbContext dBContext = new ApplicationDbContext())
             {
                 dBContext.TransactionVehicleCharacteristics.Add(TransactionVehicleCharacteristic);
                 dBContext.SaveChanges();

@@ -17,15 +17,31 @@ namespace MIS.Web.Controllers
             _service = service;
         }
 
-        public async Task<IActionResult> Index(DateTime? startDate, DateTime? endDate)
+        [HttpGet]
+        public async Task<IActionResult> Index(AccountUsageSummaryInputModel filters)
         {
-            DateTime start = startDate ?? DateTime.Now.AddDays(-30);
-            DateTime end = endDate ?? DateTime.Now;
+            var start = filters.StartDate ?? DateTime.Now.AddDays(-30);
+            var end = filters.EndDate ?? DateTime.Now;
 
-            var model = await _service.GetAccountUsageSummaryAsync(start, end);
+            var page = filters.Page <= 0 ? 1 : filters.Page;
+            var pageSize = filters.PageSize <= 0 ? 20 : filters.PageSize;
 
-            ViewBag.StartDate = start;
-            ViewBag.EndDate = end;
+            var model = await _service.GetAccountUsageSummaryAsync(
+                start,
+                end,
+                filters.AccountNumber,
+                page,
+                pageSize
+            );
+
+            model.Filters = new AccountUsageSummaryInputModel
+            {
+                StartDate = start,
+                EndDate = end,
+                AccountNumber = filters.AccountNumber,
+                Page = page,
+                PageSize = pageSize
+            };
 
             return View(model);
         }

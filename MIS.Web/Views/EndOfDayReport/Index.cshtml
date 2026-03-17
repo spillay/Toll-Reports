@@ -8,6 +8,10 @@
     var userId = User.FindFirst("firstName")?.Value ?? "Unknown User";
 
     string version = "3.0.0.0";
+    string reportName = "END OF DAY REPORT";
+
+    int currentPage = 1;
+    int totalPages = 1;
 
     // Safe loading
     var report = Model.Report ?? new EndOfDayReportViewModel();
@@ -426,13 +430,22 @@
     <!-- ===================================== -->
     <!--               FOOTER                  -->
     <!-- ===================================== -->
-    <div class="mt-4 p-3 border-top bg-light small">
-        <div class="row">
-            <div class="col-md-4"><strong>Date and Time:</strong> @generatedAt</div>
-            <div class="col-md-4"><strong>User ID:</strong> @userId</div>
-            <div class="col-md-4 text-end">Page 1 of 1</div>
-        </div>
-        <div class="mt-2"><strong>Reports Module Version Number:</strong> @version</div>
+    <div class="mt-4 border-top pt-3">
+        <table class="table table-borderless mb-0">
+            <tr>
+                <td><strong>@reportName</strong></td>
+                <td><strong>Date And Time:</strong> @generatedAt</td>
+                <td><strong>User ID:</strong> @userId</td>
+                <td class="text-end"><strong>Page @currentPage of @totalPages</strong></td>
+            </tr>
+            <tr>
+                <td colspan="4">
+                    <small class="text-muted">
+                        Reports Module Version Number: <strong>@version</strong>
+                    </small>
+                </td>
+            </tr>
+        </table>
     </div>
 
 </div>
@@ -443,203 +456,287 @@
 @section Scripts {
     <script>
         document.addEventListener("DOMContentLoaded", async () => {
+        const { jsPDF } = window.jspdf;
 
-            const { jsPDF } = window.jspdf;
+        const REPORT_TITLE = "END OF DAY REPORT";
+        const COMPANY_LINE_1 = "LEKKI CONCESSION COMPANY LIMITED";
+        const COMPANY_LINE_2 = "LEKKI-IKOYI LINK BRIDGE";
 
-            // Load images dynamically so it works on ALL PCs
-            const loadImage = (src) =>
-                new Promise(resolve => {
-                    const img = new Image();
-                    img.crossOrigin = "Anonymous";
-                    img.onload = () => resolve(img);
-                    img.onerror = () => resolve(null);
-                    img.src = src;
-                });
+        const GENERATED_AT = "@generatedAt";
+        const USER_ID = "@userId";
+        const REPORT_VERSION = "@version";
 
-            const logoLeft  = await loadImage("/images/LCC Logo.jpg");
-            const logoRight = await loadImage("/images/ICT-Works Logo.jpg");
+        const MONTH_TEXT = "@Model.StartDate.ToString("MMMM yyyy")";
+        const START_TEXT = "@Model.StartDate.ToString("dd/MM/yyyy hh:mm tt")";
+        const END_TEXT = "@Model.EndDate.ToString("dd/MM/yyyy hh:mm tt")";
+        const OPERATIONAL_DAY_TEXT = "@Model.StartDate.ToString("dd MMMM yyyy")";
+        const OPERATIONAL_SHIFT_TEXT = "-All-";
 
-            document.getElementById("btnDownloadPdf").addEventListener("click", async () => {
+        const LEFT_LOGO_URL = "/images/LCC Logo.jpg";
+        const RIGHT_LOGO_URL = "/images/ICT-Works Logo.jpg";
 
-                const doc = new jsPDF("p", "pt", "a4");
-                const margin = 40;
-                let y = margin;
+        function getPageWidth(doc) {
+        return doc.internal.pageSize.getWidth();
+        }
 
-                /* ------------------------------------------------------
-                 * CORPORATE HEADER WITH TWO LOGOS
-                 * ------------------------------------------------------ */
-                if (logoLeft)  doc.addImage(logoLeft, "JPEG", margin, 20, 70, 70);
-                if (logoRight) doc.addImage(logoRight, "JPEG", doc.internal.pageSize.width - margin - 70, 20, 70, 70);
+        function getPageHeight(doc) {
+        return doc.internal.pageSize.getHeight();
+        }
 
-                doc.setFont("helvetica", "bold");
-                doc.setFontSize(14);
-                doc.text("LEKKI CONCESSION COMPANY LIMITED", doc.internal.pageSize.width / 2, 40, { align: "center" });
+        function loadImage(src) {
+        return new Promise(resolve => {
+        const img = new Image();
+        img.crossOrigin = "Anonymous";
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null);
+        img.src = src;
+        });
+        }
 
-                doc.setFontSize(12);
-                doc.text("LEKKI-IKOYI LINK BRIDGE", doc.internal.pageSize.width / 2, 60, { align: "center" });
+        function drawPdfHeader(doc, margin, leftLogo, rightLogo) {
+        const pageWidth = getPageWidth(doc);
 
-                doc.setFontSize(13);
-                doc.text("END OF DAY REPORT", doc.internal.pageSize.width / 2, 80, { align: "center" });
+        if (leftLogo) {
+        doc.addImage(leftLogo, "JPEG", margin, 20, 70, 70);
+        }
 
-                y = 110;
+        if (rightLogo) {
+        doc.addImage(rightLogo, "JPEG", pageWidth - margin - 70, 20, 70, 70);
+        }
 
-                /* ------------------------------------------------------
-                 * REPORT FILTER METADATA
-                 * ------------------------------------------------------ */
-                doc.setFont("helvetica", "normal");
-                doc.setFontSize(10);
+        doc.setFont("helvetica", "bold");
 
-                doc.text(`Month: @Model.StartDate.ToString("MMMM yyyy")`, margin, y);      y += 15;
-                doc.text(`Start Date and Time: @Model.StartDate.ToString("dd/MM/yyyy hh:mm tt")`, margin, y); y += 15;
-                doc.text(`End Date and Time: @Model.EndDate.ToString("dd/MM/yyyy hh:mm tt")`, margin, y); y += 15;
-                doc.text(`Operational Day: @Model.StartDate.ToString("dd MMMM yyyy")`, margin, y); y += 15;
-                doc.text(`Operational Shift: -All-`, margin, y); y += 20;
+        doc.setFontSize(14);
+        doc.text(COMPANY_LINE_1, pageWidth / 2, 40, { align: "center" });
 
-                /* ------------------------------------------------------
-                 * SECTION: THEORETICAL INCOME
-                 * ------------------------------------------------------ */
-                doc.setFont("helvetica", "bold");
-                doc.setFontSize(11);
-                doc.text("THEORETICAL INCOME", margin, y);
-                y += 10;
+        doc.setFontSize(12);
+        doc.text(COMPANY_LINE_2, pageWidth / 2, 60, { align: "center" });
 
-                doc.autoTable({
-                    startY: y,
-                    html: "#eodExportTableTheo",
-                    theme: "grid",
-                    styles: { fontSize: 9, halign: "right" },
-                    headStyles: { fillColor: [230, 230, 230], textColor: 0 },
-                    margin: { left: margin, right: margin }
-                });
+        doc.setFontSize(13);
+        doc.text(REPORT_TITLE, pageWidth / 2, 80, { align: "center" });
 
-                y = doc.lastAutoTable.finalY + 25;
+        return 110;
+        }
 
-                /* ------------------------------------------------------
-                 * SECTION: OTHER INCOME
-                 * ------------------------------------------------------ */
-                doc.setFont("helvetica", "bold");
-                doc.setFontSize(11);
-                doc.text("OTHER INCOME", margin, y);
-                y += 10;
+        function drawPdfMetadata(doc, margin, startY) {
+        let y = startY;
 
-                doc.autoTable({
-                    startY: y,
-                    html: "#eodExportTableOther",
-                    theme: "grid",
-                    styles: { fontSize: 9, halign: "right" },
-                    headStyles: { fillColor: [230, 230, 230], textColor: 0 },
-                    margin: { left: margin, right: margin }
-                });
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
 
-                y = doc.lastAutoTable.finalY + 25;
+        const lines = [
+        `Month: ${MONTH_TEXT}`,
+        `Start Date and Time: ${START_TEXT}`,
+        `End Date and Time: ${END_TEXT}`,
+        `Operational Day: ${OPERATIONAL_DAY_TEXT}`,
+        `Operational Shift: ${OPERATIONAL_SHIFT_TEXT}`
+        ];
 
-                /* ------------------------------------------------------
-                 * SECTION: ACCOUNTED FOR
-                 * ------------------------------------------------------ */
-                doc.setFont("helvetica", "bold");
-                doc.setFontSize(11);
-                doc.text("Accounted for as follows:", margin, y);
-                y += 10;
+        lines.forEach(line => {
+        doc.text(line, margin, y);
+        y += 15;
+        });
 
-                doc.autoTable({
-                    startY: y,
-                    html: "#eodExportTableAccounted",
-                    theme: "grid",
-                    styles: { fontSize: 9, halign: "right" },
-                    headStyles: { fillColor: [230, 230, 230], textColor: 0 },
-                    margin: { left: margin, right: margin }
-                });
+        return y + 5;
+        }
 
-                /* ------------------------------------------------------
-                 * FOOTER
-                 * ------------------------------------------------------ */
-                const footerY = doc.internal.pageSize.height - 35;
+        function drawSectionTitle(doc, title, margin, y) {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(11);
+        doc.text(title, margin, y);
+        return y + 10;
+        }
 
-                doc.setFontSize(9);
-                doc.text("Date and Time: @generatedAt", margin, footerY);
-                doc.text("User ID: @userId", margin + 220, footerY);
-                doc.text("Page 1 of 1", doc.internal.pageSize.width - margin, footerY, { align: "right" });
+        function addPdfFooter(doc, margin) {
+        const pageWidth = getPageWidth(doc);
+        const pageHeight = getPageHeight(doc);
+        const totalPages = doc.internal.getNumberOfPages();
 
-                doc.text("Reports Module Version Number: @version", margin, footerY + 12);
+        for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
 
-                doc.save("EndOfDayReport.pdf");
-            });
+        const footerTopY = pageHeight - 32;
+        const footerBottomY = pageHeight - 18;
+
+        doc.setDrawColor(180);
+        doc.line(margin, pageHeight - 42, pageWidth - margin, pageHeight - 42);
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+
+        doc.text(REPORT_TITLE, margin, footerTopY);
+        doc.text(`Date And Time: ${GENERATED_AT}`, pageWidth / 2, footerTopY, { align: "center" });
+        doc.text(`Page ${i} of ${totalPages}`, pageWidth - margin, footerTopY, { align: "right" });
+
+        doc.text(`User ID: ${USER_ID}`, margin, footerBottomY);
+        doc.text(`Reports Module Version Number: ${REPORT_VERSION}`, pageWidth - margin, footerBottomY, { align: "right" });
+        }
+        }
+
+        function getTableRows(selector) {
+        return Array.from(document.querySelectorAll(`${selector} tbody tr`))
+        .map(row => Array.from(row.children).map(cell => cell.innerText.trim()));
+        }
+
+        async function exportPdf() {
+        const doc = new jsPDF("p", "pt", "a4");
+        const margin = 40;
+
+        const [logoLeft, logoRight] = await Promise.all([
+        loadImage(LEFT_LOGO_URL),
+        loadImage(RIGHT_LOGO_URL)
+        ]);
+
+        let y = drawPdfHeader(doc, margin, logoLeft, logoRight);
+        y = drawPdfMetadata(doc, margin, y);
+
+        y = drawSectionTitle(doc, "THEORETICAL INCOME", margin, y);
+
+        doc.autoTable({
+        startY: y,
+        html: "#eodExportTableTheo",
+        theme: "grid",
+        styles: {
+        fontSize: 9,
+        halign: "right",
+        cellPadding: 4
+        },
+        headStyles: {
+        fillColor: [230, 230, 230],
+        textColor: 0,
+        halign: "center"
+        },
+        margin: {
+        left: margin,
+        right: margin,
+        bottom: 55
+        }
+        });
+
+        y = doc.lastAutoTable.finalY + 25;
+        y = drawSectionTitle(doc, "OTHER INCOME", margin, y);
+
+        doc.autoTable({
+        startY: y,
+        html: "#eodExportTableOther",
+        theme: "grid",
+        styles: {
+        fontSize: 9,
+        halign: "right",
+        cellPadding: 4
+        },
+        headStyles: {
+        fillColor: [230, 230, 230],
+        textColor: 0,
+        halign: "center"
+        },
+        margin: {
+        left: margin,
+        right: margin,
+        bottom: 55
+        }
+        });
+
+        y = doc.lastAutoTable.finalY + 25;
+        y = drawSectionTitle(doc, "ACCOUNTED FOR AS FOLLOWS", margin, y);
+
+        doc.autoTable({
+        startY: y,
+        html: "#eodExportTableAccounted",
+        theme: "grid",
+        styles: {
+        fontSize: 9,
+        halign: "right",
+        cellPadding: 4
+        },
+        headStyles: {
+        fillColor: [230, 230, 230],
+        textColor: 0,
+        halign: "center"
+        },
+        margin: {
+        left: margin,
+        right: margin,
+        bottom: 55
+        }
+        });
+
+        addPdfFooter(doc, margin);
+        doc.save("EndOfDayReport.pdf");
+        }
+
+        function exportExcel() {
+        const wb = XLSX.utils.book_new();
+        const wsData = [];
+
+        wsData.push([COMPANY_LINE_1]);
+        wsData.push([COMPANY_LINE_2]);
+        wsData.push([REPORT_TITLE]);
+        wsData.push([]);
+        wsData.push([`Month: ${MONTH_TEXT}`]);
+        wsData.push([`Start Date and Time: ${START_TEXT}`]);
+        wsData.push([`End Date and Time: ${END_TEXT}`]);
+        wsData.push([`Operational Day: ${OPERATIONAL_DAY_TEXT}`]);
+        wsData.push([`Operational Shift: ${OPERATIONAL_SHIFT_TEXT}`]);
+        wsData.push([]);
+        wsData.push([]);
+
+        wsData.push(["THEORETICAL INCOME"]);
+        wsData.push(["Metric", "Class M", "Class I", "Class II", "Class III", "Total"]);
+        getTableRows("#eodExportTableTheo").forEach(row => wsData.push(row));
+
+        wsData.push([]);
+        wsData.push([]);
+
+        wsData.push(["OTHER INCOME"]);
+        wsData.push(["Metric", "Total"]);
+        getTableRows("#eodExportTableOther").forEach(row => wsData.push(row));
+
+        wsData.push([]);
+        wsData.push([]);
+
+        wsData.push(["ACCOUNTED FOR AS FOLLOWS"]);
+        wsData.push(["Metric", "Total"]);
+        getTableRows("#eodExportTableAccounted").forEach(row => wsData.push(row));
+
+        wsData.push([]);
+        wsData.push(["Date and Time:", GENERATED_AT]);
+        wsData.push(["User ID:", USER_ID]);
+        wsData.push(["Reports Module Version Number:", REPORT_VERSION]);
+
+        const sheet = XLSX.utils.aoa_to_sheet(wsData);
+
+        sheet["!cols"] = [
+        { wch: 35 },
+        { wch: 12 },
+        { wch: 12 },
+        { wch: 12 },
+        { wch: 12 },
+        { wch: 16 }
+        ];
+
+        XLSX.utils.book_append_sheet(wb, sheet, "EndOfDay");
+        XLSX.writeFile(wb, "EndOfDayReport.xlsx");
+        }
+
+        document.getElementById("btnDownloadPdf")?.addEventListener("click", async () => {
+        try {
+        await exportPdf();
+        } catch (error) {
+        console.error("PDF export failed:", error);
+        alert("Failed to export PDF.");
+        }
+        });
+
+        document.getElementById("btnDownloadExcel")?.addEventListener("click", () => {
+        try {
+        exportExcel();
+        } catch (error) {
+        console.error("Excel export failed:", error);
+        alert("Failed to export Excel.");
+        }
+        });
         });
     </script>
-
-    <script>
-        document.getElementById("btnDownloadExcel").addEventListener("click", () => {
-
-            const wb = XLSX.utils.book_new();
-            const ws = [];
-
-            // HEADER
-            ws.push(["LEKKI CONCESSION COMPANY LIMITED"]);
-            ws.push(["LEKKI-IKOYI LINK BRIDGE"]);
-            ws.push(["END OF DAY REPORT"]);
-            ws.push([]);
-            ws.push([`Month: @Model.StartDate.ToString("MMMM yyyy")`]);
-            ws.push([`Start Date and Time: @Model.StartDate.ToString("dd/MM/yyyy hh:mm tt")`]);
-            ws.push([`End Date and Time: @Model.EndDate.ToString("dd/MM/yyyy hh:mm tt")`]);
-            ws.push([`Operational Day: @Model.StartDate.ToString("dd MMMM yyyy")`]);
-            ws.push(["Operational Shift: -All-"]);
-            ws.push([]);
-            ws.push([]);
-
-            // THEORETICAL INCOME
-            ws.push(["THEORETICAL INCOME"]);
-            ws.push(["Metric", "Class M", "Class I", "Class II", "Class III", "Total"]);
-
-            // Insert table rows from hidden HTML
-            const theo = document.querySelectorAll("#eodExportTableTheo tbody tr");
-            theo.forEach(row => {
-                const cells = [...row.children].map(c => c.innerText);
-                ws.push(cells);
-            });
-
-            ws.push([]);
-            ws.push([]);
-
-            // OTHER INCOME
-            ws.push(["OTHER INCOME"]);
-            const other = document.querySelectorAll("#eodExportTableOther tbody tr");
-            other.forEach(row => {
-                ws.push([...row.children].map(c => c.innerText));
-            });
-
-            ws.push([]);
-            ws.push([]);
-
-            // ACCOUNTED FOR
-            ws.push(["ACCOUNTED FOR AS FOLLOWS"]);
-            const accRows = document.querySelectorAll("#eodExportTableAccounted tbody tr");
-            accRows.forEach(row => {
-                ws.push([...row.children].map(c => c.innerText));
-            });
-
-            ws.push([]);
-            ws.push(["Date and Time:", "@generatedAt"]);
-            ws.push(["User ID:", "@userId"]);
-            ws.push(["Reports Module Version Number:", "@version"]);
-
-            const sheet = XLSX.utils.aoa_to_sheet(ws);
-
-            // Set column widths
-            sheet["!cols"] = [
-                { wch: 35 },
-                { wch: 12 },
-                { wch: 12 },
-                { wch: 12 },
-                { wch: 12 },
-                { wch: 16 }
-            ];
-
-            XLSX.utils.book_append_sheet(wb, sheet, "EndOfDay");
-
-            XLSX.writeFile(wb, "EndOfDayReport.xlsx");
-        });
-    </script>
-
-
 }
 

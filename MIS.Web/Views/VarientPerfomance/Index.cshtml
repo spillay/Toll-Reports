@@ -165,6 +165,7 @@
                         <th>Cash Expected</th>
                         <th>Cash Declared</th>
                         <th>Cash Declared Difference</th>
+                        <th>Discrepancies</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -184,6 +185,7 @@
                                 <td>@item.NominalTariff</td>
                                 <td>@item.NettAmount</td>
                                 <td>@item.Difference</td>
+                                <td>@(item.DiscrepancyDifference?.ToString("N2") ?? "0.00")</td>
                             </tr>
                         }
                     }
@@ -297,14 +299,14 @@
 <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 
 <script>
-document.addEventListener("DOMContentLoaded", () => {
+    document.addEventListener("DOMContentLoaded", () => {
 
     // =====================================================
     // Global checkbox helper
     // =====================================================
     window.toggleAll = function (name, checked) {
-        document.querySelectorAll(`input[type="checkbox"][name="${name}"]`)
-            .forEach(cb => cb.checked = checked);
+    document.querySelectorAll(`input[type="checkbox"][name="${name}"]`)
+    .forEach(cb => cb.checked = checked);
     };
 
     // =====================================================
@@ -331,425 +333,442 @@ document.addEventListener("DOMContentLoaded", () => {
     // Generic helpers
     // =====================================================
     function cleanList(arr) {
-        if (!Array.isArray(arr)) return [];
-        return arr
-            .filter(x => x !== null && x !== undefined)
-            .map(x => String(x).trim())
-            .filter(x => x.length > 0);
+    if (!Array.isArray(arr)) return [];
+    return arr
+    .filter(x => x !== null && x !== undefined)
+    .map(x => String(x).trim())
+    .filter(x => x.length > 0);
     }
 
     function labelAll(selectedList, allList) {
-        const selected = cleanList(selectedList);
-        const all = cleanList(allList);
+    const selected = cleanList(selectedList);
+    const all = cleanList(allList);
 
-        if (selected.length === 0) return "All";
-        if (all.length > 0 && selected.length >= all.length) return "All";
+    if (selected.length === 0) return "All";
+    if (all.length > 0 && selected.length >= all.length) return "All";
 
-        return selected.join(", ");
+    return selected.join(", ");
     }
 
     function pick(obj, ...keys) {
-        for (const key of keys) {
-            if (obj && obj[key] !== undefined && obj[key] !== null) {
-                return obj[key];
-            }
-        }
-        return null;
+    for (const key of keys) {
+    if (obj && obj[key] !== undefined && obj[key] !== null) {
+    return obj[key];
+    }
+    }
+    return null;
     }
 
     function toMoney(value) {
-        const n = Number(value) || 0;
-        return n.toFixed(2);
+    const n = Number(value) || 0;
+    return n.toFixed(2);
     }
 
     function getSafeDate(value) {
-        if (!value) return "";
-        const d = new Date(value);
-        return isNaN(d.getTime()) ? "" : d.toLocaleDateString();
+    if (!value) return "";
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? "" : d.toLocaleDateString();
     }
 
-    function getCoreRows(data) {
-        return (Array.isArray(data) ? data : []).filter(row => {
-            const tollOperator = String(
-                pick(row, "TollOperator", "tollOperator") ?? ""
-            ).trim();
-
-            const shiftDescription = String(
-                pick(row, "ShiftDescription", "shiftDescription") ?? ""
-            ).trim().toUpperCase();
-
-            return !(tollOperator === "—" || shiftDescription.startsWith("TOTAL"));
-        });
+    function getShiftDescription(row) {
+    return String(
+    pick(row, "ShiftDescription", "shiftDescription") ?? ""
+    ).trim();
     }
 
-    function computeGrandTotals(rows) {
-        const expected = rows.reduce((sum, row) => {
-            return sum + (Number(pick(row, "NominalTariff", "nominalTariff")) || 0);
-        }, 0);
+    function getTollOperator(row) {
+    return String(
+    pick(row, "TollOperator", "tollOperator") ?? ""
+    ).trim();
+    }
 
-        const declared = rows.reduce((sum, row) => {
-            return sum + (Number(pick(row, "NettAmount", "nettAmount")) || 0);
-        }, 0);
+    function isGrandTotalRow(row) {
+    return getShiftDescription(row).toUpperCase() === "GRAND TOTAL";
+    }
 
-        const diff = rows.reduce((sum, row) => {
-            const explicitDiff = pick(row, "Difference", "difference");
+    function isShiftTotalRow(row) {
+    const shiftDescription = getShiftDescription(row).toUpperCase();
+    const tollOperator = getTollOperator(row);
+    return shiftDescription.endsWith("TOTAL") && shiftDescription !== "GRAND TOTAL" && tollOperator === "—";
+    }
 
-            if (explicitDiff !== null) {
-                return sum + (Number(explicitDiff) || 0);
-            }
+    function isDetailRow(row) {
+    return !isShiftTotalRow(row) && !isGrandTotalRow(row);
+    }
 
-            const nominal = Number(pick(row, "NominalTariff", "nominalTariff")) || 0;
-            const nett = Number(pick(row, "NettAmount", "nettAmount")) || 0;
-            return sum + (nominal - nett);
-        }, 0);
+    function getNominal(row) {
+    return Number(pick(row, "NominalTariff", "nominalTariff")) || 0;
+    }
 
-        return { expected, declared, diff };
+    function getActual(row) {
+    return Number(
+    pick(row, "ActualAmount", "actualAmount", "NettAmount", "nettAmount")
+    ) || 0;
+    }
+
+    function getDifference(row) {
+    const explicitDiff = pick(row, "Difference", "difference");
+    if (explicitDiff !== null) return Number(explicitDiff) || 0;
+
+    return getActual(row) - getNominal(row);
+    }
+
+    function getDiscrepancyDifference(row) {
+    return Number(
+    pick(row, "DiscrepancyDifference", "discrepancyDifference")
+    ) || 0;
+    }
+
+    function getExportRows(data) {
+    return Array.isArray(data) ? data : [];
     }
 
     function buildTableBodyRows(rows) {
-        return rows.map(row => {
-            const shiftDate = pick(row, "ShiftDate", "shiftDate");
-            const shiftDescription = pick(row, "ShiftDescription", "shiftDescription") || "";
-            const tollOperator = pick(row, "TollOperator", "tollOperator") || "";
+    return rows.map(row => {
+    const shiftDate = pick(row, "ShiftDate", "shiftDate");
+    const shiftDescription = getShiftDescription(row);
+    const tollOperator = getTollOperator(row);
 
-            const nominal = Number(pick(row, "NominalTariff", "nominalTariff")) || 0;
-            const nett = Number(pick(row, "NettAmount", "nettAmount")) || 0;
+    const nominal = getNominal(row);
+    const actual = getActual(row);
+    const difference = getDifference(row);
+    const discrepancyDifference = getDiscrepancyDifference(row);
 
-            const explicitDiff = pick(row, "Difference", "difference");
-            const safeDiff = explicitDiff !== null
-                ? (Number(explicitDiff) || 0)
-                : (nominal - nett);
-
-            return [
-                getSafeDate(shiftDate),
-                shiftDescription,
-                tollOperator,
-                toMoney(nominal),
-                toMoney(nett),
-                toMoney(safeDiff)
-            ];
-        });
+    return {
+    isGrandTotal: isGrandTotalRow(row),
+    isShiftTotal: isShiftTotalRow(row),
+    values: [
+    isGrandTotalRow(row) ? "" : getSafeDate(shiftDate),
+    shiftDescription,
+    tollOperator,
+    toMoney(nominal),
+    toMoney(actual),
+    toMoney(difference),
+    toMoney(discrepancyDifference)
+    ]
+    };
+    });
     }
 
     function getExportFileStamp() {
-        return new Date().toISOString().replace(/[:.]/g, "-");
+    return new Date().toISOString().replace(/[:.]/g, "-");
     }
 
     function buildExportQueryString() {
-        const params = new URLSearchParams();
+    const params = new URLSearchParams();
 
-        params.append("startDate", startDateIso);
-        params.append("endDate", endDateIso);
+    params.append("startDate", startDateIso);
+    params.append("endDate", endDateIso);
 
-        cleanList(selectedShifts).forEach(value => params.append("operationalShift", value));
-        cleanList(selectedOperators).forEach(value => params.append("tollOperators", value));
+    cleanList(selectedShifts).forEach(value => params.append("operationalShift", value));
+    cleanList(selectedOperators).forEach(value => params.append("tollOperators", value));
 
-        return params.toString();
+    return params.toString();
     }
 
     async function fetchExportData() {
-        const url = `${exportEndpoint}?${buildExportQueryString()}`;
+    const url = `${exportEndpoint}?${buildExportQueryString()}`;
 
-        const response = await fetch(url, {
-            method: "GET",
-            headers: {
-                "X-Requested-With": "XMLHttpRequest"
-            }
-        });
+    const response = await fetch(url, {
+    method: "GET",
+    headers: {
+    "X-Requested-With": "XMLHttpRequest"
+    }
+    });
 
-        if (!response.ok) {
-            throw new Error(`Export request failed: ${response.status} ${response.statusText}`);
-        }
+    if (!response.ok) {
+    throw new Error(`Export request failed: ${response.status} ${response.statusText}`);
+    }
 
-        const data = await response.json();
+    const data = await response.json();
 
-        if (!Array.isArray(data)) {
-            throw new Error("Export response is invalid.");
-        }
+    if (!Array.isArray(data)) {
+    throw new Error("Export response is invalid.");
+    }
 
-        console.log("Variant Performance export sample:", data[0]);
+    console.log("Variant Performance export sample:", data[0]);
 
-        return data;
+    return data;
     }
 
     async function loadLogos() {
-        function loadImage(src) {
-            return new Promise(resolve => {
-                const img = new Image();
-                img.crossOrigin = "Anonymous";
-                img.onload = () => resolve(img);
-                img.onerror = () => resolve(null);
-                img.src = src;
-            });
-        }
+    function loadImage(src) {
+    return new Promise(resolve => {
+    const img = new Image();
+    img.crossOrigin = "Anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
+    });
+    }
 
-        const [leftLogo, rightLogo] = await Promise.all([
-            loadImage('/images/lCC Logo.jpg'),
-            loadImage('/images/ICT-Works Logo.jpg')
-        ]);
+    const [leftLogo, rightLogo] = await Promise.all([
+    loadImage('/images/lCC Logo.jpg'),
+    loadImage('/images/ICT-Works Logo.jpg')
+    ]);
 
-        return { leftLogo, rightLogo };
+    return { leftLogo, rightLogo };
     }
 
     function ensureExcelLibrary() {
-        if (typeof XLSX === "undefined") {
-            throw new Error("Excel library is not loaded.");
-        }
+    if (typeof XLSX === "undefined") {
+    throw new Error("Excel library is not loaded.");
+    }
     }
 
     function ensurePdfLibrary() {
-        if (!window.jspdf || !window.jspdf.jsPDF) {
-            throw new Error("PDF library is not loaded.");
-        }
+    if (!window.jspdf || !window.jspdf.jsPDF) {
+    throw new Error("PDF library is not loaded.");
+    }
     }
 
     // =====================================================
     // Excel export builder
     // =====================================================
     function buildExcelWorksheetData(exportData) {
-        const operatorRows = getCoreRows(exportData);
-        const { expected, declared, diff } = computeGrandTotals(operatorRows);
+    const rows = buildTableBodyRows(getExportRows(exportData));
+    const worksheetData = [];
 
-        const worksheetData = [];
+    worksheetData.push(["FILTERS USED"]);
+    worksheetData.push(["Start Date And Time", startDateDisplay]);
+    worksheetData.push(["End Date And Time", endDateDisplay]);
+    worksheetData.push(["Operational Shift", labelAll(selectedShifts, allShifts)]);
+    worksheetData.push(["Toll Operator ID", labelAll(selectedOperators, allOperators)]);
+    worksheetData.push([]);
 
-        worksheetData.push(["FILTERS USED"]);
-        worksheetData.push(["Start Date And Time", startDateDisplay]);
-        worksheetData.push(["End Date And Time", endDateDisplay]);
-        worksheetData.push(["Operational Shift", labelAll(selectedShifts, allShifts)]);
-        worksheetData.push(["Toll Operator ID", labelAll(selectedOperators, allOperators)]);
-        worksheetData.push([]);
+    worksheetData.push([
+    "Operational Shift Date",
+    "Operational Shift",
+    "Toll Operator ID",
+    "Cash Expected",
+    "Cash Declared",
+    "Cash Declared Difference",
+    "Discrepancies"
+    ]);
 
-        worksheetData.push([
-            "Operational Shift Date",
-            "Operational Shift",
-            "Toll Operator ID",
-            "Cash Expected",
-            "Cash Declared",
-            "Cash Declared Difference"
-        ]);
+    rows.forEach(row => {
+    worksheetData.push(row.values);
+    });
 
-        buildTableBodyRows(operatorRows).forEach(row => worksheetData.push(row));
+    worksheetData.push([]);
+    worksheetData.push(["Generated", reportGeneratedAt, "User", currentUserId, "Version", reportVersion]);
 
-        worksheetData.push([]);
-        worksheetData.push(["", "", "GRAND TOTAL", toMoney(expected), toMoney(declared), toMoney(diff)]);
-        worksheetData.push([]);
-        worksheetData.push(["Generated", reportGeneratedAt, "User", currentUserId, "Version", reportVersion]);
-
-        return worksheetData;
+    return worksheetData;
     }
 
     // =====================================================
     // PDF helpers
     // =====================================================
     function drawPdfHeader(doc, pageWidth, margin, leftLogo, rightLogo, reportName) {
-        const topY = 25;
+    const topY = 25;
 
-        if (leftLogo) {
-            doc.addImage(leftLogo, "JPEG", margin, topY, 80, 80);
-        }
+    if (leftLogo) {
+    doc.addImage(leftLogo, "JPEG", margin, topY, 80, 80);
+    }
 
-        if (rightLogo) {
-            doc.addImage(rightLogo, "JPEG", pageWidth - margin - 80, topY, 80, 80);
-        }
+    if (rightLogo) {
+    doc.addImage(rightLogo, "JPEG", pageWidth - margin - 80, topY, 80, 80);
+    }
 
-        let y = 60;
+    let y = 60;
 
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(14);
-        doc.text("LEKKI CONCESSION COMPANY LIMITED", pageWidth / 2, y, { align: "center" });
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text("LEKKI CONCESSION COMPANY LIMITED", pageWidth / 2, y, { align: "center" });
 
-        y += 18;
-        doc.setFontSize(12);
-        doc.text("LEKKI-IKOYI LINK BRIDGE", pageWidth / 2, y, { align: "center" });
+    y += 18;
+    doc.setFontSize(12);
+    doc.text("LEKKI-IKOYI LINK BRIDGE", pageWidth / 2, y, { align: "center" });
 
-        y += 26;
-        doc.setFontSize(16);
-        doc.text(reportName, pageWidth / 2, y, { align: "center" });
+    y += 26;
+    doc.setFontSize(16);
+    doc.text(reportName, pageWidth / 2, y, { align: "center" });
 
-        return y;
+    return y;
     }
 
     function drawPdfFilters(doc, margin, startY) {
-        let y = startY;
+    let y = startY;
 
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
 
-        doc.text("FILTERS USED:", margin, y);
-        y += 14;
+    doc.text("FILTERS USED:", margin, y);
+    y += 14;
 
-        const filters = [
-            ["Start Date And Time", startDateDisplay],
-            ["End Date And Time", endDateDisplay],
-            ["Operational Shift", labelAll(selectedShifts, allShifts)],
-            ["Toll Operator ID", labelAll(selectedOperators, allOperators)]
-        ];
+    const filters = [
+    ["Start Date And Time", startDateDisplay],
+    ["End Date And Time", endDateDisplay],
+    ["Operational Shift", labelAll(selectedShifts, allShifts)],
+    ["Toll Operator ID", labelAll(selectedOperators, allOperators)]
+    ];
 
-        filters.forEach(([key, value]) => {
-            doc.text(`${key}: ${value}`, margin, y);
-            y += 12;
-        });
+    filters.forEach(([key, value]) => {
+    doc.text(`${key}: ${value}`, margin, y);
+    y += 12;
+    });
 
-        return y;
+    return y;
     }
 
     function addPdfFooter(doc, pageWidth, pageHeight, margin, totalPages) {
-        for (let i = 1; i <= totalPages; i++) {
-            doc.setPage(i);
+    for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
 
-            const footerY = pageHeight - 30;
+    const footerY = pageHeight - 30;
 
-            doc.setFont("helvetica", "normal");
-            doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
 
-            doc.text("Staff Performance Report", margin, footerY);
-            doc.text(`Date: ${reportGeneratedAt}`, pageWidth / 2.2, footerY);
-            doc.text(`User: ${currentUserId}`, pageWidth / 1.5, footerY);
-            doc.text(`Page ${i} of ${totalPages}`, pageWidth - margin, footerY, { align: "right" });
+    doc.text("Staff Performance Report", margin, footerY);
+    doc.text(`Date: ${reportGeneratedAt}`, pageWidth / 2.2, footerY);
+    doc.text(`User: ${currentUserId}`, pageWidth / 1.5, footerY);
+    doc.text(`Page ${i} of ${totalPages}`, pageWidth - margin, footerY, { align: "right" });
 
-            doc.setFontSize(9);
-            doc.text(`Reports Module Version Number: ${reportVersion}`, margin, footerY + 14);
-        }
+    doc.setFontSize(9);
+    doc.text(`Reports Module Version Number: ${reportVersion}`, margin, footerY + 14);
+    }
     }
 
     function buildPdfTableBody(exportData) {
-        const operatorRows = getCoreRows(exportData);
-        const { expected, declared, diff } = computeGrandTotals(operatorRows);
-
-        const tableBody = buildTableBodyRows(operatorRows);
-        tableBody.push(["", "##GRAND_TOTAL##", "", toMoney(expected), toMoney(declared), toMoney(diff)]);
-
-        return tableBody;
+    return buildTableBodyRows(getExportRows(exportData)).map(row => row.values);
     }
 
     // =====================================================
     // Excel export event
     // =====================================================
     document.getElementById("btnDownloadExcel")?.addEventListener("click", async () => {
-        try {
-            ensureExcelLibrary();
+    try {
+    ensureExcelLibrary();
 
-            const exportData = await fetchExportData();
+    const exportData = await fetchExportData();
 
-            if (exportData.length === 0) {
-                alert("No data to export.");
-                return;
-            }
+    if (exportData.length === 0) {
+    alert("No data to export.");
+    return;
+    }
 
-            const worksheetData = buildExcelWorksheetData(exportData);
-            const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+    const worksheetData = buildExcelWorksheetData(exportData);
+    const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
 
-            worksheet["!cols"] = [
-                { wch: 22 },
-                { wch: 22 },
-                { wch: 18 },
-                { wch: 18 },
-                { wch: 18 },
-                { wch: 24 }
-            ];
+    worksheet["!cols"] = [
+    { wch: 22 },
+    { wch: 24 },
+    { wch: 20 },
+    { wch: 18 },
+    { wch: 18 },
+    { wch: 24 },
+    { wch: 24 }
+    ];
 
-            const workbook = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(workbook, worksheet, "Variant Performance");
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Variant Performance");
 
-            XLSX.writeFile(
-                workbook,
-                `Staff_Performance_Report_${getExportFileStamp()}.xlsx`
-            );
-        } catch (error) {
-            console.error("Excel export failed:", error);
-            alert("Excel export failed. Please try again.");
-        }
+    XLSX.writeFile(
+    workbook,
+    `Staff_Performance_Report_${getExportFileStamp()}.xlsx`
+    );
+    } catch (error) {
+    console.error("Excel export failed:", error);
+    alert("Excel export failed. Please try again.");
+    }
     });
 
     // =====================================================
     // PDF export event
     // =====================================================
     document.getElementById("btnDownloadPdf")?.addEventListener("click", async () => {
-        try {
-            ensurePdfLibrary();
+    try {
+    ensurePdfLibrary();
 
-            const exportData = await fetchExportData();
+    const exportData = await fetchExportData();
 
-            if (exportData.length === 0) {
-                alert("No data to export.");
-                return;
-            }
+    if (exportData.length === 0) {
+    alert("No data to export.");
+    return;
+    }
 
-            const tableBody = buildPdfTableBody(exportData);
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF({
-                orientation: "landscape",
-                unit: "pt",
-                format: "a4"
-            });
-
-            const pageWidth = doc.internal.pageSize.getWidth();
-            const pageHeight = doc.internal.pageSize.getHeight();
-            const margin = 50;
-
-            const { leftLogo, rightLogo } = await loadLogos();
-
-            const headerBottomY = drawPdfHeader(
-                doc,
-                pageWidth,
-                margin,
-                leftLogo,
-                rightLogo,
-                "STAFF PERFORMANCE REPORT"
-            );
-
-            const filtersBottomY = drawPdfFilters(doc, margin, headerBottomY + 35);
-
-            doc.autoTable({
-                head: [[
-                    "Operational Shift Date",
-                    "Operational Shift",
-                    "Toll Operator ID",
-                    "Cash Expected",
-                    "Cash Declared",
-                    "Cash Declared Difference"
-                ]],
-                body: tableBody,
-                startY: filtersBottomY + 10,
-                theme: "grid",
-                headStyles: {
-                    fillColor: [41, 128, 185],
-                    textColor: 255
-                },
-                styles: {
-                    fontSize: 9,
-                    halign: "center",
-                    cellPadding: 4
-                },
-                margin: {
-                    left: margin,
-                    right: margin
-                },
-                didParseCell: function (data) {
-                    const row = data.row?.raw;
-                    if (!row) return;
-
-                    const isGrandTotal = row[1] === "##GRAND_TOTAL##";
-
-                    if (isGrandTotal) {
-                        if (data.column.index === 1) {
-                            data.cell.text = ["GRAND TOTAL"];
-                        }
-
-                        data.cell.styles.fontStyle = "bold";
-                        data.cell.styles.fillColor = [245, 245, 245];
-                    }
-                }
-            });
-
-            const totalPages = doc.internal.getNumberOfPages();
-            addPdfFooter(doc, pageWidth, pageHeight, margin, totalPages);
-
-            doc.save(`Staff_Performance_Report_${getExportFileStamp()}.pdf`);
-        } catch (error) {
-            console.error("PDF export failed:", error);
-            alert("PDF export failed. Please try again.");
-        }
+    const tableBody = buildPdfTableBody(exportData);
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({
+    orientation: "landscape",
+    unit: "pt",
+    format: "a4"
     });
-});
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 40;
+
+    const { leftLogo, rightLogo } = await loadLogos();
+
+    const headerBottomY = drawPdfHeader(
+    doc,
+    pageWidth,
+    margin,
+    leftLogo,
+    rightLogo,
+    "STAFF PERFORMANCE REPORT"
+    );
+
+    const filtersBottomY = drawPdfFilters(doc, margin, headerBottomY + 35);
+
+    doc.autoTable({
+    head: [[
+    "Operational Shift Date",
+    "Operational Shift",
+    "Toll Operator ID",
+    "Cash Expected",
+    "Cash Declared",
+    "Cash Declared Difference",
+    "Discrepancies"
+    ]],
+    body: tableBody,
+    startY: filtersBottomY + 10,
+    theme: "grid",
+    headStyles: {
+    fillColor: [41, 128, 185],
+    textColor: 255
+    },
+    styles: {
+    fontSize: 8,
+    halign: "center",
+    cellPadding: 4
+    },
+    margin: {
+    left: margin,
+    right: margin
+    },
+    didParseCell: function (data) {
+    const row = data.row?.raw;
+    if (!row) return;
+
+    const shiftDescription = String(row[1] || "").trim().toUpperCase();
+    const tollOperator = String(row[2] || "").trim();
+
+    const isGrandTotal = shiftDescription === "GRAND TOTAL";
+    const isShiftTotal = shiftDescription.endsWith("TOTAL") && shiftDescription !== "GRAND TOTAL" && tollOperator === "—";
+
+    if (isGrandTotal) {
+    data.cell.styles.fontStyle = "bold";
+    data.cell.styles.fillColor = [230, 230, 230];
+    }
+
+    if (isShiftTotal) {
+    data.cell.styles.fontStyle = "bold";
+    data.cell.styles.fillColor = [245, 245, 245];
+    }
+    }
+    });
+
+    const totalPages = doc.internal.getNumberOfPages();
+    addPdfFooter(doc, pageWidth, pageHeight, margin, totalPages);
+
+    doc.save(`Staff_Performance_Report_${getExportFileStamp()}.pdf`);
+    } catch (error) {
+    console.error("PDF export failed:", error);
+    alert("PDF export failed. Please try again.");
+    }
+    });
+    });
 </script>

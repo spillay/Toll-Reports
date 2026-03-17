@@ -11,16 +11,39 @@
     var reportVersion = "3.0.0.0";
     var reportName = "TOP-UP REPORT";
 
-    var totalAmount = Model.PageData?.Items?.Sum(i => i.AmountPaid) ?? 0;
+    var items = Model.PageData != null && Model.PageData.Items != null
+        ? Model.PageData.Items
+        : Enumerable.Empty<dynamic>();
+
+    var totalAmount = items.Sum(i => (decimal)(i.AmountPaid ?? 0));
 
     int maxPagesToShow = 3;
-    int currentPage = Model.PageData?.page ?? 1;
-    int totalPages = Model.PageData?.totalPages ?? 1;
+
+    int currentPage = Model.PageData != null ? Model.PageData.page : 1;
+    int pageSize = Model.PageData != null ? Model.PageData.pageSize : Model.pageSize;
+    if (pageSize <= 0)
+    {
+        pageSize = 20;
+    }
+
+    int totalCount = Model.PageData != null ? Model.PageData.totalCount : 0;
+
+    int apiTotalPages = Model.PageData != null ? Model.PageData.totalPages : 0;
+    int calculatedTotalPages = pageSize > 0
+        ? (int)Math.Ceiling((double)totalCount / pageSize)
+        : 1;
+
+    int totalPages = apiTotalPages > 0 ? apiTotalPages : Math.Max(1, calculatedTotalPages);
+
+    currentPage = Math.Max(1, Math.Min(currentPage, totalPages));
 
     int startPage = Math.Max(1, currentPage - 1);
     int endPage = Math.Min(totalPages, startPage + maxPagesToShow - 1);
+
     if (endPage - startPage + 1 < maxPagesToShow && startPage > 1)
+    {
         startPage = Math.Max(1, endPage - maxPagesToShow + 1);
+    }
 }
 
 <div class="card shadow-lg p-4 mb-4">

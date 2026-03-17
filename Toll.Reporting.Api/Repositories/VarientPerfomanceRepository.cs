@@ -25,10 +25,17 @@ namespace Toll.Reporting.Api.Repositories
             var normalized = values
                 .Where(v => !string.IsNullOrWhiteSpace(v))
                 .Select(v => v.Trim())
-                .Distinct()
+                .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
             return normalized.Count == 0 ? null : normalized;
+        }
+
+        private static DateTime NormalizeEndDate(DateTime endDate)
+        {
+            return (endDate.TimeOfDay == TimeSpan.Zero)
+                ? endDate.Date.AddDays(1).AddSeconds(-1)
+                : endDate;
         }
 
         public async Task<PagedResult<VarientPerformanceDto>> GetVarientPerformanceAsync(
@@ -41,13 +48,13 @@ namespace Toll.Reporting.Api.Repositories
         {
             operationalShift = NormalizeList(operationalShift);
             tollOperators = NormalizeList(tollOperators);
+            endDate = NormalizeEndDate(endDate);
 
             // =========================================================
-            // 1. BASE TRANSACTION QUERY
-            //    This is the real source for toll operator totals.
+            // 1. BASE TRANSACTION QUERY FOR STAFF PERFORMANCE
             // =========================================================
             var transactionQuery =
-                from t in _context.Transactions
+                from t in _context.Transactions.AsNoTracking()
                 join s in _context.Shifts on t.ShiftId equals s.ShiftId into shiftGroup
                 from s in shiftGroup.DefaultIfEmpty()
                 join su in _context.SystemUsers on t.SystemUserId equals su.SystemUserId into userGroup
@@ -62,12 +69,12 @@ namespace Toll.Reporting.Api.Repositories
                     ShiftDescription = s.Description,
                     t.SystemUserId,
                     TollOperator = su.Username,
-                    CashExpected = (double?)(t.NominalTariff),
+                    CashExpected = (double?)t.NominalTariff,
                     t.AllocatedToCollectorCashupId
                 };
 
             // =========================================================
-            // 2. APPLY FILTERS
+            // 2. APPLY STAFF FILTERS
             // =========================================================
             if (operationalShift != null && operationalShift.Any())
             {
@@ -81,11 +88,8 @@ namespace Toll.Reporting.Api.Repositories
                     .Where(x => x.TollOperator != null && tollOperators.Contains(x.TollOperator));
             }
 
-            var transactionData = await transactionQuery
-                .AsNoTracking()
-                .ToListAsync();
+            var transactionData = await transactionQuery.ToListAsync();
 
-            // No records, return empty result early
             if (!transactionData.Any())
             {
                 return new PagedResult<VarientPerformanceDto>
@@ -99,7 +103,6 @@ namespace Toll.Reporting.Api.Repositories
 
             // =========================================================
             // 3. GROUP EXPECTED CASH BY SHIFT + OPERATOR
-            //    This is based ONLY on transactions.
             // =========================================================
             var expectedByOperator = transactionData
                 .GroupBy(x => new
@@ -119,7 +122,6 @@ namespace Toll.Reporting.Api.Repositories
                     TollOperator = g.Key.TollOperator ?? "-- None --",
                     NominalTariff = g.Sum(x => x.CashExpected ?? 0.0),
 
-                    // Keep distinct cashup ids linked to this operator's transactions
                     CashupIds = g.Where(x => x.AllocatedToCollectorCashupId != null)
                                  .Select(x => x.AllocatedToCollectorCashupId!.Value)
                                  .Distinct()
@@ -131,7 +133,6 @@ namespace Toll.Reporting.Api.Repositories
 
             // =========================================================
             // 4. FETCH DECLARED CASHUPS ONCE
-            //    Important: each cashup must only be counted once.
             // =========================================================
             var allCashupIds = expectedByOperator
                 .SelectMany(x => x.CashupIds)
@@ -139,17 +140,101 @@ namespace Toll.Reporting.Api.Repositories
                 .ToList();
 
             var declaredCashupMap = allCashupIds.Any()
-            ? await _context.CollectorCashups
-                .AsNoTracking()
-                .Where(cc => allCashupIds.Contains(cc.CollectorCashupId))
-                .ToDictionaryAsync(
-                    cc => cc.CollectorCashupId,
-                    cc => (double?)(cc.TotalDeclared))
-            : new Dictionary<long, double?>();  
+                ? await _context.CollectorCashups
+                    .AsNoTracking()
+                    .Where(cc => allCashupIds.Contains(cc.CollectorCashupId))
+                    .ToDictionaryAsync(
+                        cc => cc.CollectorCashupId,
+                        cc => (double?)cc.TotalDeclared)
+                : new Dictionary<long, double?>();
 
             // =========================================================
-            // 5. BUILD FINAL OPERATOR ROWS
-            //    Declared amount is sum of DISTINCT related cashups only.
+            // 5. BUILD DISCREPANCY TOTALS BY SHIFT + OPERATOR
+            //    This mirrors the discrepancy report logic enough for totals.
+            // =========================================================
+            var discrepancyBaseQuery =
+                from t in _context.Transactions.AsNoTracking()
+                join s in _context.Shifts on t.ShiftId equals s.ShiftId into shiftGroup
+                from s in shiftGroup.DefaultIfEmpty()
+
+                join su in _context.SystemUsers on t.SystemUserId equals su.SystemUserId into userGroup
+                from su in userGroup.DefaultIfEmpty()
+
+                join tc1 in _context.TollClasses on t.ManualTollClassId equals tc1.TollClassId into tc1Group
+                from tc1 in tc1Group.DefaultIfEmpty()
+
+                join tc2 in _context.TollClasses on t.AutomaticTollClassId equals tc2.TollClassId into tc2Group
+                from tc2 in tc2Group.DefaultIfEmpty()
+
+                join tpd in _context.TariffPlanDetails
+                    on new
+                    {
+                        TariffPlanId = (int?)t.TariffPlanId,
+                        TollClassId = (int?)t.ManualTollClassId,
+                        TransactionTypeId = (int?)t.TransactionTypeId
+                    }
+                    equals new
+                    {
+                        TariffPlanId = (int?)tpd.TariffPlanId,
+                        TollClassId = (int?)tpd.TollClassId,
+                        TransactionTypeId = (int?)tpd.TransactionTypeId
+                    } into tpdGroup
+                from tpd in tpdGroup.DefaultIfEmpty()
+
+                where t.TransactionDateTime >= startDate
+                   && t.TransactionDateTime <= endDate
+                select new
+                {
+                    ShiftDescription = s.Description,
+                    TollOperator = su.Username,
+                    ManualClass = tc1.ClassDescription,
+                    AutomaticClass = tc2.ClassDescription,
+                    AmountInclusive = (double?)tpd.AmountInclusive,
+                    AmountExclusive = (double?)tpd.AmountExclusive
+                };
+
+            // Same filters as staff report so totals line up
+            if (operationalShift != null && operationalShift.Any())
+            {
+                discrepancyBaseQuery = discrepancyBaseQuery
+                    .Where(x => x.ShiftDescription != null && operationalShift.Contains(x.ShiftDescription));
+            }
+
+            if (tollOperators != null && tollOperators.Any())
+            {
+                discrepancyBaseQuery = discrepancyBaseQuery
+                    .Where(x => x.TollOperator != null && tollOperators.Contains(x.TollOperator));
+            }
+
+            // Only true discrepancies
+            discrepancyBaseQuery = discrepancyBaseQuery.Where(x =>
+                (x.ManualClass ?? "").Trim() != (x.AutomaticClass ?? "").Trim());
+
+            var discrepancyTotals = await discrepancyBaseQuery
+                .GroupBy(x => new
+                {
+                    ShiftDescription = x.ShiftDescription ?? "-- None --",
+                    TollOperator = x.TollOperator ?? "-- None --"
+                })
+                .Select(g => new
+                {
+                    g.Key.ShiftDescription,
+                    g.Key.TollOperator,
+
+                    // Use the same difference direction your discrepancy report uses.
+                    // If your report calculates it the other way around, flip this line.
+                    DiscrepancyDifference = g.Sum(x =>
+                        (x.AmountExclusive ?? 0.0) - (x.AmountInclusive ?? 0.0))
+                })
+                .ToListAsync();
+
+            var discrepancyLookup = discrepancyTotals.ToDictionary(
+                x => $"{x.ShiftDescription}|||{x.TollOperator}",
+                x => x.DiscrepancyDifference,
+                StringComparer.OrdinalIgnoreCase);
+
+            // =========================================================
+            // 6. BUILD FINAL OPERATOR ROWS
             // =========================================================
             var operatorRows = expectedByOperator
                 .Select(x =>
@@ -160,6 +245,11 @@ namespace Toll.Reporting.Api.Repositories
                             ? (declared ?? 0.0)
                             : 0.0);
 
+                    var discrepancyKey = $"{x.ShiftDescription}|||{x.TollOperator}";
+                    var discrepancyDifference = discrepancyLookup.TryGetValue(discrepancyKey, out var totalDiscrepancy)
+                        ? totalDiscrepancy
+                        : 0.0;
+
                     return new VarientPerformanceDto
                     {
                         ShiftDate = x.ShiftDate,
@@ -168,6 +258,7 @@ namespace Toll.Reporting.Api.Repositories
                         NominalTariff = x.NominalTariff,
                         ActualAmount = actualAmount,
                         Difference = actualAmount - x.NominalTariff,
+                        DiscrepancyDifference = discrepancyDifference,
                         StartDate = startDate,
                         EndDate = endDate
                     };
@@ -175,8 +266,7 @@ namespace Toll.Reporting.Api.Repositories
                 .ToList();
 
             // =========================================================
-            // 6. ADD SHIFT TOTALS
-            //    Totals are based on the already-correct operator rows.
+            // 7. ADD SHIFT TOTALS
             // =========================================================
             var withShiftTotals = new List<VarientPerformanceDto>();
 
@@ -186,29 +276,28 @@ namespace Toll.Reporting.Api.Repositories
             {
                 var rows = shiftGroup.ToList();
 
-                // Add detail rows first
                 withShiftTotals.AddRange(rows);
 
-                // Add shift total row
                 withShiftTotals.Add(new VarientPerformanceDto
                 {
                     ShiftDate = rows.First().ShiftDate,
-                    ShiftDescription = $"{shiftGroup.Key.ToUpper()} TOTAL",
+                    ShiftDescription = $"{shiftGroup.Key!.ToUpper()} TOTAL",
                     TollOperator = "—",
-                    NominalTariff = rows.Sum(x => x.NominalTariff),
-                    ActualAmount = rows.Sum(x => x.ActualAmount),
+                    NominalTariff = rows.Sum(x => x.NominalTariff ?? 0.0),
+                    ActualAmount = rows.Sum(x => x.ActualAmount ?? 0.0),
                     Difference = rows.Sum(x => x.Difference),
+                    DiscrepancyDifference = rows.Sum(x => x.DiscrepancyDifference),
                     StartDate = startDate,
                     EndDate = endDate
                 });
             }
 
             // =========================================================
-            // 7. ADD GRAND TOTAL
-            //    Only sum shift total rows, not detail rows again.
+            // 8. ADD GRAND TOTAL
             // =========================================================
             var shiftTotals = withShiftTotals
-                .Where(x => x.ShiftDescription.EndsWith("TOTAL")
+                .Where(x => x.ShiftDescription != null
+                         && x.ShiftDescription.EndsWith("TOTAL")
                          && x.ShiftDescription != "GRAND TOTAL")
                 .ToList();
 
@@ -219,16 +308,17 @@ namespace Toll.Reporting.Api.Repositories
                     ShiftDate = shiftTotals.First().ShiftDate,
                     ShiftDescription = "GRAND TOTAL",
                     TollOperator = "—",
-                    NominalTariff = shiftTotals.Sum(x => x.NominalTariff),
-                    ActualAmount = shiftTotals.Sum(x => x.ActualAmount),
+                    NominalTariff = shiftTotals.Sum(x => x.NominalTariff ?? 0.0),
+                    ActualAmount = shiftTotals.Sum(x => x.ActualAmount ?? 0.0),
                     Difference = shiftTotals.Sum(x => x.Difference),
+                    DiscrepancyDifference = shiftTotals.Sum(x => x.DiscrepancyDifference),
                     StartDate = startDate,
                     EndDate = endDate
                 });
             }
 
             // =========================================================
-            // 8. PAGINATION
+            // 9. PAGINATION
             // =========================================================
             var totalCount = withShiftTotals.Count;
 
@@ -246,11 +336,6 @@ namespace Toll.Reporting.Api.Repositories
             };
         }
 
-        // =========================================================
-        // FILTER OPTIONS
-        // Use descriptions / usernames, not IDs, since your filters
-        // are matching display values in the UI.
-        // =========================================================
         public async Task<IEnumerable<string>> GetShiftsAsync()
         {
             return await _context.Shifts

@@ -2,35 +2,34 @@
 @using System.Text.Json
 
 @{
-    var reportVersion   = "3.0.0.0";
+    var reportVersion = "3.0.0.0";
     var currentUserId = User.FindFirst("firstName")?.Value ?? (User.Identity?.Name ?? "Lucky");
     var reportGenerated = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
-    var items           = Model.items ?? new List<MIS.Web.Models.Transaction.TransactionModel>();
+    var items = Model.items ?? new List<MIS.Web.Models.Transaction.TransactionModel>();
+
+    var safePage = Model.page <= 0 ? 1 : Model.page;
+    var safeTotalPages = Model.totalPages <= 0 ? 1 : Model.totalPages;
 
     string FilterText(List<string> selected, List<string> allOptions)
     {
         selected ??= new List<string>();
         allOptions ??= new List<string>();
 
-        // remove empties + distinct
         var sel = selected.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim())
                           .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var all = allOptions.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim())
                             .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
-        // If none selected => treat as All (because you apply no filter)
         if (!sel.Any()) return "All";
-
-        // If selected count matches all options => All
         if (all.Any() && sel.Count >= all.Count) return "All";
 
         return string.Join(", ", sel);
     }
 
-    var shiftText    = FilterText(Model.SelectedShifts, Model.Shifts);
+    var shiftText = FilterText(Model.SelectedShifts, Model.Shifts);
     var operatorText = FilterText(Model.SelectedTollOperators, Model.TollOperators);
-    var laneText     = FilterText(Model.SelectedLanes, Model.Lanes);
-    var paymentText  = FilterText(Model.SelectedPaymentMethods, Model.PaymentMethods);
+    var laneText = FilterText(Model.SelectedLanes, Model.Lanes);
+    var paymentText = FilterText(Model.SelectedPaymentMethods, Model.PaymentMethods);
 }
 
 <div class="card shadow-lg mb-4">

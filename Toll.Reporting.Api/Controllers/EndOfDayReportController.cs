@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Toll.Reporting.Api.Repositories;
-using Toll.Reporting.Api.DTOs.EndOfDay;
+using Toll.Reporting.Api.Repositories.Interfaces;
 
 namespace Toll.Reporting.Api.Controllers
 {
@@ -19,28 +19,55 @@ namespace Toll.Reporting.Api.Controllers
             _logger = logger;
         }
 
-        [HttpGet]
-        public async Task<IActionResult> Get([FromQuery] DateTime startDate, [FromQuery] DateTime endDate)
+        [HttpGet("details")]
+        public async Task<IActionResult> Get(
+            [FromQuery] DateTime startDate,
+            [FromQuery] DateTime endDate,
+            [FromQuery] int? shiftId = null)
         {
             if (startDate == default || endDate == default)
-                return BadRequest("StartDate and EndDate are required.");
+            {
+                return BadRequest(new
+                {
+                    message = "startDate and endDate are required."
+                });
+            }
 
             if (endDate < startDate)
-                return BadRequest("EndDate cannot be earlier than StartDate.");
+            {
+                return BadRequest(new
+                {
+                    message = "endDate cannot be earlier than startDate."
+                });
+            }
 
             try
             {
-                var report = await _repo.GetEndOfDayAsync(startDate, endDate);
+                var report = await _repo.GetEndOfDayAsync(startDate, endDate, shiftId);
 
                 if (report == null)
-                    return NotFound("No End Of Day data found for the given date range.");
+                {
+                    return NotFound(new
+                    {
+                        message = "No End Of Day data found for the given date range."
+                    });
+                }
 
                 return Ok(report);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to generate End Of Day Report.");
-                return StatusCode(500, "Internal server error occurred.");
+                _logger.LogError(
+                    ex,
+                    "Failed to generate End Of Day Report. StartDate: {StartDate}, EndDate: {EndDate}, ShiftId: {ShiftId}",
+                    startDate,
+                    endDate,
+                    shiftId);
+
+                return StatusCode(StatusCodes.Status500InternalServerError, new
+                {
+                    message = "Internal server error occurred while generating the End Of Day report."
+                });
             }
         }
     }

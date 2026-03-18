@@ -4,6 +4,6 @@ namespace Toll.Reporting.Api.Repositories
 {
     public interface IEndOfDayReportRepository
     {
-        Task<EndOfDayReportDto?> GetEndOfDayAsync(DateTime startDate, DateTime endDate);
+        Task<EndOfDayReportDto?> GetEndOfDayAsync(DateTime startDate, DateTime endDate, int? shiftId = null);
     }
 }

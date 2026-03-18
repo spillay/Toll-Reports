@@ -16,24 +16,23 @@ namespace MIS.Web.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> Index(DateTime? reportDate)
+        public async Task<IActionResult> Index(DateTime? reportDate, int? shiftId = null)
         {
-            // default to today
-            DateTime date = reportDate ?? DateTime.Today;
+            var selectedDate = reportDate?.Date ?? DateTime.Today;
 
-            // Operational day boundaries
-            DateTime startDate = date.Date.AddHours(5).AddMinutes(30);        // 05:30 AM same day
-            DateTime endDate = date.Date.AddDays(1).AddHours(5).AddMinutes(29); // 05:29 AM next day
+            var startDate = selectedDate.AddHours(5).AddMinutes(30);
+            var endDate = selectedDate.AddDays(1).AddHours(5).AddMinutes(29);
 
             var model = new PageEndOfDayModel
             {
                 StartDate = startDate,
                 EndDate = endDate,
-                Report = await _service.GetEndOfDayAsync(startDate, endDate)
+                ShiftId = shiftId,
+                Report = await _service.GetEndOfDayAsync(startDate, endDate, shiftId)
+                         ?? new EndOfDayReportViewModel()
             };
 
             return View(model);
         }
-
     }
 }

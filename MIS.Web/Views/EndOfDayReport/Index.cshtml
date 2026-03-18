@@ -4,17 +4,15 @@
 @{
     ViewData["Title"] = "End Of Day Report";
 
-    string generatedAt = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
+    var generatedAt = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
     var userId = User.FindFirst("firstName")?.Value ?? "Unknown User";
+    var version = "3.0.0.0";
+    var reportName = "END OF DAY REPORT";
 
-    string version = "3.0.0.0";
-    string reportName = "END OF DAY REPORT";
+    var currentPage = 1;
+    var totalPages = 1;
 
-    int currentPage = 1;
-    int totalPages = 1;
-
-    // Safe loading
-    var report = Model.Report ?? new EndOfDayReportViewModel();
+    var report = Model?.Report ?? new EndOfDayReportViewModel();
     var theoretical = report.TheoreticalIncome ?? new List<TheoreticalIncomeRowViewModel>();
     var discounts = report.Discounts ?? new DiscountsViewModel();
     var exempts = report.Exempts ?? new ExemptsViewModel();
@@ -22,93 +20,81 @@
     var recon = report.Reconciliation ?? new ReconciliationViewModel();
     var totals = report.Totals ?? new EndOfDayTotalsViewModel();
 
-    // Metric lookup
-    var map = theoretical.ToDictionary(
-        x => x.Metric.Trim().ToLower(),
-        x => x
-    );
+    var monthLabel = !string.IsNullOrWhiteSpace(report.MonthLabel)
+        ? report.MonthLabel
+        : Model.StartDate.ToString("MMMM yyyy");
 
-    TheoreticalIncomeRowViewModel? Get(string key)
-        => map.GetValueOrDefault(key.Trim().ToLower());
+    var operationalDayLabel = !string.IsNullOrWhiteSpace(report.OperationalDayLabel)
+        ? report.OperationalDayLabel
+        : Model.StartDate.ToString("dd MMMM yyyy");
 
-    var traffic = Get("traffic");
-    var nominal = Get("nominal tariff");
-    var trafficNominal = Get("traffic x nominal tariff");
-    var penalty = Get("cash penalty");
-    var totalTheoRow = Get("total theoretical income");
+    var shiftName = !string.IsNullOrWhiteSpace(report.ShiftName)
+        ? report.ShiftName
+        : "-All-";
 
-    decimal totalTheo = totalTheoRow?.Total ?? ((trafficNominal?.Total ?? 0) + (penalty?.Total ?? 0));
+    var map = theoretical
+        .Where(x => !string.IsNullOrWhiteSpace(x.Metric))
+        .GroupBy(x => x.Metric.Trim().ToLower())
+        .ToDictionary(g => g.Key, g => g.First());
 
-    decimal exemptsTotal = exempts.TotalExemptAmount;
+    TheoreticalIncomeRowViewModel? GetRow(string key)
+        => map.TryGetValue(key.Trim().ToLower(), out var row) ? row : null;
 
-    decimal anonTotal =
-        discounts.ClassM_AnonymousAmount +
-        discounts.ClassI_AnonymousAmount +
-        discounts.ClassII_AnonymousAmount +
-        discounts.ClassIII_AnonymousAmount;
+    var traffic = GetRow("traffic");
+    var nominal = GetRow("nominal tariff");
+    var trafficNominal = GetRow("traffic x nominal tariff");
+    var penalty = GetRow("cash penalty");
 
-    decimal indivTotal =
-        discounts.ClassM_IndividualAmount +
-        discounts.ClassI_IndividualAmount +
-        discounts.ClassII_IndividualAmount +
-        discounts.ClassIII_IndividualAmount;
+    decimal totalTheo = totals.TotalTheoreticalIncome > 0
+        ? totals.TotalTheoreticalIncome
+        : ((trafficNominal?.Total ?? 0) + (penalty?.Total ?? 0));
 
-    decimal corpTotal =
-        discounts.ClassM_CorporateAmount +
-        discounts.ClassI_CorporateAmount +
-        discounts.ClassII_CorporateAmount +
-        discounts.ClassIII_CorporateAmount;
+    decimal exemptsTotal = totals.TotalExemptAmount > 0
+        ? totals.TotalExemptAmount
+        : exempts.TotalExemptAmount;
 
-    decimal staffTotal =
-        discounts.ClassM_StaffAmount +
-        discounts.ClassI_StaffAmount +
-        discounts.ClassII_StaffAmount +
-        discounts.ClassIII_StaffAmount;
+    decimal anonTotal = discounts.Anonymous5.Total;
+    decimal indivTotal = discounts.Individual10.Total;
+    decimal corpTotal = discounts.Corporate10.Total;
+    decimal staffTotal = discounts.Staff100.Total;
 
-    decimal providedTotal = discounts.TotalDiscountAmount;
+    decimal providedTotal = totals.TotalDiscountAmount > 0
+        ? totals.TotalDiscountAmount
+        : discounts.TotalDiscountAmount;
 
-    decimal totalDiscountedIncome = totalTheo - exemptsTotal - providedTotal;
+    decimal totalDiscountedIncome = totals.TotalDiscountedIncome > 0
+        ? totals.TotalDiscountedIncome
+        : (totalTheo - providedTotal);
 
     decimal totalIncomeA = totals.TotalIncomeA;
     decimal totalAccountedB = totals.TotalAccountedB;
     decimal unreconciled = totals.UnreconciledDiscrepancy;
+
+    string F(decimal value) => value.ToString("N2");
 }
 
-<!-- ===================================== -->
-<!--             PAGE WRAPPER              -->
-<!-- ===================================== -->
 <div class="card shadow-lg p-4 mb-4">
-
-    <!-- ========================= -->
-    <!--        PAGE HEADER        -->
-    <!-- ========================= -->
     <div class="border-bottom pb-2 mb-3 text-center">
         <h2 class="fw-bold text-primary mb-0">END OF DAY REPORT</h2>
     </div>
 
-    <!-- ========================= -->
-    <!--       EXPORT BUTTONS      -->
-    <!-- ========================= -->
     <div class="row mb-4">
         <div class="col-md-2 me-2">
-            <button id="btnDownloadPdf" class="btn btn-danger w-100 shadow-sm">
+            <button id="btnDownloadPdf" type="button" class="btn btn-danger w-100 shadow-sm">
                 <i class="bi bi-file-earmark-pdf"></i> Export PDF
             </button>
         </div>
 
         <div class="col-md-2">
-            <button id="btnDownloadExcel" class="btn btn-success w-100 shadow-sm">
+            <button id="btnDownloadExcel" type="button" class="btn btn-success w-100 shadow-sm">
                 <i class="bi bi-file-earmark-excel"></i> Export Excel
             </button>
         </div>
     </div>
 
-    <!-- ========================= -->
-    <!--          FILTERS          -->
-    <!-- ========================= -->
-    <form method="get" asp-action="Index" class="row g-3 mb-4">
+    <form method="get" asp-action="Index" asp-controller="EndOfDayReport" class="row g-3 mb-4">
         <div class="col-md-3">
-            <label class="form-label fw-semibold">Select Date</label>
+            <label class="form-label fw-semibold">Report Date</label>
             <input type="date"
                    name="reportDate"
                    class="form-control"
@@ -116,248 +102,234 @@
                    required />
         </div>
 
+        <div class="col-md-3">
+            <label class="form-label fw-semibold">Shift ID</label>
+            <input type="number"
+                   name="shiftId"
+                   class="form-control"
+                   value="@(Model.ShiftId?.ToString() ?? "")"
+                   placeholder="Optional" />
+        </div>
+
         <div class="col-md-3 d-flex align-items-end">
-            <button class="btn btn-primary w-100 shadow-sm">Apply Filter</button>
+            <button class="btn btn-primary w-100 shadow-sm" type="submit">Apply Filter</button>
         </div>
     </form>
 
-    <!-- ========================= -->
-    <!--      DATE INFORMATION     -->
-    <!-- ========================= -->
     <div class="mb-4 small">
-        <div><strong>Start Date and Time:</strong> @Model.StartDate</div>
-        <div><strong>End Date and Time:</strong> @Model.EndDate</div>
-        <div><strong>Operational Day:</strong> @Model.StartDate.ToString("dd MMMM yyyy")</div>
-        <div><strong>Operational Shift:</strong> -All-</div>
+        <div><strong>Month:</strong> @monthLabel</div>
+        <div><strong>Start Date and Time:</strong> @Model.StartDate.ToString("dd/MM/yyyy HH:mm")</div>
+        <div><strong>End Date and Time:</strong> @Model.EndDate.ToString("dd/MM/yyyy HH:mm")</div>
+        <div><strong>Operational Day:</strong> @(report.IsOperationalDay ? "Yes" : "No") @operationalDayLabel</div>
+        <div><strong>Operational Shift:</strong> @shiftName</div>
     </div>
 
-    <!-- ===================================== -->
-    <!--         SECTION: THEORETICAL INCOME   -->
-    <!-- ===================================== -->
     <h5 class="fw-bold text-secondary mt-4 mb-2">THEORETICAL INCOME</h5>
     <div class="table-responsive">
         <table class="table table-bordered align-middle text-end">
-
             <thead class="table-light text-center">
                 <tr>
                     <th class="text-start">Metric</th>
                     <th>Class M</th>
-                    <th>Class I</th>
-                    <th>Class II</th>
-                    <th>Class III</th>
+                    <th>Class 1</th>
+                    <th>Class 2</th>
+                    <th>Class 3</th>
+                    <th>Class 4</th>
+                    <th>Class D</th>
                     <th>Total</th>
                 </tr>
             </thead>
-
             <tbody>
-
-                @* ------------ Traffic Row ------------ *@
                 <tr>
                     <td class="fw-semibold text-start">Traffic</td>
-                    <td>@traffic?.ClassM</td>
-                    <td>@traffic?.ClassI</td>
-                    <td>@traffic?.ClassII</td>
-                    <td>@traffic?.ClassIII</td>
-                    <td>@traffic?.Total</td>
+                    <td>@F(traffic?.ClassM ?? 0)</td>
+                    <td>@F(traffic?.Class1 ?? 0)</td>
+                    <td>@F(traffic?.Class2 ?? 0)</td>
+                    <td>@F(traffic?.Class3 ?? 0)</td>
+                    <td>@F(traffic?.Class4 ?? 0)</td>
+                    <td>@F(traffic?.ClassD ?? 0)</td>
+                    <td>@F(traffic?.Total ?? 0)</td>
                 </tr>
 
-                @* ------------ Nominal Tariff ------------ *@
                 <tr>
                     <td class="fw-semibold text-start">Nominal Tariff</td>
-                    <td>@nominal?.ClassM</td>
-                    <td>@nominal?.ClassI</td>
-                    <td>@nominal?.ClassII</td>
-                    <td>@nominal?.ClassIII</td>
+                    <td>@F(nominal?.ClassM ?? 0)</td>
+                    <td>@F(nominal?.Class1 ?? 0)</td>
+                    <td>@F(nominal?.Class2 ?? 0)</td>
+                    <td>@F(nominal?.Class3 ?? 0)</td>
+                    <td>@F(nominal?.Class4 ?? 0)</td>
+                    <td>@F(nominal?.ClassD ?? 0)</td>
                     <td></td>
                 </tr>
 
-                @* ------------ Traffic x Nominal ------------ *@
                 <tr class="fw-bold">
-                    <td class="text-start"><em>Traffic × Nominal Tariff</em></td>
-                    <td>@trafficNominal?.ClassM</td>
-                    <td>@trafficNominal?.ClassI</td>
-                    <td>@trafficNominal?.ClassII</td>
-                    <td>@trafficNominal?.ClassIII</td>
-                    <td>@trafficNominal?.Total</td>
+                    <td class="text-start"><em>Traffic x Nominal Tariff</em></td>
+                    <td>@F(trafficNominal?.ClassM ?? 0)</td>
+                    <td>@F(trafficNominal?.Class1 ?? 0)</td>
+                    <td>@F(trafficNominal?.Class2 ?? 0)</td>
+                    <td>@F(trafficNominal?.Class3 ?? 0)</td>
+                    <td>@F(trafficNominal?.Class4 ?? 0)</td>
+                    <td>@F(trafficNominal?.ClassD ?? 0)</td>
+                    <td>@F(trafficNominal?.Total ?? 0)</td>
                 </tr>
 
-                @* ------------ Penalty ------------ *@
                 <tr>
                     <td class="fw-semibold text-start">Cash Penalty</td>
-                    <td>@penalty?.ClassM</td>
-                    <td>@penalty?.ClassI</td>
-                    <td>@penalty?.ClassII</td>
-                    <td>@penalty?.ClassIII</td>
-                    <td>@penalty?.Total</td>
+                    <td>@F(penalty?.ClassM ?? 0)</td>
+                    <td>@F(penalty?.Class1 ?? 0)</td>
+                    <td>@F(penalty?.Class2 ?? 0)</td>
+                    <td>@F(penalty?.Class3 ?? 0)</td>
+                    <td>@F(penalty?.Class4 ?? 0)</td>
+                    <td>@F(penalty?.ClassD ?? 0)</td>
+                    <td>@F(penalty?.Total ?? 0)</td>
                 </tr>
 
-                @* ------------ Total Theoretical ------------ *@
                 <tr class="fw-bold table-light">
                     <td class="text-start">TOTAL THEORETICAL INCOME</td>
-                    <td colspan="4"></td>
-                    <td>@totalTheo.ToString("N2")</td>
+                    <td colspan="6"></td>
+                    <td>@F(totalTheo)</td>
                 </tr>
 
-                @* ------------ EXEMPTS ------------ *@
                 <tr>
                     <td class="fw-semibold text-start">LESS: EXEMPTS</td>
-                    <td>@exempts.ClassM_ExemptAmount</td>
-                    <td>@exempts.ClassI_ExemptAmount</td>
-                    <td>@exempts.ClassII_ExemptAmount</td>
-                    <td>@exempts.ClassIII_ExemptAmount</td>
-                    <td>@exemptsTotal</td>
+                    <td>@F(exempts.ClassM)</td>
+                    <td>@F(exempts.Class1)</td>
+                    <td>@F(exempts.Class2)</td>
+                    <td>@F(exempts.Class3)</td>
+                    <td>@F(exempts.Class4)</td>
+                    <td>@F(exempts.ClassD)</td>
+                    <td>@F(exemptsTotal)</td>
                 </tr>
 
-                @* ------------ DISCOUNT HEADER ------------ *@
                 <tr class="table-light fw-bold">
-                    <td colspan="6" class="text-start">LESS: DISCOUNT</td>
+                    <td colspan="8" class="text-start">LESS: DISCOUNT</td>
                 </tr>
 
-                @* ------------ Each Discount Row ------------ *@
                 <tr>
                     <td class="text-start">Anonymous 5%</td>
-                    <td>@discounts.ClassM_AnonymousAmount</td>
-                    <td>@discounts.ClassI_AnonymousAmount</td>
-                    <td>@discounts.ClassII_AnonymousAmount</td>
-                    <td>@discounts.ClassIII_AnonymousAmount</td>
-                    <td>@(-anonTotal)</td>
+                    <td>@F(discounts.Anonymous5.ClassM)</td>
+                    <td>@F(discounts.Anonymous5.Class1)</td>
+                    <td>@F(discounts.Anonymous5.Class2)</td>
+                    <td>@F(discounts.Anonymous5.Class3)</td>
+                    <td>@F(discounts.Anonymous5.Class4)</td>
+                    <td>@F(discounts.Anonymous5.ClassD)</td>
+                    <td>@F(-anonTotal)</td>
                 </tr>
 
                 <tr>
                     <td class="text-start">Individual 10%</td>
-                    <td>@discounts.ClassM_IndividualAmount</td>
-                    <td>@discounts.ClassI_IndividualAmount</td>
-                    <td>@discounts.ClassII_IndividualAmount</td>
-                    <td>@discounts.ClassIII_IndividualAmount</td>
-                    <td>@(-indivTotal)</td>
+                    <td>@F(discounts.Individual10.ClassM)</td>
+                    <td>@F(discounts.Individual10.Class1)</td>
+                    <td>@F(discounts.Individual10.Class2)</td>
+                    <td>@F(discounts.Individual10.Class3)</td>
+                    <td>@F(discounts.Individual10.Class4)</td>
+                    <td>@F(discounts.Individual10.ClassD)</td>
+                    <td>@F(-indivTotal)</td>
                 </tr>
 
                 <tr>
                     <td class="text-start">Corporate 10%</td>
-                    <td>@discounts.ClassM_CorporateAmount</td>
-                    <td>@discounts.ClassI_CorporateAmount</td>
-                    <td>@discounts.ClassII_CorporateAmount</td>
-                    <td>@discounts.ClassIII_CorporateAmount</td>
-                    <td>@(-corpTotal)</td>
+                    <td>@F(discounts.Corporate10.ClassM)</td>
+                    <td>@F(discounts.Corporate10.Class1)</td>
+                    <td>@F(discounts.Corporate10.Class2)</td>
+                    <td>@F(discounts.Corporate10.Class3)</td>
+                    <td>@F(discounts.Corporate10.Class4)</td>
+                    <td>@F(discounts.Corporate10.ClassD)</td>
+                    <td>@F(-corpTotal)</td>
                 </tr>
 
                 <tr>
                     <td class="text-start">Staff 100%</td>
-                    <td>@discounts.ClassM_StaffAmount</td>
-                    <td>@discounts.ClassI_StaffAmount</td>
-                    <td>@discounts.ClassII_StaffAmount</td>
-                    <td>@discounts.ClassIII_StaffAmount</td>
-                    <td>@(-staffTotal)</td>
+                    <td>@F(discounts.Staff100.ClassM)</td>
+                    <td>@F(discounts.Staff100.Class1)</td>
+                    <td>@F(discounts.Staff100.Class2)</td>
+                    <td>@F(discounts.Staff100.Class3)</td>
+                    <td>@F(discounts.Staff100.Class4)</td>
+                    <td>@F(discounts.Staff100.ClassD)</td>
+                    <td>@F(-staffTotal)</td>
                 </tr>
 
                 <tr class="fw-bold">
                     <td class="text-start">Discount Provided</td>
-                    <td colspan="4"></td>
-                    <td>@(-providedTotal)</td>
+                    <td colspan="6"></td>
+                    <td>@F(-providedTotal)</td>
                 </tr>
 
-                @* ------------ TOTAL DISCOUNTED ------------ *@
                 <tr class="fw-bold table-light">
                     <td class="text-start">TOTAL DISCOUNTED INCOME</td>
-                    <td colspan="4"></td>
-                    <td>@totalDiscountedIncome</td>
+                    <td colspan="6"></td>
+                    <td>@F(totalDiscountedIncome)</td>
                 </tr>
-
             </tbody>
-
         </table>
     </div>
 
-    <!-- ===================================== -->
-    <!--           SECTION: OTHER INCOME       -->
-    <!-- ===================================== -->
     <h5 class="fw-bold text-secondary mt-4 mb-2">OTHER INCOME</h5>
-
     <div class="table-responsive">
         <table class="table table-bordered align-middle text-end">
-
             <tbody>
-
                 <tr class="fw-bold table-light">
                     <td class="text-start">OTHER INCOME</td>
-                    <td colspan="4"></td>
-                    <td>@other.TotalOtherIncome</td>
+                    <td>@F(other.TotalOtherIncome)</td>
                 </tr>
 
                 <tr>
                     <td class="text-start">Account Payments (Top-up)</td>
-                    <td colspan="4"></td>
-                    <td>@other.TotalTopupAmount</td>
+                    <td>@F(other.AccountPaymentsTopUp > 0 ? other.AccountPaymentsTopUp : other.TotalTopupAmount)</td>
                 </tr>
 
-                <tr><td class="text-start ps-4">Cash</td><td colspan="4"></td><td>@other.CashTopupAmount</td></tr>
-                <tr><td class="text-start ps-4">Switch</td><td colspan="4"></td><td>@other.SwitchTopupAmount</td></tr>
-                <tr><td class="text-start ps-4">Digital (EFT)</td><td colspan="4"></td><td>@other.DigitalTopupAmount</td></tr>
-                <tr><td class="text-start">Cash Declared Surplus</td><td colspan="4"></td><td>@other.CashSurplusShortage</td></tr>
+                <tr><td class="text-start ps-4">Cash</td><td>@F(other.CashTopupAmount)</td></tr>
+                <tr><td class="text-start ps-4">Switch</td><td>@F(other.SwitchTopupAmount)</td></tr>
+                <tr><td class="text-start ps-4">Digital (EFT)</td><td>@F(other.DigitalTopupAmount)</td></tr>
+                <tr><td class="text-start">Cash Declared Surplus</td><td>@F(other.CashDeclaredSurplus != 0 ? other.CashDeclaredSurplus : other.CashSurplusShortage)</td></tr>
 
                 <tr class="fw-bold table-light">
                     <td class="text-start">(A) TOTAL INCOME</td>
-                    <td colspan="4"></td>
-                    <td>@totalIncomeA</td>
+                    <td>@F(totalIncomeA)</td>
                 </tr>
-
             </tbody>
-
         </table>
     </div>
 
-    <!-- ===================================== -->
-    <!--      SECTION: ACCOUNTED FOR AS FOLLOWS -->
-    <!-- ===================================== -->
     <h5 class="fw-bold text-secondary mt-4 mb-2">Accounted for as follows:</h5>
-
     <div class="table-responsive">
         <table class="table table-bordered align-middle text-end">
-
             <tbody>
+                <tr><td class="text-start">Cash Declared</td><td>@F(recon.CashDeclared)</td></tr>
+                <tr><td class="text-start">Cash Banked</td><td>@F(recon.CashBanked)</td></tr>
+                <tr><td class="text-start">Cash Banked (Surplus) Shortage</td><td>@F(recon.CashBankedSurplusShortage)</td></tr>
+                <tr><td class="text-start">Switch</td><td>@F(recon.SwitchAmount)</td></tr>
+                <tr><td class="text-start">Digital</td><td>@F(recon.DigitalAmount)</td></tr>
 
-                <tr><td class="text-start">Cash Declared</td><td colspan="4"></td><td>@recon.CashDeclared</td></tr>
-                <tr><td class="text-start">Cash Banked</td><td colspan="4"></td><td>@recon.CashBanked</td></tr>
-                <tr><td class="text-start">Cash Banked (Surplus) Shortage</td><td colspan="4"></td><td>@recon.CashSurplusShortage</td></tr>
-                <tr><td class="text-start">Switch</td><td colspan="4"></td><td>@recon.SwitchAmount</td></tr>
-                <tr><td class="text-start">Digital</td><td colspan="4"></td><td>@recon.DigitalAmount</td></tr>
-
-                <!-- PREPAID -->
                 <tr class="fw-bold table-light">
                     <td class="text-start">Pre-Paid Account Transactions</td>
-                    <td colspan="4"></td>
-                    <td>@recon.PrePaidTotal</td>
+                    <td>@F(recon.PrePaidTotal)</td>
                 </tr>
 
-                <tr><td class="text-start ps-4">Smart Card</td><td colspan="4"></td><td>@recon.SmartCardAmount</td></tr>
-                <tr><td class="text-start ps-4">ETC TAG</td><td colspan="4"></td><td>@recon.ETCTagAmount</td></tr>
+                <tr><td class="text-start ps-4">Smart Card</td><td>@F(recon.SmartCardAmount)</td></tr>
+                <tr><td class="text-start ps-4">ETC TAG</td><td>@F(recon.ETCTagAmount)</td></tr>
 
-                <!-- OTHER LANE -->
                 <tr class="fw-bold table-light">
                     <td class="text-start">Other Lane Transactions</td>
-                    <td colspan="4"></td>
-                    <td>@recon.OtherLaneTotal</td>
+                    <td>@F(recon.OtherLaneTotal)</td>
                 </tr>
 
-                <tr><td class="text-start ps-4">Violation</td><td colspan="4"></td><td>@recon.ViolationAmount</td></tr>
-                <tr><td class="text-start ps-4">Exemptions</td><td colspan="4"></td><td>@recon.ExemptionsAmount</td></tr>
+                <tr><td class="text-start ps-4">Violation</td><td>@F(recon.ViolationAmount)</td></tr>
+                <tr><td class="text-start ps-4">Exemptions</td><td>@F(recon.ExemptionsAmount)</td></tr>
 
-                <tr><td class="text-start">Collector Debt</td><td colspan="4"></td><td>@recon.CollectorDebt</td></tr>
-                <tr><td class="text-start">Cash Declared Shortages</td><td colspan="4"></td><td>@recon.CashShortages</td></tr>
+                <tr><td class="text-start">Collector Debt</td><td>@F(recon.CollectorDebt)</td></tr>
+                <tr><td class="text-start">Cash Declared Shortages</td><td>@F(recon.CashShortages)</td></tr>
 
                 <tr class="fw-bold table-light">
                     <td class="text-start">(B) TOTAL ACCOUNTED FOR</td>
-                    <td colspan="4"></td>
-                    <td>@totalAccountedB</td>
+                    <td>@F(totalAccountedB)</td>
                 </tr>
 
                 <tr class="fw-bold">
                     <td class="text-start">UN-RECONCILED DISCREPANCY</td>
-                    <td colspan="4"></td>
-                    <td>@unreconciled</td>
+                    <td>@F(unreconciled)</td>
                 </tr>
             </tbody>
-
         </table>
 
         <table id="eodExportTableTheo" class="d-none">
@@ -365,71 +337,65 @@
                 <tr>
                     <th>Metric</th>
                     <th>Class M</th>
-                    <th>Class I</th>
-                    <th>Class II</th>
-                    <th>Class III</th>
+                    <th>Class 1</th>
+                    <th>Class 2</th>
+                    <th>Class 3</th>
+                    <th>Class 4</th>
+                    <th>Class D</th>
                     <th>Total</th>
                 </tr>
             </thead>
             <tbody>
-                <tr><td>Traffic</td><td>@traffic?.ClassM</td><td>@traffic?.ClassI</td><td>@traffic?.ClassII</td><td>@traffic?.ClassIII</td><td>@traffic?.Total</td></tr>
-                <tr><td>Nominal Tariff</td><td>@nominal?.ClassM</td><td>@nominal?.ClassI</td><td>@nominal?.ClassII</td><td>@nominal?.ClassIII</td><td></td></tr>
-                <tr><td>Traffic × Nominal Tariff</td><td>@trafficNominal?.ClassM</td><td>@trafficNominal?.ClassI</td><td>@trafficNominal?.ClassII</td><td>@trafficNominal?.ClassIII</td><td>@trafficNominal?.Total</td></tr>
-                <tr><td>Cash Penalty</td><td>@penalty?.ClassM</td><td>@penalty?.ClassI</td><td>@penalty?.ClassII</td><td>@penalty?.ClassIII</td><td>@penalty?.Total</td></tr>
-                <tr><td><b>Total Theoretical Income</b></td><td></td><td></td><td></td><td></td><td>@totalTheo</td></tr>
-
-                <tr><td>Exempts</td><td>@exempts.ClassM_ExemptAmount</td><td>@exempts.ClassI_ExemptAmount</td><td>@exempts.ClassII_ExemptAmount</td><td>@exempts.ClassIII_ExemptAmount</td><td>@exemptsTotal</td></tr>
-
-                <tr><td>Anonymous 5%</td><td>@discounts.ClassM_AnonymousAmount</td><td>@discounts.ClassI_AnonymousAmount</td><td>@discounts.ClassII_AnonymousAmount</td><td>@discounts.ClassIII_AnonymousAmount</td><td>@(-anonTotal)</td></tr>
-                <tr><td>Individual 10%</td><td>@discounts.ClassM_IndividualAmount</td><td>@discounts.ClassI_IndividualAmount</td><td>@discounts.ClassII_IndividualAmount</td><td>@discounts.ClassIII_IndividualAmount</td><td>@(-indivTotal)</td></tr>
-                <tr><td>Corporate 10%</td><td>@discounts.ClassM_CorporateAmount</td><td>@discounts.ClassI_CorporateAmount</td><td>@discounts.ClassII_CorporateAmount</td><td>@discounts.ClassIII_CorporateAmount</td><td>@(-corpTotal)</td></tr>
-                <tr><td>Staff 100%</td><td>@discounts.ClassM_StaffAmount</td><td>@discounts.ClassI_StaffAmount</td><td>@discounts.ClassII_StaffAmount</td><td>@discounts.ClassIII_StaffAmount</td><td>@(-staffTotal)</td></tr>
-
-                <tr><td><b>Total Discounted Income</b></td><td></td><td></td><td></td><td></td><td>@totalDiscountedIncome</td></tr>
+                <tr><td>Traffic</td><td>@F(traffic?.ClassM ?? 0)</td><td>@F(traffic?.Class1 ?? 0)</td><td>@F(traffic?.Class2 ?? 0)</td><td>@F(traffic?.Class3 ?? 0)</td><td>@F(traffic?.Class4 ?? 0)</td><td>@F(traffic?.ClassD ?? 0)</td><td>@F(traffic?.Total ?? 0)</td></tr>
+                <tr><td>Nominal Tariff</td><td>@F(nominal?.ClassM ?? 0)</td><td>@F(nominal?.Class1 ?? 0)</td><td>@F(nominal?.Class2 ?? 0)</td><td>@F(nominal?.Class3 ?? 0)</td><td>@F(nominal?.Class4 ?? 0)</td><td>@F(nominal?.ClassD ?? 0)</td><td></td></tr>
+                <tr><td>Traffic x Nominal Tariff</td><td>@F(trafficNominal?.ClassM ?? 0)</td><td>@F(trafficNominal?.Class1 ?? 0)</td><td>@F(trafficNominal?.Class2 ?? 0)</td><td>@F(trafficNominal?.Class3 ?? 0)</td><td>@F(trafficNominal?.Class4 ?? 0)</td><td>@F(trafficNominal?.ClassD ?? 0)</td><td>@F(trafficNominal?.Total ?? 0)</td></tr>
+                <tr><td>Cash Penalty</td><td>@F(penalty?.ClassM ?? 0)</td><td>@F(penalty?.Class1 ?? 0)</td><td>@F(penalty?.Class2 ?? 0)</td><td>@F(penalty?.Class3 ?? 0)</td><td>@F(penalty?.Class4 ?? 0)</td><td>@F(penalty?.ClassD ?? 0)</td><td>@F(penalty?.Total ?? 0)</td></tr>
+                <tr><td><b>Total Theoretical Income</b></td><td colspan="6"></td><td>@F(totalTheo)</td></tr>
+                <tr><td>Exempts</td><td>@F(exempts.ClassM)</td><td>@F(exempts.Class1)</td><td>@F(exempts.Class2)</td><td>@F(exempts.Class3)</td><td>@F(exempts.Class4)</td><td>@F(exempts.ClassD)</td><td>@F(exemptsTotal)</td></tr>
+                <tr><td>Anonymous 5%</td><td>@F(discounts.Anonymous5.ClassM)</td><td>@F(discounts.Anonymous5.Class1)</td><td>@F(discounts.Anonymous5.Class2)</td><td>@F(discounts.Anonymous5.Class3)</td><td>@F(discounts.Anonymous5.Class4)</td><td>@F(discounts.Anonymous5.ClassD)</td><td>@F(-anonTotal)</td></tr>
+                <tr><td>Individual 10%</td><td>@F(discounts.Individual10.ClassM)</td><td>@F(discounts.Individual10.Class1)</td><td>@F(discounts.Individual10.Class2)</td><td>@F(discounts.Individual10.Class3)</td><td>@F(discounts.Individual10.Class4)</td><td>@F(discounts.Individual10.ClassD)</td><td>@F(-indivTotal)</td></tr>
+                <tr><td>Corporate 10%</td><td>@F(discounts.Corporate10.ClassM)</td><td>@F(discounts.Corporate10.Class1)</td><td>@F(discounts.Corporate10.Class2)</td><td>@F(discounts.Corporate10.Class3)</td><td>@F(discounts.Corporate10.Class4)</td><td>@F(discounts.Corporate10.ClassD)</td><td>@F(-corpTotal)</td></tr>
+                <tr><td>Staff 100%</td><td>@F(discounts.Staff100.ClassM)</td><td>@F(discounts.Staff100.Class1)</td><td>@F(discounts.Staff100.Class2)</td><td>@F(discounts.Staff100.Class3)</td><td>@F(discounts.Staff100.Class4)</td><td>@F(discounts.Staff100.ClassD)</td><td>@F(-staffTotal)</td></tr>
+                <tr><td><b>Total Discounted Income</b></td><td colspan="6"></td><td>@F(totalDiscountedIncome)</td></tr>
             </tbody>
         </table>
+
         <table id="eodExportTableOther" class="d-none">
             <thead>
                 <tr><th>Metric</th><th>Total</th></tr>
             </thead>
             <tbody>
-                <tr><td>Account Payments (Top-up)</td><td>@other.TotalTopupAmount</td></tr>
-                <tr><td>Cash</td><td>@other.CashTopupAmount</td></tr>
-                <tr><td>Switch</td><td>@other.SwitchTopupAmount</td></tr>
-                <tr><td>Digital (EFT)</td><td>@other.DigitalTopupAmount</td></tr>
-                <tr><td>Cash Declared Surplus</td><td>@other.CashSurplusShortage</td></tr>
-                <tr><td><b>Total Income (A)</b></td><td>@totalIncomeA</td></tr>
+                <tr><td>Account Payments (Top-up)</td><td>@F(other.AccountPaymentsTopUp > 0 ? other.AccountPaymentsTopUp : other.TotalTopupAmount)</td></tr>
+                <tr><td>Cash</td><td>@F(other.CashTopupAmount)</td></tr>
+                <tr><td>Switch</td><td>@F(other.SwitchTopupAmount)</td></tr>
+                <tr><td>Digital (EFT)</td><td>@F(other.DigitalTopupAmount)</td></tr>
+                <tr><td>Cash Declared Surplus</td><td>@F(other.CashDeclaredSurplus != 0 ? other.CashDeclaredSurplus : other.CashSurplusShortage)</td></tr>
+                <tr><td><b>Total Income (A)</b></td><td>@F(totalIncomeA)</td></tr>
             </tbody>
         </table>
+
         <table id="eodExportTableAccounted" class="d-none">
             <thead>
                 <tr><th>Metric</th><th>Total</th></tr>
             </thead>
             <tbody>
-                <tr><td>Cash Declared</td><td>@recon.CashDeclared</td></tr>
-                <tr><td>Cash Banked</td><td>@recon.CashBanked</td></tr>
-                <tr><td>Cash Banked (Surplus) Shortage</td><td>@recon.CashSurplusShortage</td></tr>
-                <tr><td>Switch</td><td>@recon.SwitchAmount</td></tr>
-                <tr><td>Digital</td><td>@recon.DigitalAmount</td></tr>
-
-                <tr><td>Prepaid: Smart Card</td><td>@recon.SmartCardAmount</td></tr>
-                <tr><td>Prepaid: ETC Tag</td><td>@recon.ETCTagAmount</td></tr>
-
-                <tr><td>Violations</td><td>@recon.ViolationAmount</td></tr>
-                <tr><td>Exemptions</td><td>@recon.ExemptionsAmount</td></tr>
-                <tr><td>Collector Debt</td><td>@recon.CollectorDebt</td></tr>
-                <tr><td>Cash Declared Shortages</td><td>@recon.CashShortages</td></tr>
-
-                <tr><td><b>Total Accounted (B)</b></td><td>@totalAccountedB</td></tr>
-                <tr><td><b>Un-Reconciled Discrepancy</b></td><td>@unreconciled</td></tr>
+                <tr><td>Cash Declared</td><td>@F(recon.CashDeclared)</td></tr>
+                <tr><td>Cash Banked</td><td>@F(recon.CashBanked)</td></tr>
+                <tr><td>Cash Banked (Surplus) Shortage</td><td>@F(recon.CashBankedSurplusShortage)</td></tr>
+                <tr><td>Switch</td><td>@F(recon.SwitchAmount)</td></tr>
+                <tr><td>Digital</td><td>@F(recon.DigitalAmount)</td></tr>
+                <tr><td>Prepaid: Smart Card</td><td>@F(recon.SmartCardAmount)</td></tr>
+                <tr><td>Prepaid: ETC Tag</td><td>@F(recon.ETCTagAmount)</td></tr>
+                <tr><td>Violations</td><td>@F(recon.ViolationAmount)</td></tr>
+                <tr><td>Exemptions</td><td>@F(recon.ExemptionsAmount)</td></tr>
+                <tr><td>Collector Debt</td><td>@F(recon.CollectorDebt)</td></tr>
+                <tr><td>Cash Declared Shortages</td><td>@F(recon.CashShortages)</td></tr>
+                <tr><td><b>Total Accounted (B)</b></td><td>@F(totalAccountedB)</td></tr>
+                <tr><td><b>Un-Reconciled Discrepancy</b></td><td>@F(unreconciled)</td></tr>
             </tbody>
         </table>
-
     </div>
 
-    <!-- ===================================== -->
-    <!--               FOOTER                  -->
-    <!-- ===================================== -->
     <div class="mt-4 border-top pt-3">
         <table class="table table-borderless mb-0">
             <tr>
@@ -447,8 +413,8 @@
             </tr>
         </table>
     </div>
-
 </div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
@@ -466,11 +432,11 @@
         const USER_ID = "@userId";
         const REPORT_VERSION = "@version";
 
-        const MONTH_TEXT = "@Model.StartDate.ToString("MMMM yyyy")";
-        const START_TEXT = "@Model.StartDate.ToString("dd/MM/yyyy hh:mm tt")";
-        const END_TEXT = "@Model.EndDate.ToString("dd/MM/yyyy hh:mm tt")";
-        const OPERATIONAL_DAY_TEXT = "@Model.StartDate.ToString("dd MMMM yyyy")";
-        const OPERATIONAL_SHIFT_TEXT = "-All-";
+        const MONTH_TEXT = "@monthLabel";
+        const START_TEXT = "@Model.StartDate.ToString("dd/MM/yyyy HH:mm")";
+        const END_TEXT = "@Model.EndDate.ToString("dd/MM/yyyy HH:mm")";
+        const OPERATIONAL_DAY_TEXT = "@((report.IsOperationalDay ? "Yes" : "No") + " " + operationalDayLabel)";
+        const OPERATIONAL_SHIFT_TEXT = "@shiftName";
 
         const LEFT_LOGO_URL = "/images/LCC Logo.jpg";
         const RIGHT_LOGO_URL = "/images/ICT-Works Logo.jpg";
@@ -496,16 +462,10 @@
         function drawPdfHeader(doc, margin, leftLogo, rightLogo) {
         const pageWidth = getPageWidth(doc);
 
-        if (leftLogo) {
-        doc.addImage(leftLogo, "JPEG", margin, 20, 70, 70);
-        }
-
-        if (rightLogo) {
-        doc.addImage(rightLogo, "JPEG", pageWidth - margin - 70, 20, 70, 70);
-        }
+        if (leftLogo) doc.addImage(leftLogo, "JPEG", margin, 20, 70, 70);
+        if (rightLogo) doc.addImage(rightLogo, "JPEG", pageWidth - margin - 70, 20, 70, 70);
 
         doc.setFont("helvetica", "bold");
-
         doc.setFontSize(14);
         doc.text(COMPANY_LINE_1, pageWidth / 2, 40, { align: "center" });
 
@@ -596,21 +556,9 @@
         startY: y,
         html: "#eodExportTableTheo",
         theme: "grid",
-        styles: {
-        fontSize: 9,
-        halign: "right",
-        cellPadding: 4
-        },
-        headStyles: {
-        fillColor: [230, 230, 230],
-        textColor: 0,
-        halign: "center"
-        },
-        margin: {
-        left: margin,
-        right: margin,
-        bottom: 55
-        }
+        styles: { fontSize: 9, halign: "right", cellPadding: 4 },
+        headStyles: { fillColor: [230, 230, 230], textColor: 0, halign: "center" },
+        margin: { left: margin, right: margin, bottom: 55 }
         });
 
         y = doc.lastAutoTable.finalY + 25;
@@ -620,21 +568,9 @@
         startY: y,
         html: "#eodExportTableOther",
         theme: "grid",
-        styles: {
-        fontSize: 9,
-        halign: "right",
-        cellPadding: 4
-        },
-        headStyles: {
-        fillColor: [230, 230, 230],
-        textColor: 0,
-        halign: "center"
-        },
-        margin: {
-        left: margin,
-        right: margin,
-        bottom: 55
-        }
+        styles: { fontSize: 9, halign: "right", cellPadding: 4 },
+        headStyles: { fillColor: [230, 230, 230], textColor: 0, halign: "center" },
+        margin: { left: margin, right: margin, bottom: 55 }
         });
 
         y = doc.lastAutoTable.finalY + 25;
@@ -644,21 +580,9 @@
         startY: y,
         html: "#eodExportTableAccounted",
         theme: "grid",
-        styles: {
-        fontSize: 9,
-        halign: "right",
-        cellPadding: 4
-        },
-        headStyles: {
-        fillColor: [230, 230, 230],
-        textColor: 0,
-        halign: "center"
-        },
-        margin: {
-        left: margin,
-        right: margin,
-        bottom: 55
-        }
+        styles: { fontSize: 9, halign: "right", cellPadding: 4 },
+        headStyles: { fillColor: [230, 230, 230], textColor: 0, halign: "center" },
+        margin: { left: margin, right: margin, bottom: 55 }
         });
 
         addPdfFooter(doc, margin);
@@ -682,7 +606,7 @@
         wsData.push([]);
 
         wsData.push(["THEORETICAL INCOME"]);
-        wsData.push(["Metric", "Class M", "Class I", "Class II", "Class III", "Total"]);
+        wsData.push(["Metric", "Class M", "Class 1", "Class 2", "Class 3", "Class 4", "Class D", "Total"]);
         getTableRows("#eodExportTableTheo").forEach(row => wsData.push(row));
 
         wsData.push([]);
@@ -705,14 +629,9 @@
         wsData.push(["Reports Module Version Number:", REPORT_VERSION]);
 
         const sheet = XLSX.utils.aoa_to_sheet(wsData);
-
         sheet["!cols"] = [
-        { wch: 35 },
-        { wch: 12 },
-        { wch: 12 },
-        { wch: 12 },
-        { wch: 12 },
-        { wch: 16 }
+        { wch: 35 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
+        { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 16 }
         ];
 
         XLSX.utils.book_append_sheet(wb, sheet, "EndOfDay");
@@ -739,4 +658,3 @@
         });
     </script>
 }
-

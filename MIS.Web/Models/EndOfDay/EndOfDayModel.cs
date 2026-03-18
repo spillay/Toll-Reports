@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using MIS.Web.Services.Interfaces;
 using MIS.Web.Models.EndOfDay;
+using MIS.Web.Services.Interfaces;
 
 namespace MIS.Web.Pages.Reports
 {
@@ -14,22 +14,25 @@ namespace MIS.Web.Pages.Reports
             _service = service;
         }
 
-        [BindProperty]
+        [BindProperty(SupportsGet = true)]
         public DateTime StartDate { get; set; } = DateTime.Today;
 
-        [BindProperty]
+        [BindProperty(SupportsGet = true)]
         public DateTime EndDate { get; set; } = DateTime.Today;
 
-        public EndOfDayReportViewModel? Report { get; set; }
+        [BindProperty(SupportsGet = true)]
+        public int? ShiftId { get; set; }
 
-        public async Task<IActionResult> OnGetAsync()
+        public EndOfDayReportViewModel Report { get; set; } = new();
+
+        public IActionResult OnGet()
         {
             return Page();
         }
 
         public async Task<IActionResult> OnPostAsync()
         {
-            Report = await _service.GetEndOfDayAsync(StartDate, EndDate);
+            Report = await _service.GetEndOfDayAsync(StartDate, EndDate, ShiftId) ?? new EndOfDayReportViewModel();
             return Page();
         }
     }

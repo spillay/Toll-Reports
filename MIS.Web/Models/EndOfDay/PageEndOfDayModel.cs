@@ -1,5 +1,4 @@
 ﻿using System;
-using MIS.Web.Models.EndOfDay;
 
 namespace MIS.Web.Models.EndOfDay
 {
@@ -7,8 +6,8 @@ namespace MIS.Web.Models.EndOfDay
     {
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
+        public int? ShiftId { get; set; }
 
-        // Holds the full report returned from API
-        public EndOfDayReportViewModel? Report { get; set; }
+        public EndOfDayReportViewModel Report { get; set; } = new();
     }
 }

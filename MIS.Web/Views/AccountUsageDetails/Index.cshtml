@@ -4,20 +4,24 @@
 @{
     ViewData["Title"] = "Account Usage Details";
 
+    // Filters
     DateTime startDate = ViewBag.StartDate is DateTime s ? s : DateTime.Now.AddDays(-30);
     DateTime endDate = ViewBag.EndDate is DateTime e ? e : DateTime.Now;
 
+    // Report meta
     var reportGeneratedAt = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
     var currentUserId = User.FindFirst("firstName")?.Value ?? User.Identity?.Name ?? "Lucky";
     var reportVersion = "3.0.0.0";
 
+    // Data
     var header = Model?.Header ?? new AccountUsageDetailsHeaderModel();
     var items = Model?.Items ?? new List<AccountUsageDetailsRowModel>();
 
+    // Selected account
     var selectedAccount = (ViewBag.AccountNumber as string ?? "").Trim();
     var hasSelectedAccount = !string.IsNullOrWhiteSpace(selectedAccount);
 
-    // Export-only branding
+    // Export branding
     var exportCompany = "LEKKI CONCESSION COMPANY LIMITED";
     var exportBridge = "LEKKI-IKOYI LINK BRIDGE";
     var exportTitle = "ACCOUNT USAGE DETAILS REPORT";
@@ -124,6 +128,8 @@
 
 <div class="card shadow-lg p-4 mb-4 report-shell">
     <div class="card-body">
+
+        <!-- Title + Export Buttons -->
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h2 class="fw-bold text-primary mb-0">Account Usage Details</h2>
 
@@ -141,631 +147,628 @@
             }
         </div>
 
-    <form method="get" class="row g-3 mb-4 no-print" id="accountUsageForm">
-        <div class="col-md-4">
-            <label class="form-label fw-semibold">Start Date And Time</label>
-            <input type="datetime-local"
-                   name="StartDate"
-                   class="form-control"
-                   value="@startDate.ToString("yyyy-MM-ddTHH:mm")" />
-        </div>
-
-        <div class="col-md-4">
-            <label class="form-label fw-semibold">End Date And Time</label>
-            <input type="datetime-local"
-                   name="EndDate"
-                   class="form-control"
-                   value="@endDate.ToString("yyyy-MM-ddTHH:mm")" />
-        </div>
-
-        <div class="col-md-4">
-            <label class="form-label fw-semibold">Account Number <span class="text-danger">*</span></label>
-
-            <div class="account-search-wrap">
-                <input type="hidden" id="AccountNumber" name="AccountNumber" value="@selectedAccount" />
-
-                <select id="accountSearch" class="form-select">
-                    @if (!string.IsNullOrWhiteSpace(selectedAccount))
-                    {
-                        <option value="@selectedAccount" selected="selected">@selectedAccount</option>
-                    }
-                </select>
+        <!-- Filters -->
+        <form method="get" class="row g-3 mb-4 no-print" id="accountUsageForm">
+            <div class="col-md-4">
+                <label class="form-label fw-semibold">Start Date And Time</label>
+                <input type="datetime-local"
+                       name="StartDate"
+                       class="form-control"
+                       value="@startDate.ToString("yyyy-MM-ddTHH:mm")" />
             </div>
-        </div>
 
-        <div class="col-md-2 align-self-end">
+            <div class="col-md-4">
+                <label class="form-label fw-semibold">End Date And Time</label>
+                <input type="datetime-local"
+                       name="EndDate"
+                       class="form-control"
+                       value="@endDate.ToString("yyyy-MM-ddTHH:mm")" />
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label fw-semibold">
+                    Account Number <span class="text-danger">*</span>
+                </label>
+
+                <div class="account-search-wrap">
+                    <!-- Hidden field submitted to backend -->
+                    <input type="hidden" id="AccountNumber" name="AccountNumber" value="@selectedAccount" />
+
+                    <!-- Visible Select2 search -->
+                    <select id="accountSearch" class="form-select">
+                        @if (!string.IsNullOrWhiteSpace(selectedAccount))
+                        {
+                            <option value="@selectedAccount" selected="selected">@selectedAccount</option>
+                        }
+                    </select>
+                </div>
+            </div>
+
+            <div class="col-md-2 align-self-end">
                 <button class="btn btn-primary w-100" type="submit">Apply Filters</button>
-        </div>
-    </form>
-
-    @if (!hasSelectedAccount)
-    {
-        <div class="alert alert-info">
-            <strong>Select an account number first</strong> to load the Account Usage Details report.
-        </div>
-    }
-    else
-    {
-        <div class="report-header-block mb-3">
-            <h5 class="mb-3">Account Information</h5>
-            <div class="row mb-2">
-                <div class="col-md-3 table-summary-label">Account Number:</div>
-                <div class="col-md-3">@header.AccountNumber</div>
-                <div class="col-md-3 table-summary-label">Account Status:</div>
-                <div class="col-md-3">@header.AccountStatus</div>
             </div>
-            <div class="row">
-                <div class="col-md-3 table-summary-label">Start Date:</div>
-                <div class="col-md-3">@header.StartDate?.ToString("dd/MM/yyyy HH:mm")</div>
-                <div class="col-md-3 table-summary-label">End Date:</div>
-                <div class="col-md-3">@header.EndDate?.ToString("dd/MM/yyyy HH:mm")</div>
+        </form>
+
+        @if (!hasSelectedAccount)
+        {
+            <div class="alert alert-info">
+                <strong>Select an account number first</strong> to load the Account Usage Details report.
             </div>
-        </div>
+        }
+        else
+        {
+            <!-- Account Info -->
+            <div class="report-header-block mb-3">
+                <h5 class="mb-3">Account Information</h5>
 
-        <div class="report-header-block mb-4">
-            <h5 class="mb-3">Account Balance Summary</h5>
+                <div class="row mb-2">
+                    <div class="col-md-3 table-summary-label">Account Number:</div>
+                    <div class="col-md-3">@header.AccountNumber</div>
 
-            <div class="row mb-2">
-                <div class="col-md-4 table-summary-label">Opening Balance:</div>
-                <div class="col-md-8 fw-bold">@header.OpeningBalance.ToString("N2")</div>
+                    <div class="col-md-3 table-summary-label">Account Status:</div>
+                    <div class="col-md-3">@header.AccountStatus</div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-3 table-summary-label">Start Date:</div>
+                    <div class="col-md-3">@header.StartDate?.ToString("dd/MM/yyyy HH:mm")</div>
+
+                    <div class="col-md-3 table-summary-label">End Date:</div>
+                    <div class="col-md-3">@header.EndDate?.ToString("dd/MM/yyyy HH:mm")</div>
+                </div>
             </div>
 
-            <div class="row mb-2">
-                <div class="col-md-4 table-summary-label">Add: Top-ups</div>
-                <div class="col-md-8">@header.TotalTopUps.ToString("N2")</div>
+            <!-- Balance Summary -->
+            <div class="report-header-block mb-4">
+                <h5 class="mb-3">Account Balance Summary</h5>
+
+                <div class="row mb-2">
+                    <div class="col-md-4 table-summary-label">Opening Balance:</div>
+                    <div class="col-md-8 fw-bold">@header.OpeningBalance.ToString("N2")</div>
+                </div>
+
+                <div class="row mb-2">
+                    <div class="col-md-4 table-summary-label">Add: Top-ups</div>
+                    <div class="col-md-8">@header.TotalTopUps.ToString("N2")</div>
+                </div>
+
+                <div class="row mb-2">
+                    <div class="col-md-4 table-summary-label">Less: Transactions</div>
+                    <div class="col-md-8">@header.TotalTransactions.ToString("N2")</div>
+                </div>
+
+                <div class="row mb-2">
+                    <div class="col-md-4 table-summary-label">Fees</div>
+                    <div class="col-md-8">@header.TotalFees.ToString("N2")</div>
+                </div>
+
+                <div class="row mb-2">
+                    <div class="col-md-4 table-summary-label">Deposits</div>
+                    <div class="col-md-8">@header.TotalDeposits.ToString("N2")</div>
+                </div>
+
+                <div class="row mb-2">
+                    <div class="col-md-4 table-summary-label">Refunds</div>
+                    <div class="col-md-8">@header.TotalRefunds.ToString("N2")</div>
+                </div>
+
+                <div class="row mb-2">
+                    <div class="col-md-4 table-summary-label">Deposit Refunded</div>
+                    <div class="col-md-8">@header.DepositRefunded.ToString("N2")</div>
+                </div>
+
+                <hr />
+
+                <div class="row">
+                    <div class="col-md-4 table-summary-label">Closing Balance:</div>
+                    <div class="col-md-8 fw-bold">@header.ClosingBalance.ToString("N2")</div>
+                </div>
             </div>
 
-            <div class="row mb-2">
-                <div class="col-md-4 table-summary-label">Less: Transactions</div>
-                <div class="col-md-8">@header.TotalTransactions.ToString("N2")</div>
-            </div>
-
-            <div class="row mb-2">
-                <div class="col-md-4 table-summary-label">Fees</div>
-                <div class="col-md-8">@header.TotalFees.ToString("N2")</div>
-            </div>
-
-            <div class="row mb-2">
-                <div class="col-md-4 table-summary-label">Deposits</div>
-                <div class="col-md-8">@header.TotalDeposits.ToString("N2")</div>
-            </div>
-
-            <div class="row mb-2">
-                <div class="col-md-4 table-summary-label">Refunds</div>
-                <div class="col-md-8">@header.TotalRefunds.ToString("N2")</div>
-            </div>
-
-            <div class="row mb-2">
-                <div class="col-md-4 table-summary-label">Deposit Refunded</div>
-                <div class="col-md-8">@header.DepositRefunded.ToString("N2")</div>
-            </div>
-
-            <hr />
-
-            <div class="row">
-                <div class="col-md-4 table-summary-label">Closing Balance:</div>
-                <div class="col-md-8 fw-bold">@header.ClosingBalance.ToString("N2")</div>
-            </div>
-        </div>
-
-        <div class="table-responsive">
-            <table id="detailsTable" class="table table-bordered table-striped table-sm text-center align-middle">
-                <thead>
-                    <tr class="lcc-table-head fw-bold">
-                        <th rowspan="2">E-ID Device Type</th>
-                        <th rowspan="2">E-ID Device Number</th>
-                        <th rowspan="2">Vehicle Registration Number</th>
-                        <th rowspan="2">Vehicle Class</th>
-                        <th rowspan="2">Balance</th>
-                        <th colspan="2">Lane Transactions</th>
-                        <th colspan="2">Receipts</th>
-                        <th colspan="2">Payments</th>
-                        <th colspan="2">Refund</th>
-                    </tr>
-                    <tr class="table-light">
-                        <th>Count</th>
-                        <th>Value</th>
-                        <th>Top-ups</th>
-                        <th>Deposits</th>
-                        <th>Fees</th>
-                        <th>Refunds</th>
-                        <th>Account</th>
-                        <th>Deposit</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (items.Any())
-                    {
-                        foreach (var row in items)
+            <!-- Main Table -->
+            <div class="table-responsive">
+                <table id="detailsTable" class="table table-bordered table-striped table-sm text-center align-middle">
+                    <thead>
+                        <tr class="lcc-table-head fw-bold">
+                            <th rowspan="2">E-ID Device Type</th>
+                            <th rowspan="2">E-ID Device Number</th>
+                            <th rowspan="2">Vehicle Registration Number</th>
+                            <th rowspan="2">Vehicle Class</th>
+                            <th rowspan="2">Balance</th>
+                            <th colspan="2">Lane Transactions</th>
+                            <th colspan="2">Receipts</th>
+                            <th colspan="2">Payments</th>
+                            <th colspan="2">Refund</th>
+                        </tr>
+                        <tr class="table-light">
+                            <th>Count</th>
+                            <th>Value</th>
+                            <th>Top-ups</th>
+                            <th>Deposits</th>
+                            <th>Fees</th>
+                            <th>Refunds</th>
+                            <th>Account</th>
+                            <th>Deposit</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (items.Any())
+                        {
+                            foreach (var row in items)
+                            {
+                                <tr>
+                                    <td>@row.EID_DeviceType</td>
+                                    <td>@row.EID_DeviceNumber</td>
+                                    <td>@row.VehicleRegNumber</td>
+                                    <td>@row.VehicleClass</td>
+                                    <td class="text-end">@row.Balance.ToString("N2")</td>
+                                    <td class="text-end">@row.LaneTransactionCount</td>
+                                    <td class="text-end">@row.LaneTransactionValue.ToString("N2")</td>
+                                    <td class="text-end">@row.ReceiptTopUp.ToString("N2")</td>
+                                    <td class="text-end">@row.ReceiptDeposit.ToString("N2")</td>
+                                    <td class="text-end">@row.PaymentFees.ToString("N2")</td>
+                                    <td class="text-end">@row.PaymentRefunds.ToString("N2")</td>
+                                    <td class="text-end">@row.RefundAccount.ToString("N2")</td>
+                                    <td class="text-end">@row.RefundDeposit.ToString("N2")</td>
+                                </tr>
+                            }
+                        }
+                        else
                         {
                             <tr>
-                                <td>@row.EID_DeviceType</td>
-                                <td>@row.EID_DeviceNumber</td>
-                                <td>@row.VehicleRegNumber</td>
-                                <td>@row.VehicleClass</td>
-                                <td class="text-end">@row.Balance.ToString("N2")</td>
-                                <td class="text-end">@row.LaneTransactionCount</td>
-                                <td class="text-end">@row.LaneTransactionValue.ToString("N2")</td>
-                                <td class="text-end">@row.ReceiptTopUp.ToString("N2")</td>
-                                <td class="text-end">@row.ReceiptDeposit.ToString("N2")</td>
-                                <td class="text-end">@row.PaymentFees.ToString("N2")</td>
-                                <td class="text-end">@row.PaymentRefunds.ToString("N2")</td>
-                                <td class="text-end">@row.RefundAccount.ToString("N2")</td>
-                                <td class="text-end">@row.RefundDeposit.ToString("N2")</td>
+                                <td colspan="13" class="text-muted text-center">No records found.</td>
                             </tr>
                         }
-                    }
-                    else
-                    {
-                        <tr>
-                            <td colspan="13" class="text-muted text-center">No records found.</td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
+                    </tbody>
+                </table>
+            </div>
 
-        <!-- PAGE FOOTER ON SCREEN -->
-        <div class="mt-4 border-top pt-3">
-            <table class="table table-borderless mb-0 w-100">
-                <tr>
-                    <td><strong>Account Usage Details Report</strong></td>
-                    <td><strong>Date And Time:</strong> @reportGeneratedAt</td>
-                    <td><strong>User:</strong> @currentUserId</td>
+            <!-- On-screen footer -->
+            <div class="mt-4 border-top pt-3">
+                <table class="table table-borderless mb-0 w-100">
+                    <tr>
+                        <td><strong>Account Usage Details Report</strong></td>
+                        <td><strong>Date And Time:</strong> @reportGeneratedAt</td>
+                        <td><strong>User:</strong> @currentUserId</td>
                         <td class="text-end">
                             Page <strong>1</strong> of <strong>1</strong>
                         </td>
-                </tr>
-                <tr>
-                    <td colspan="4">
-                            <small class="text-muted">Reports Module Version Number: <strong>@reportVersion</strong></small>
-                    </td>
-                </tr>
-            </table>
-        </div>
-    }
+                    </tr>
+                    <tr>
+                        <td colspan="4">
+                            <small class="text-muted">
+                                Reports Module Version Number: <strong>@reportVersion</strong>
+                            </small>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        }
+    </div>
 </div>
 
 @section Scripts {
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
-        <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
-        <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-
-        <script>
-            // ============================================================
-            // ACCOUNT SEARCH / SELECT2
-            // Fixes selected-account display issues and keeps hidden input synced
-            // ============================================================
-            $(document).ready(function () {
-                if (!$.fn.select2) {
-                    console.error("Select2 is not loaded. Please include select2.min.js after jQuery.");
-                    return;
-                }
-
-                const $accountSearch = $('#accountSearch');
-                const $accountNumber = $('#AccountNumber');
-                const existingAccount = ($accountNumber.val() || '').trim();
-
-                $accountSearch.select2({
-                    placeholder: 'Search account number / name...',
-                    allowClear: true,
-                    width: '100%',
-                    minimumInputLength: 2,
-                    dropdownParent: $accountSearch.closest('.account-search-wrap'),
-                    ajax: {
-                        url: '@Url.Action("SearchAccounts", "AccountUsageDetails")',
-                        dataType: 'json',
-                        delay: 300,
-                        data: function (params) {
-                            return {
-                                q: params.term || '',
-                                take: 20
-                            };
-                        },
-                        processResults: function (data) {
-                            return {
-                                results: $.map(data || [], function (item) {
-                                    const acc = item.accountNumber || item.AccountNumber || '';
-                                    const desc = item.description || item.Description || '';
-                                    const displayText = desc && desc.trim() !== ''
-                                        ? desc.trim()
-                                        : acc;
-
-                                    return {
-                                        id: acc,
-                                        text: displayText,
-                                        accountNumber: acc,
-                                        description: desc
-                                    };
-                                })
-                            };
-                        },
-                        cache: true
-                    },
-
-                    // Display selected item cleanly to avoid ugly overlap/duplication behavior
-                    templateSelection: function (item) {
-                        return item.text || item.id || '';
-                    },
-
-                    templateResult: function (item) {
-                        if (item.loading) return item.text;
-
-                        const acc = item.accountNumber || item.id || '';
-                        const desc = item.description || item.text || '';
-
-                        if (desc && desc !== acc) {
-                            return $('<span>').text(`${desc} (${acc})`);
-                        }
-
-                        return $('<span>').text(acc);
-                    },
-
-                    escapeMarkup: function (markup) {
-                        return markup;
-                    }
-                });
-
-                $accountSearch.on('select2:select', function (e) {
-                    const selected = e.params.data;
-                    $accountNumber.val(selected.id || '');
-                });
-
-                $accountSearch.on('select2:clear', function () {
-                    $accountNumber.val('');
-                });
-
-                // Preload existing selected account safely
-                // Use the current account number as both value and fallback text
-                if (existingAccount) {
-                    const option = new Option(existingAccount, existingAccount, true, true);
-                    $accountSearch.append(option).trigger('change');
-                    $accountNumber.val(existingAccount);
-                }
-            });
-        </script>
-
-        <script>
-            // ============================================================
-            // EXPORT METADATA
-            // ============================================================
-            function getExportHeaders() {
-                return {
-                    company: "@exportCompany",
-                    bridge: "@exportBridge",
-                    title: "Account Usage Summary",
-                    generatedAt: "@reportGeneratedAt",
-                    userId: "@currentUserId",
-                    version: "@reportVersion",
-                    startDate: "@startDate.ToString("dd/MM/yyyy HH:mm")",
-                    endDate: "@endDate.ToString("dd/MM/yyyy HH:mm")",
-                    accountNumber: "@selectedAccount",
-                    leftLogo: "@leftLogoPath",
-                    rightLogo: "@rightLogoPath"
-                };
-            }
-
-            // ============================================================
-            // IMAGE HELPERS
-            // ============================================================
-            function loadImageAsDataUrl(url) {
-                return new Promise((resolve, reject) => {
-                    if (!url) {
-                        resolve(null);
-                        return;
-                    }
-
-                    const img = new Image();
-                    img.crossOrigin = "anonymous";
-
-                    img.onload = function () {
-                        try {
-                            const canvas = document.createElement("canvas");
-                            canvas.width = img.naturalWidth || img.width;
-                            canvas.height = img.naturalHeight || img.height;
-
-                            const ctx = canvas.getContext("2d");
-                            ctx.drawImage(img, 0, 0);
-
-                            resolve(canvas.toDataURL("image/png"));
-                        } catch (err) {
-                            reject(err);
-                        }
-                    };
-
-                    img.onerror = function () {
-                        reject(new Error("Failed to load image: " + url));
-                    };
-
-                    img.src = url;
-                });
-            }
-
-            async function loadExportLogos(headers) {
-                const [leftLogoData, rightLogoData] = await Promise.all([
-                    loadImageAsDataUrl(headers.leftLogo).catch(() => null),
-                    loadImageAsDataUrl(headers.rightLogo).catch(() => null)
-                ]);
-
-                return {
-                    ...headers,
-                    leftLogoData,
-                    rightLogoData
-                };
-            }
-
-            // ============================================================
-            // PDF LAYOUT HELPERS
-            // ============================================================
-            function drawPdfHeader(doc, pageWidth, margin, headers) {
-                const topY = 18;
-                const logoWidth = 60;
-                const logoHeight = 45;
-
-                if (headers.leftLogoData) {
-                    doc.addImage(headers.leftLogoData, "PNG", margin, topY, logoWidth, logoHeight);
-                }
-
-                if (headers.rightLogoData) {
-                    doc.addImage(
-                        headers.rightLogoData,
-                        "PNG",
-                        pageWidth - margin - logoWidth,
-                        topY,
-                        logoWidth,
-                        logoHeight
-                    );
-                }
-
-                doc.setFont("helvetica", "bold");
-                doc.setFontSize(14);
-                doc.text(headers.company, pageWidth / 2, 28, { align: "center" });
-
-                doc.setFontSize(12);
-                doc.text(headers.bridge, pageWidth / 2, 44, { align: "center" });
-
-                doc.setTextColor(31, 78, 121);
-                doc.setFontSize(16);
-                doc.text(headers.title, pageWidth / 2, 66, { align: "center" });
-
-                doc.setTextColor(0, 0, 0);
-            }
-
-            function drawPdfFilters(doc, margin, startY, headers) {
-                let y = startY;
-
-                doc.setFont("helvetica", "bold");
-                doc.setFontSize(10);
-                doc.text("FILTERS USED:", margin, y);
-
-                y += 14;
-                doc.setFont("helvetica", "normal");
-
-                doc.text(`Start Date: ${headers.startDate}`, margin, y);
-                y += 12;
-
-                doc.text(`End Date: ${headers.endDate}`, margin, y);
-                y += 12;
-
-                doc.text(`Account Number: ${headers.accountNumber}`, margin, y);
-                y += 18;
-
-                return y;
-            }
-
-            function drawPdfFooter(doc, pageWidth, pageHeight, margin, headers, pageNumber, totalPages) {
-                // Leave two rows in the footer and keep enough bottom margin
-                const row1Y = pageHeight - 28;
-                const row2Y = pageHeight - 14;
-
-                // Row 1
-                doc.setFont("helvetica", "bold");
-                doc.setFontSize(9);
-                doc.text(`${headers.title} (Report name)`, margin, row1Y);
-
-                doc.setFont("helvetica", "normal");
-                doc.text(`Date and Time: ${headers.generatedAt}`, pageWidth / 2, row1Y, { align: "center" });
-                doc.text(`User ID: ${headers.userId}`, pageWidth - 170, row1Y);
-                doc.text(`Page ${pageNumber} of ${totalPages}`, pageWidth - margin, row1Y, { align: "right" });
-
-                // Row 2
-                doc.setFont("helvetica", "normal");
-                doc.setFontSize(8);
-                doc.text(`Reports Module Version Number: ${headers.version}`, margin, row2Y);
-            }
-
-            function addPdfFooters(doc, headers) {
-                const pageWidth = doc.internal.pageSize.getWidth();
-                const pageHeight = doc.internal.pageSize.getHeight();
-                const margin = 40;
-                const totalPages = doc.internal.getNumberOfPages();
-
-                for (let i = 1; i <= totalPages; i++) {
-                    doc.setPage(i);
-                    drawPdfFooter(doc, pageWidth, pageHeight, margin, headers, i, totalPages);
-                }
-            }
-
-            function extractTableData(table) {
-                const rows = [];
-                const trs = table.querySelectorAll("tr");
-
-                trs.forEach(tr => {
-                    const row = [];
-                    tr.querySelectorAll("th, td").forEach(cell => {
-                        row.push((cell.innerText || cell.textContent || "").trim());
-                    });
-                    rows.push(row);
-                });
-
-                return rows;
-            }
-
-            // ============================================================
-            // PDF EXPORT
-            // ============================================================
-            document.getElementById("btnDownloadPdf")?.addEventListener("click", async function () {
-                const table = document.getElementById("detailsTable");
-                if (!table) return;
-
-                const { jsPDF } = window.jspdf;
-                const doc = new jsPDF({
-                    orientation: "landscape",
-                    unit: "pt",
-                    format: "a4"
-                });
-
-                const rawHeaders = getExportHeaders();
-                const headers = await loadExportLogos(rawHeaders);
-
-                const pageWidth = doc.internal.pageSize.getWidth();
-                const margin = 40;
-
-                const rows = extractTableData(table);
-                if (!rows.length) return;
-
-                const headRows = rows.slice(0, 2);
-                const bodyRows = rows.slice(2);
-
-                drawPdfHeader(doc, pageWidth, margin, headers);
-                const tableStartY = drawPdfFilters(doc, margin, 90, headers);
-
-                doc.autoTable({
-                    head: headRows,
-                    body: bodyRows,
-                    startY: tableStartY,
-                    theme: "grid",
-                    styles: {
-                        fontSize: 8,
-                        cellPadding: 4,
-                        overflow: "linebreak",
-                        halign: "center",
-                        valign: "middle"
-                    },
-                    headStyles: {
-                        fillColor: [41, 128, 185],
-                        textColor: 255,
-                        fontStyle: "bold"
-                    },
-                    bodyStyles: {
-                        textColor: 20
-                    },
-
-                    // Important: reserve bottom space so footer does not overlap table
-                    margin: {
-                        top: 40,
-                        right: margin,
-                        bottom: 46,
-                        left: margin
-                    },
-
-                    didDrawPage: function (data) {
-                        if (data.pageNumber > 1) {
-                            drawPdfHeader(doc, pageWidth, margin, headers);
-                        }
-                    }
-                });
-
-                // Add footer only after all pages are known
-                addPdfFooters(doc, headers);
-
-                doc.save("AccountUsageSummary.pdf");
-            });
-
-            // ============================================================
-            // EXCEL EXPORT HELPERS
-            // ============================================================
-            function buildExcelSheet(table, headers) {
-                const wb = XLSX.utils.book_new();
-
-                const aoa = [
-                    [headers.company],
-                    [headers.bridge],
-                    [headers.title],
-                    [],
-                    ["FILTERS USED:"],
-                    [`Start Date: ${headers.startDate}`],
-                    [`End Date: ${headers.endDate}`],
-                    [`Account Number: ${headers.accountNumber}`],
-                    []
-                ];
-
-                const ws = XLSX.utils.aoa_to_sheet(aoa);
-
-                const tableSheet = XLSX.utils.table_to_sheet(table, { raw: true });
-                const tableRange = XLSX.utils.decode_range(tableSheet["!ref"]);
-                const startRow = aoa.length;
-
-                for (let row = tableRange.s.r; row <= tableRange.e.r; row++) {
-                    for (let col = tableRange.s.c; col <= tableRange.e.c; col++) {
-                        const sourceCell = XLSX.utils.encode_cell({ r: row, c: col });
-                        const targetCell = XLSX.utils.encode_cell({
-                            r: startRow + (row - tableRange.s.r),
-                            c: col
-                        });
-
-                        if (tableSheet[sourceCell]) {
-                            ws[targetCell] = tableSheet[sourceCell];
-                        }
-                    }
-                }
-
-                ws["!cols"] = [
-                    { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 16 },
-                    { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 },
-                    { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 },
-                    { wch: 16 }, { wch: 16 }
-                ];
-
-                ws["!margins"] = {
-                    left: 0.3,
-                    right: 0.3,
-                    top: 0.6,
-                    bottom: 0.6,
-                    header: 0.3,
-                    footer: 0.4
-                };
-
-                ws["!pageSetup"] = {
-                    orientation: "landscape",
-                    paperSize: 9,
-                    fitToWidth: 1,
-                    fitToHeight: 0
-                };
-
-                // Real print header
-                ws["!printHeader"] =
-                    `&C&16&"Arial,Bold"${headers.company}\n` +
-                    `&C&12&"Arial,Bold"${headers.bridge}\n` +
-                    `&C&14&"Arial,Bold"${headers.title}`;
-
-                // Real print footer
-                // Excel handles page numbering with &P and &N
-                ws["!printFooter"] =
-                    `&L${headers.title} (Report name)` +
-                    `&CDate and Time: ${headers.generatedAt}` +
-                    `&RUser ID: ${headers.userId}    Page &P of &N\n` +
-                    `&LReports Module Version Number: ${headers.version}`;
-
-                wb.Workbook = wb.Workbook || {};
-                wb.Workbook.Views = [{ RTL: false }];
-
-                XLSX.utils.book_append_sheet(wb, ws, "Account Usage Summary");
-                return wb;
-            }
-
-            // ============================================================
-            // EXCEL EXPORT
-            // ============================================================
-            document.getElementById("btnDownloadExcel")?.addEventListener("click", function () {
-                const table = document.getElementById("detailsTable");
-                if (!table) return;
-
-                const headers = getExportHeaders();
-                const wb = buildExcelSheet(table, headers);
-
-                XLSX.writeFile(wb, "AccountUsageSummary.xlsx");
-            });
-        </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+    <script>
+        // ============================================================
+        // SELECT2 ACCOUNT SEARCH
+        // Keeps visible search and hidden AccountNumber input in sync
+        // ============================================================
+        $(document).ready(function () {
+        if (!$.fn.select2) {
+        console.error("Select2 is not loaded. Make sure jQuery loads before Select2.");
+        return;
+        }
+
+        const $accountSearch = $("#accountSearch");
+        const $accountNumber = $("#AccountNumber");
+        const existingAccount = ($accountNumber.val() || "").trim();
+
+        $accountSearch.select2({
+        placeholder: "Search account number / name...",
+        allowClear: true,
+        width: "100%",
+        minimumInputLength: 2,
+        dropdownParent: $accountSearch.closest(".account-search-wrap"),
+        ajax: {
+        url: '@Url.Action("SearchAccounts", "AccountUsageDetails")',
+        dataType: "json",
+        delay: 300,
+        data: function (params) {
+        return {
+        q: params.term || "",
+        take: 20
+        };
+        },
+        processResults: function (data) {
+        return {
+        results: $.map(data || [], function (item) {
+        const acc = item.accountNumber || item.AccountNumber || "";
+        const desc = item.description || item.Description || "";
+
+        return {
+        id: acc,
+        text: acc, // keep selected value clean and consistent
+        accountNumber: acc,
+        description: desc
+        };
+        })
+        };
+        },
+        cache: true
+        },
+        templateSelection: function (item) {
+        return item.accountNumber || item.id || item.text || "";
+        },
+        templateResult: function (item) {
+        if (item.loading) return item.text;
+
+        const acc = item.accountNumber || item.id || "";
+        const desc = item.description || "";
+
+        if (desc && desc.trim() !== "" && desc !== acc) {
+        return $("<span>").text(`${acc} - ${desc}`);
+        }
+
+        return $("<span>").text(acc);
+        },
+        escapeMarkup: function (markup) {
+        return markup;
+        }
+        });
+
+        $accountSearch.on("select2:select", function (e) {
+        const selected = e.params.data;
+        $accountNumber.val(selected.id || "");
+        });
+
+        $accountSearch.on("select2:clear", function () {
+        $accountNumber.val("");
+        });
+
+        // Preload existing selected account
+        if (existingAccount) {
+        const option = new Option(existingAccount, existingAccount, true, true);
+        $accountSearch.append(option).trigger("change");
+        $accountNumber.val(existingAccount);
+        }
+        });
+    </script>
+
+    <script>
+        // ============================================================
+        // EXPORT METADATA
+        // Shared by PDF and Excel exports
+        // ============================================================
+        function getExportHeaders() {
+        return {
+        company: "@exportCompany",
+        bridge: "@exportBridge",
+        title: "@exportTitle",
+        generatedAt: "@reportGeneratedAt",
+        userId: "@currentUserId",
+        version: "@reportVersion",
+        startDate: "@startDate.ToString("dd/MM/yyyy HH:mm")",
+        endDate: "@endDate.ToString("dd/MM/yyyy HH:mm")",
+        accountNumber: "@selectedAccount",
+        leftLogo: "@leftLogoPath",
+        rightLogo: "@rightLogoPath"
+        };
+        }
+
+        // ============================================================
+        // IMAGE HELPERS
+        // ============================================================
+        function loadImageAsDataUrl(url) {
+        return new Promise((resolve, reject) => {
+        if (!url) {
+        resolve(null);
+        return;
+        }
+
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+
+        img.onload = function () {
+        try {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.naturalWidth || img.width;
+        canvas.height = img.naturalHeight || img.height;
+
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0);
+
+        resolve(canvas.toDataURL("image/png"));
+        } catch (err) {
+        reject(err);
+        }
+        };
+
+        img.onerror = function () {
+        reject(new Error("Failed to load image: " + url));
+        };
+
+        img.src = url;
+        });
+        }
+
+        async function loadExportLogos(headers) {
+        const [leftLogoData, rightLogoData] = await Promise.all([
+        loadImageAsDataUrl(headers.leftLogo).catch(() => null),
+        loadImageAsDataUrl(headers.rightLogo).catch(() => null)
+        ]);
+
+        return {
+        ...headers,
+        leftLogoData,
+        rightLogoData
+        };
+        }
+
+        // ============================================================
+        // PDF HELPERS
+        // ============================================================
+        function drawPdfHeader(doc, pageWidth, margin, headers) {
+        const topY = 18;
+        const logoWidth = 60;
+        const logoHeight = 45;
+
+        if (headers.leftLogoData) {
+        doc.addImage(headers.leftLogoData, "PNG", margin, topY, logoWidth, logoHeight);
+        }
+
+        if (headers.rightLogoData) {
+        doc.addImage(
+        headers.rightLogoData,
+        "PNG",
+        pageWidth - margin - logoWidth,
+        topY,
+        logoWidth,
+        logoHeight
+        );
+        }
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(14);
+        doc.text(headers.company, pageWidth / 2, 28, { align: "center" });
+
+        doc.setFontSize(12);
+        doc.text(headers.bridge, pageWidth / 2, 44, { align: "center" });
+
+        doc.setTextColor(31, 78, 121);
+        doc.setFontSize(16);
+        doc.text(headers.title, pageWidth / 2, 66, { align: "center" });
+
+        doc.setTextColor(0, 0, 0);
+        }
+
+        function drawPdfFilters(doc, margin, startY, headers) {
+        let y = startY;
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10);
+        doc.text("FILTERS USED:", margin, y);
+
+        y += 14;
+        doc.setFont("helvetica", "normal");
+
+        doc.text(`Start Date: ${headers.startDate}`, margin, y);
+        y += 12;
+
+        doc.text(`End Date: ${headers.endDate}`, margin, y);
+        y += 12;
+
+        doc.text(`Account Number: ${headers.accountNumber}`, margin, y);
+        y += 18;
+
+        return y;
+        }
+
+        function drawPdfFooter(doc, pageWidth, pageHeight, margin, headers, pageNumber, totalPages) {
+        const row1Y = pageHeight - 28;
+        const row2Y = pageHeight - 14;
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+        doc.text(`${headers.title} (Report name)`, margin, row1Y);
+
+        doc.setFont("helvetica", "normal");
+        doc.text(`Date and Time: ${headers.generatedAt}`, pageWidth / 2, row1Y, { align: "center" });
+        doc.text(`User ID: ${headers.userId}`, pageWidth - 170, row1Y);
+        doc.text(`Page ${pageNumber} of ${totalPages}`, pageWidth - margin, row1Y, { align: "right" });
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.text(`Reports Module Version Number: ${headers.version}`, margin, row2Y);
+        }
+
+        function addPdfFooters(doc, headers) {
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const margin = 40;
+        const totalPages = doc.internal.getNumberOfPages();
+
+        for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        drawPdfFooter(doc, pageWidth, pageHeight, margin, headers, i, totalPages);
+        }
+        }
+
+        function extractTableData(table) {
+        const rows = [];
+        const trs = table.querySelectorAll("tr");
+
+        trs.forEach(tr => {
+        const row = [];
+        tr.querySelectorAll("th, td").forEach(cell => {
+        row.push((cell.innerText || cell.textContent || "").trim());
+        });
+        rows.push(row);
+        });
+
+        return rows;
+        }
+
+        // ============================================================
+        // PDF EXPORT
+        // ============================================================
+        document.getElementById("btnDownloadPdf")?.addEventListener("click", async function () {
+        const table = document.getElementById("detailsTable");
+        if (!table) return;
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({
+        orientation: "landscape",
+        unit: "pt",
+        format: "a4"
+        });
+
+        const rawHeaders = getExportHeaders();
+        const headers = await loadExportLogos(rawHeaders);
+
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const margin = 40;
+
+        const rows = extractTableData(table);
+        if (!rows.length) return;
+
+        const headRows = rows.slice(0, 2);
+        const bodyRows = rows.slice(2);
+
+        drawPdfHeader(doc, pageWidth, margin, headers);
+        const tableStartY = drawPdfFilters(doc, margin, 90, headers);
+
+        doc.autoTable({
+        head: headRows,
+        body: bodyRows,
+        startY: tableStartY,
+        theme: "grid",
+        styles: {
+        fontSize: 8,
+        cellPadding: 4,
+        overflow: "linebreak",
+        halign: "center",
+        valign: "middle"
+        },
+        headStyles: {
+        fillColor: [41, 128, 185],
+        textColor: 255,
+        fontStyle: "bold"
+        },
+        bodyStyles: {
+        textColor: 20
+        },
+        margin: {
+        top: 40,
+        right: margin,
+        bottom: 46,
+        left: margin
+        },
+        didDrawPage: function (data) {
+        if (data.pageNumber > 1) {
+        drawPdfHeader(doc, pageWidth, margin, headers);
+        }
+        }
+        });
+
+        addPdfFooters(doc, headers);
+        doc.save("AccountUsageDetails.pdf");
+        });
+
+        // ============================================================
+        // EXCEL EXPORT HELPERS
+        // ============================================================
+        function buildExcelSheet(table, headers) {
+        const wb = XLSX.utils.book_new();
+
+        const aoa = [
+        [headers.company],
+        [headers.bridge],
+        [headers.title],
+        [],
+        ["FILTERS USED:"],
+        [`Start Date: ${headers.startDate}`],
+        [`End Date: ${headers.endDate}`],
+        [`Account Number: ${headers.accountNumber}`],
+        []
+        ];
+
+        const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+        const tableSheet = XLSX.utils.table_to_sheet(table, { raw: true });
+        const tableRange = XLSX.utils.decode_range(tableSheet["!ref"]);
+        const startRow = aoa.length;
+
+        for (let row = tableRange.s.r; row <= tableRange.e.r; row++) {
+        for (let col = tableRange.s.c; col <= tableRange.e.c; col++) {
+        const sourceCell = XLSX.utils.encode_cell({ r: row, c: col });
+        const targetCell = XLSX.utils.encode_cell({
+        r: startRow + (row - tableRange.s.r),
+        c: col
+        });
+
+        if (tableSheet[sourceCell]) {
+        ws[targetCell] = tableSheet[sourceCell];
+        }
+        }
+        }
+
+        ws["!cols"] = [
+        { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 16 },
+        { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 },
+        { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 },
+        { wch: 16 }
+        ];
+
+        ws["!margins"] = {
+        left: 0.3,
+        right: 0.3,
+        top: 0.6,
+        bottom: 0.6,
+        header: 0.3,
+        footer: 0.4
+        };
+
+        ws["!pageSetup"] = {
+        orientation: "landscape",
+        paperSize: 9,
+        fitToWidth: 1,
+        fitToHeight: 0
+        };
+
+        ws["!printHeader"] =
+        `&C&16&"Arial,Bold"${headers.company}\n` +
+        `&C&12&"Arial,Bold"${headers.bridge}\n` +
+        `&C&14&"Arial,Bold"${headers.title}`;
+
+        ws["!printFooter"] =
+        `&L${headers.title} (Report name)` +
+        `&CDate and Time: ${headers.generatedAt}` +
+        `&RUser ID: ${headers.userId}    Page &P of &N\n` +
+        `&LReports Module Version Number: ${headers.version}`;
+
+        wb.Workbook = wb.Workbook || {};
+        wb.Workbook.Views = [{ RTL: false }];
+
+        XLSX.utils.book_append_sheet(wb, ws, "Account Usage Details");
+        return wb;
+        }
+
+        // ============================================================
+        // EXCEL EXPORT
+        // ============================================================
+        document.getElementById("btnDownloadExcel")?.addEventListener("click", function () {
+        const table = document.getElementById("detailsTable");
+        if (!table) return;
+
+        const headers = getExportHeaders();
+        const wb = buildExcelSheet(table, headers);
+
+        XLSX.writeFile(wb, "AccountUsageDetails.xlsx");
+        });
+    </script>
 }

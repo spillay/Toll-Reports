@@ -20,31 +20,55 @@ namespace MIS.Web.Services
             _logger = logger;
         }
 
-        public async Task<EndOfDayReportViewModel?> GetEndOfDayAsync(DateTime startDate, DateTime endDate)
+        public async Task<EndOfDayReportViewModel?> GetEndOfDayAsync(DateTime startDate, DateTime endDate, int? shiftId = null)
         {
             try
             {
                 string baseUrl = _config["BaseApiUrl:Link"]?.TrimEnd('/')
-                                 ?? throw new Exception("BaseApiUrl:Link is missing in appsettings.json");
+                    ?? throw new Exception("BaseApiUrl:Link is missing in appsettings.json");
 
-                // string url = $"{baseUrl}/api/EndOfDayReport?startDate={startDate:yyyy-MM-dd}&endDate={endDate:yyyy-MM-dd}";
-                string url = $"{baseUrl}/api/EndOfDayReport?startDate={startDate:yyyy-MM-ddTHH:mm:ss}&endDate={endDate:yyyy-MM-ddTHH:mm:ss}";
+                string endpoint = _config["ApiSettings:EndOfDayEndpoint"]?.TrimStart('/')
+                    ?? throw new Exception("ApiSettings:EndOfDayEndpoint is missing in appsettings.json");
 
+                var query = $"startDate={Uri.EscapeDataString(startDate.ToString("dd/MM/yyyy"))}" +
+                            $"&endDate={Uri.EscapeDataString(endDate.ToString("dd/MM/yyyy"))}";
 
-                _logger.LogInformation("Fetching End Of Day report from: {URL}", url);
+                if (shiftId.HasValue)
+                {
+                    query += $"&shiftId={shiftId.Value}";
+                }
+
+                string url = $"{baseUrl}/{endpoint}?{query}";
+
+                _logger.LogInformation(
+                    "Fetching End Of Day report from: {URL}. StartDate: {StartDate}, EndDate: {EndDate}, ShiftId: {ShiftId}",
+                    url,
+                    startDate,
+                    endDate,
+                    shiftId);
 
                 var result = await _http.GetFromJsonAsync<EndOfDayReportViewModel>(url);
 
                 if (result == null)
                 {
-                    _logger.LogWarning("End Of Day API returned NULL data.");
+                    _logger.LogWarning(
+                        "End Of Day API returned null data. StartDate: {StartDate}, EndDate: {EndDate}, ShiftId: {ShiftId}",
+                        startDate,
+                        endDate,
+                        shiftId);
                 }
 
                 return result;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to fetch End Of Day report.");
+                _logger.LogError(
+                    ex,
+                    "Failed to fetch End Of Day report. StartDate: {StartDate}, EndDate: {EndDate}, ShiftId: {ShiftId}",
+                    startDate,
+                    endDate,
+                    shiftId);
+
                 return null;
             }
         }

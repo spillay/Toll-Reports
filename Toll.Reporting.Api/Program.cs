@@ -70,7 +70,9 @@ builder.Services.AddScoped<IAccountHistoryRepository, AccountHistoryRepository>(
 builder.Services.AddScoped<IAccountUsageSummaryRepository, AccountUsageSummaryRepository>();
 builder.Services.AddScoped<IAccountUsageDetailsRepository, AccountUsageDetailsRepository>();
 builder.Services.AddScoped<IEndOfDayReportRepository, EndOfDayReportRepository>();
+builder.Services.AddScoped<IAvcAccuracyRepository, AvcAccuracyRepository>();
 builder.Services.AddScoped<IAuthRepository, AuthRepository>();
+
 
 builder.Services.AddHttpClient();
 

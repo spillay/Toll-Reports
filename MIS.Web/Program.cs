@@ -33,6 +33,7 @@ builder.Services.AddHttpClient<IAccountHistoryService, AccountHistoryService>();
 builder.Services.AddScoped<IAccountUsageSummaryService, AccountUsageSummaryService>();
 builder.Services.AddHttpClient<IAccountUsageDetailsService, AccountUsageDetailsService>();
 builder.Services.AddHttpClient<IEndOfDayReportService, EndOfDayReportService>();
+builder.Services.AddHttpClient<IAvcAccuracyReportService, AvcAccuracyReportService>();
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {

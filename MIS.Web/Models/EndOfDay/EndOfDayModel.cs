@@ -15,24 +15,26 @@ namespace MIS.Web.Pages.Reports
         }
 
         [BindProperty(SupportsGet = true)]
-        public DateTime StartDate { get; set; } = DateTime.Today;
-
-        [BindProperty(SupportsGet = true)]
-        public DateTime EndDate { get; set; } = DateTime.Today;
+        public DateTime? ReportDate { get; set; }
 
         [BindProperty(SupportsGet = true)]
         public int? ShiftId { get; set; }
 
+        public DateTime StartDate { get; set; }
+        public DateTime EndDate { get; set; }
+
         public EndOfDayReportViewModel Report { get; set; } = new();
 
-        public IActionResult OnGet()
+        public async Task<IActionResult> OnGetAsync()
         {
-            return Page();
-        }
+            var selectedDate = ReportDate?.Date ?? DateTime.Today;
 
-        public async Task<IActionResult> OnPostAsync()
-        {
-            Report = await _service.GetEndOfDayAsync(StartDate, EndDate, ShiftId) ?? new EndOfDayReportViewModel();
+            StartDate = selectedDate.AddHours(5).AddMinutes(30);
+            EndDate = selectedDate.AddDays(1).AddHours(5).AddMinutes(29);
+
+            Report = await _service.GetEndOfDayAsync(StartDate, EndDate, ShiftId)
+                     ?? new EndOfDayReportViewModel();
+
             return Page();
         }
     }

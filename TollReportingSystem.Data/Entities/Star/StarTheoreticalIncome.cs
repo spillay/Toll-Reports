@@ -14,10 +14,23 @@ namespace TollReportingSystem.Data.Entities.Star
 
         public string Metric { get; set; } = string.Empty;
 
+        [Column("Class_M")]
         public decimal? Class_M { get; set; }
-        public decimal? Class_I { get; set; }
-        public decimal? Class_II { get; set; }
-        public decimal? Class_III { get; set; }
+
+        [Column("Class_1")]
+        public decimal? Class_1 { get; set; }
+
+        [Column("Class_2")]
+        public decimal? Class_2 { get; set; }
+
+        [Column("Class_3")]
+        public decimal? Class_3 { get; set; }
+
+        [Column("Class_4")]
+        public decimal? Class_4 { get; set; }
+
+        [Column("Class_D")]
+        public decimal? Class_D { get; set; }
 
         public decimal? Total { get; set; }
 

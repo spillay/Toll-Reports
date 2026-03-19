@@ -44,10 +44,11 @@
     var nominal = GetRow("nominal tariff");
     var trafficNominal = GetRow("traffic x nominal tariff");
     var penalty = GetRow("cash penalty");
+    var totalTheoreticalRow = GetRow("total theoretical income");
 
     decimal totalTheo = totals.TotalTheoreticalIncome > 0
         ? totals.TotalTheoreticalIncome
-        : ((trafficNominal?.Total ?? 0) + (penalty?.Total ?? 0));
+        : (totalTheoreticalRow?.Total ?? ((trafficNominal?.Total ?? 0) + (penalty?.Total ?? 0)));
 
     decimal exemptsTotal = totals.TotalExemptAmount > 0
         ? totals.TotalExemptAmount
@@ -66,9 +67,17 @@
         ? totals.TotalDiscountedIncome
         : (totalTheo - providedTotal);
 
-    decimal totalIncomeA = totals.TotalIncomeA;
-    decimal totalAccountedB = totals.TotalAccountedB;
-    decimal unreconciled = totals.UnreconciledDiscrepancy;
+    decimal totalIncomeA = totals.TotalIncomeA > 0
+        ? totals.TotalIncomeA
+        : (totalDiscountedIncome + other.TotalOtherIncome);
+
+    decimal totalAccountedB = totals.TotalAccountedB > 0
+        ? totals.TotalAccountedB
+        : recon.TotalAccounted;
+
+    decimal unreconciled = totals.UnreconciledDiscrepancy != 0
+        ? totals.UnreconciledDiscrepancy
+        : (totalIncomeA - totalAccountedB);
 
     string F(decimal value) => value.ToString("N2");
 }
@@ -98,7 +107,7 @@
             <input type="date"
                    name="reportDate"
                    class="form-control"
-                   value="@Model.StartDate.ToString("yyyy-MM-dd")"
+                   value="@Model.ReportDate.ToString("yyyy-MM-dd")"
                    required />
         </div>
 
@@ -415,11 +424,11 @@
     </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
-<script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
-
 @section Scripts {
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+
     <script>
         document.addEventListener("DOMContentLoaded", async () => {
         const { jsPDF } = window.jspdf;
@@ -533,11 +542,6 @@
         }
         }
 
-        function getTableRows(selector) {
-        return Array.from(document.querySelectorAll(`${selector} tbody tr`))
-        .map(row => Array.from(row.children).map(cell => cell.innerText.trim()));
-        }
-
         async function exportPdf() {
         const doc = new jsPDF("p", "pt", "a4");
         const margin = 40;
@@ -551,7 +555,6 @@
         y = drawPdfMetadata(doc, margin, y);
 
         y = drawSectionTitle(doc, "THEORETICAL INCOME", margin, y);
-
         doc.autoTable({
         startY: y,
         html: "#eodExportTableTheo",
@@ -563,7 +566,6 @@
 
         y = doc.lastAutoTable.finalY + 25;
         y = drawSectionTitle(doc, "OTHER INCOME", margin, y);
-
         doc.autoTable({
         startY: y,
         html: "#eodExportTableOther",
@@ -575,7 +577,6 @@
 
         y = doc.lastAutoTable.finalY + 25;
         y = drawSectionTitle(doc, "ACCOUNTED FOR AS FOLLOWS", margin, y);
-
         doc.autoTable({
         startY: y,
         html: "#eodExportTableAccounted",
@@ -587,6 +588,11 @@
 
         addPdfFooter(doc, margin);
         doc.save("EndOfDayReport.pdf");
+        }
+
+        function getTableRows(selector) {
+        return Array.from(document.querySelectorAll(`${selector} tbody tr`))
+        .map(row => Array.from(row.children).map(cell => cell.innerText.trim()));
         }
 
         function exportExcel() {

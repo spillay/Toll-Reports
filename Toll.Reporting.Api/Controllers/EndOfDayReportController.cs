@@ -66,7 +66,9 @@ namespace Toll.Reporting.Api.Controllers
 
                 return StatusCode(StatusCodes.Status500InternalServerError, new
                 {
-                    message = "Internal server error occurred while generating the End Of Day report."
+                    message = ex.Message,
+                    detail = ex.InnerException?.Message,
+                    type = ex.GetType().FullName
                 });
             }
         }

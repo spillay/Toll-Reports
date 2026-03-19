@@ -7,18 +7,26 @@
     var reportGenerated = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
     var items = Model.items ?? new List<MIS.Web.Models.Transaction.TransactionModel>();
 
-    var safePage = Model.page <= 0 ? 1 : Model.page;
-    var safeTotalPages = Model.totalPages <= 0 ? 1 : Model.totalPages;
+    // Always keep paging safe, even when there is no data
+    var currentPage = Model.page <= 0 ? 1 : Model.page;
+    var totalPages = Model.totalPages <= 0 ? 1 : Model.totalPages;
 
     string FilterText(List<string> selected, List<string> allOptions)
     {
         selected ??= new List<string>();
         allOptions ??= new List<string>();
 
-        var sel = selected.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim())
-                          .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        var all = allOptions.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim())
-                            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var sel = selected
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var all = allOptions
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
         if (!sel.Any()) return "All";
         if (all.Any() && sel.Count >= all.Count) return "All";
@@ -30,6 +38,10 @@
     var operatorText = FilterText(Model.SelectedTollOperators, Model.TollOperators);
     var laneText = FilterText(Model.SelectedLanes, Model.Lanes);
     var paymentText = FilterText(Model.SelectedPaymentMethods, Model.PaymentMethods);
+
+    var filters = Model;
+    int startPage = Math.Max(1, currentPage - 1);
+    int endPage = Math.Min(totalPages, currentPage + 1);
 }
 
 <div class="card shadow-lg mb-4">
@@ -117,59 +129,52 @@
                 </tbody>
             </table>
         </div>
-        <!-- ====== SUMMARY (UI - ALWAYS AT BOTTOM) ====== -->
-            @if (Model.totalPages <= 1 || Model.page == Model.totalPages)
-            {
-                <!-- ====== SUMMARY (SHOW ONLY ON LAST PAGE) ====== -->
-                <div class="mt-4 border-top pt-3">
-                    <h5 class="fw-bold mb-3">Summary</h5>
 
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <div class="border rounded p-3 bg-light">
-                                <h6 class="fw-bold">Filters Used</h6>
-                                <div class="small">
-                                    <div><strong>Start Date:</strong> @Model.StartDate.ToString("dd/MM/yyyy HH:mm")</div>
-                                    <div><strong>End Date:</strong> @Model.EndDate.ToString("dd/MM/yyyy HH:mm")</div>
-                                    <div><strong>Shift:</strong> @shiftText</div>
-                                    <div><strong>Toll Operator:</strong> @operatorText</div>
-                                    <div><strong>Lane:</strong> @laneText</div>
-                                    <div><strong>Payment Method:</strong> @paymentText</div>
-                                </div>
+        <!-- SUMMARY: show on last page, and also works correctly when no data -->
+        @if (totalPages <= 1 || currentPage == totalPages)
+        {
+            <div class="mt-4 border-top pt-3">
+                <h5 class="fw-bold mb-3">Summary</h5>
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="border rounded p-3 bg-light">
+                            <h6 class="fw-bold">Filters Used</h6>
+                            <div class="small">
+                                <div><strong>Start Date:</strong> @Model.StartDate.ToString("dd/MM/yyyy HH:mm")</div>
+                                <div><strong>End Date:</strong> @Model.EndDate.ToString("dd/MM/yyyy HH:mm")</div>
+                                <div><strong>Shift:</strong> @shiftText</div>
+                                <div><strong>Toll Operator:</strong> @operatorText</div>
+                                <div><strong>Lane:</strong> @laneText</div>
+                                <div><strong>Payment Method:</strong> @paymentText</div>
                             </div>
                         </div>
+                    </div>
 
-                        <div class="col-md-6">
-                            <div class="border rounded p-3 bg-light">
-                                <h6 class="fw-bold">Totals</h6>
-                                <div class="small">
-                                    <div><strong>Total Transaction Count:</strong> @Model.totalCount</div>
-                                    <div><strong>Total Transaction Value:</strong> @Model.TotalTariff.ToString("N2")</div>
-                                </div>
+                    <div class="col-md-6">
+                        <div class="border rounded p-3 bg-light">
+                            <h6 class="fw-bold">Totals</h6>
+                            <div class="small">
+                                <div><strong>Total Transaction Count:</strong> @Model.totalCount</div>
+                                <div><strong>Total Transaction Value:</strong> @Model.TotalTariff.ToString("N2")</div>
                             </div>
                         </div>
                     </div>
                 </div>
-            }
-        @if (Model.totalPages > 1)
-        {
-            var filters = Model;
-            int startPage = Math.Max(1, Model.page - 1);
-            int endPage   = Math.Min(Model.totalPages, Model.page + 1);
+            </div>
+        }
 
-            <div class="mt-4 d-flex flex-column flex-md-row justify-content-between align-items-center border-top pt-3">
+        <!-- PAGINATION-->
+        <div class="mt-4 d-flex flex-column flex-md-row justify-content-between align-items-center border-top pt-3">
 
-                @* <div class="mb-2 mb-md-0">
-                    <h6>Total Transactions: <strong>@Model.totalCount</strong></h6>
-                    <h6>Total Value: <strong>@Model.TotalTariff.ToString("N2")</strong></h6>
-                </div> *@
-
+            @if (totalPages > 1)
+            {
                 <nav>
-                    <ul class="pagination">
+                    <ul class="pagination mb-0">
 
-                        <li class="page-item @(Model.page <= 1 ? "disabled" : "")">
-                            <a class="page-link" href="@Url.Action("Transaction","Transaction", new {
-                                page = Model.page - 1,
+                        <li class="page-item @(currentPage <= 1 ? "disabled" : "")">
+                            <a class="page-link" href="@Url.Action("Transaction", "Transaction", new {
+                                page = currentPage - 1,
                                 pageSize = Model.pageSize,
                                 SelectedShifts = filters.SelectedShifts,
                                 SelectedTollOperators = filters.SelectedTollOperators,
@@ -182,8 +187,8 @@
 
                         @for (int i = startPage; i <= endPage; i++)
                         {
-                            <li class="page-item @(i == Model.page ? "active" : "")">
-                                <a class="page-link" href="@Url.Action("Transaction","Transaction", new {
+                            <li class="page-item @(i == currentPage ? "active" : "")">
+                                <a class="page-link" href="@Url.Action("Transaction", "Transaction", new {
                                     page = i,
                                     pageSize = Model.pageSize,
                                     SelectedShifts = filters.SelectedShifts,
@@ -196,9 +201,9 @@
                             </li>
                         }
 
-                        <li class="page-item @(Model.page >= Model.totalPages ? "disabled" : "")">
-                            <a class="page-link" href="@Url.Action("Transaction","Transaction", new {
-                                page = Model.page + 1,
+                        <li class="page-item @(currentPage >= totalPages ? "disabled" : "")">
+                            <a class="page-link" href="@Url.Action("Transaction", "Transaction", new {
+                                page = currentPage + 1,
                                 pageSize = Model.pageSize,
                                 SelectedShifts = filters.SelectedShifts,
                                 SelectedTollOperators = filters.SelectedTollOperators,
@@ -211,17 +216,17 @@
 
                     </ul>
                 </nav>
+            }
 
-            </div>
-        }
+        </div>
 
         <div class="mt-4 border-top pt-3">
             <table class="table table-borderless mb-0">
                 <tr>
                     <td><strong>Transaction Details Report</strong></td>
                     <td><strong>Date And Time:</strong> @reportGenerated</td>
-                    <td><strong>User:</strong>  @User.FindFirst("firstName")?.Value</td>
-                    <td class="text-end">Page <strong>@Model.page</strong> of <strong>@Model.totalPages</strong></td>
+                    <td><strong>User:</strong> @currentUserId</td>
+                    <td class="text-end">Page <strong>@currentPage</strong> of <strong>@totalPages</strong></td>
                 </tr>
                 <tr>
                     <td colspan="4">
@@ -245,17 +250,17 @@ document.addEventListener("DOMContentLoaded", () => {
     const txData = @Html.Raw(JsonSerializer.Serialize(Model.ExportItems ?? new List<MIS.Web.Models.Transaction.TransactionModel>()));
 
     const reportGeneratedAt = '@DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")';
-    const currentUserId = '@User.FindFirst("firstName")?.Value';
-    const reportVersion     = "3.0.0.0";
+    const currentUserId = '@currentUserId';
+    const reportVersion = "3.0.0.0";
 
     const filtersUsed = {
-  "Start Date": '@Model.StartDate.ToString("dd/MM/yyyy HH:mm")',
-  "End Date": '@Model.EndDate.ToString("dd/MM/yyyy HH:mm")',
-  "Shift": '@shiftText',
-  "Toll Operator": '@operatorText',
-  "Lane": '@laneText',
-  "Payment Method": '@paymentText'
-};
+        "Start Date": '@Model.StartDate.ToString("dd/MM/yyyy HH:mm")',
+        "End Date": '@Model.EndDate.ToString("dd/MM/yyyy HH:mm")',
+        "Shift": '@shiftText',
+        "Toll Operator": '@operatorText',
+        "Lane": '@laneText',
+        "Payment Method": '@paymentText'
+    };
 
     const fileStamp = () => new Date().toISOString().replace(/[:.]/g, "-");
     const hasData = () => Array.isArray(txData) && txData.length > 0;
@@ -265,6 +270,15 @@ document.addEventListener("DOMContentLoaded", () => {
             if (obj && obj[k] !== undefined && obj[k] !== null) return obj[k];
         }
         return "";
+    }
+
+    function toNumber(value) {
+        const num = Number(value);
+        return isNaN(num) ? 0 : num;
+    }
+
+    function formatAmount(value) {
+        return toNumber(value).toFixed(2); // plain number, no currency symbol
     }
 
     const headers = [
@@ -284,14 +298,14 @@ document.addEventListener("DOMContentLoaded", () => {
             safe(t, "toll_Collector_Class", "Toll_Collector_Class"),
             safe(t, "avC_Class", "AVC_Class"),
             safe(t, "final_Class", "Final_Class"),
-            Number(safe(t, "tariff", "Tariff") || 0),
+            formatAmount(safe(t, "tariff", "Tariff")),
             safe(t, "tac_Card_Number", "Tac_Card_Number")
         ]));
     }
 
     function computeTotals(data) {
         const totalCount = data.length;
-        const totalValue = data.reduce((sum, t) => sum + Number(safe(t, "tariff", "Tariff") || 0), 0);
+        const totalValue = data.reduce((sum, t) => sum + toNumber(safe(t, "tariff", "Tariff")), 0);
         return { totalCount, totalValue };
     }
 
@@ -306,30 +320,27 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function drawHeader(doc, pageWidth, margin, leftLogo, rightLogo, reportName) {
+        const topY = 30;
 
-    const topY = 30;
+        if (leftLogo) doc.addImage(leftLogo, "JPEG", margin, topY, 70, 70);
+        if (rightLogo) doc.addImage(rightLogo, "JPEG", pageWidth - margin - 70, topY, 70, 70);
 
-    // Optional Logos (still aligned but not affecting text centering)
-    if (leftLogo)  doc.addImage(leftLogo,  "JPEG", margin, topY, 70, 70);
-    if (rightLogo) doc.addImage(rightLogo, "JPEG", pageWidth - margin - 70, topY, 70, 70);
+        let centerY = 60;
 
-    // ====== CENTERED HEADER TEXT ======
-    let centerY = 60;
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(14);
+        doc.text("LEKKI CONCESSION COMPANY LIMITED", pageWidth / 2, centerY, { align: "center" });
 
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.text("LEKKI CONCESSION COMPANY LIMITED", pageWidth / 2, centerY, { align: "center" });
+        centerY += 20;
 
-    centerY += 20;
+        doc.setFontSize(12);
+        doc.text("LEKKI-IKOYI LINK BRIDGE", pageWidth / 2, centerY, { align: "center" });
 
-    doc.setFontSize(12);
-    doc.text("LEKKI-IKOYI LINK BRIDGE", pageWidth / 2, centerY, { align: "center" });
+        centerY += 25;
 
-    centerY += 25;
-
-    doc.setFontSize(16);
-    doc.text(reportName || "TRANSACTION DETAILS REPORT", pageWidth / 2, centerY, { align: "center" });
-}
+        doc.setFontSize(16);
+        doc.text(reportName || "TRANSACTION DETAILS REPORT", pageWidth / 2, centerY, { align: "center" });
+    }
 
     function drawFilters(doc, margin, startY, filters) {
         let y = startY;
@@ -367,7 +378,7 @@ document.addEventListener("DOMContentLoaded", () => {
         y += 12;
         doc.setFont("helvetica", "bold");
         doc.text(`Total Transaction Count: ${totals.totalCount}`, margin, y);
-        doc.text(`Total Transaction Value: ${totals.totalValue.toFixed(2)}`, margin, y + 20);
+        doc.text(`Total Transaction Value: ${formatAmount(totals.totalValue)}`, margin, y + 20);
     }
 
     function addFooters(doc, pageWidth, pageHeight, margin) {
@@ -399,9 +410,9 @@ document.addEventListener("DOMContentLoaded", () => {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
 
-        const pageWidth  = doc.internal.pageSize.getWidth();
+        const pageWidth = doc.internal.pageSize.getWidth();
         const pageHeight = doc.internal.pageSize.getHeight();
-        const margin     = 50;
+        const margin = 50;
 
         const [leftLogo, rightLogo] = await Promise.all([
             loadImage('/images/lCC Logo.jpg'),
@@ -411,7 +422,7 @@ document.addEventListener("DOMContentLoaded", () => {
         drawHeader(doc, pageWidth, margin, leftLogo, rightLogo);
         const afterFiltersY = drawFilters(doc, margin, 130, filtersUsed);
 
-        const tableRows = buildRows(txData).map(r => { r[10] = Number(r[10] || 0).toFixed(2); return r; });
+        const tableRows = buildRows(txData);
 
         doc.autoTable({
             head: [headers],
@@ -422,11 +433,8 @@ document.addEventListener("DOMContentLoaded", () => {
             headStyles: { fillColor: [41, 128, 185], textColor: 255 }
         });
 
-        // ✅ Summary on last page
         const totals = computeTotals(txData);
         addSummaryLastPage(doc, margin, totals, filtersUsed);
-
-        // ✅ Proper page "i of X"
         addFooters(doc, pageWidth, pageHeight, margin);
 
         doc.save(`Transaction_Report_${fileStamp()}.pdf`);
@@ -441,7 +449,6 @@ document.addEventListener("DOMContentLoaded", () => {
         const rows = buildRows(txData);
         const totals = computeTotals(txData);
 
-        // Filters used (top)
         rows.unshift([]);
         rows.unshift(["FILTERS USED"]);
         rows.unshift(["Payment Method", filtersUsed["Payment Method"]]);
@@ -451,10 +458,9 @@ document.addEventListener("DOMContentLoaded", () => {
         rows.unshift(["End Date", filtersUsed["End Date"]]);
         rows.unshift(["Start Date", filtersUsed["Start Date"]]);
 
-        // Totals + meta (bottom)
         rows.push([]);
         rows.push(["Total Transaction Count", totals.totalCount]);
-        rows.push(["Total Transaction Value", totals.totalValue.toFixed(2)]);
+        rows.push(["Total Transaction Value", formatAmount(totals.totalValue)]);
         rows.push([]);
         rows.push(["Generated", reportGeneratedAt, "User", currentUserId, "Version", reportVersion]);
 

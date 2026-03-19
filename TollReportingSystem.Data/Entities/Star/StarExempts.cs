@@ -11,9 +11,12 @@ namespace TollReportingSystem.Data.Entities.Star
         public DateTime ReportDate { get; set; }
 
         public decimal? Class_M_ExemptAmount { get; set; }
-        public decimal? Class_I_ExemptAmount { get; set; }
-        public decimal? Class_II_ExemptAmount { get; set; }
-        public decimal? Class_III_ExemptAmount { get; set; }
+        public decimal? Class_D_ExemptAmount { get; set; }
+        public decimal? Class_10_ExemptAmount { get; set; }
+        public decimal? Class_1_ExemptAmount { get; set; }
+        public decimal? Class_2_ExemptAmount { get; set; }
+        public decimal? Class_3_ExemptAmount { get; set; }
+        public decimal? Class_4_ExemptAmount { get; set; }
 
         public int? TotalExemptCount { get; set; }
         public decimal? TotalExemptAmount { get; set; }

@@ -1,6 +1,6 @@
-﻿using MIS.Web.Models.EndOfDay;
+﻿using System.Text.Json;
+using MIS.Web.Models.EndOfDay;
 using MIS.Web.Services.Interfaces;
-using System.Net.Http.Json;
 
 namespace MIS.Web.Services
 {
@@ -20,7 +20,10 @@ namespace MIS.Web.Services
             _logger = logger;
         }
 
-        public async Task<EndOfDayReportViewModel?> GetEndOfDayAsync(DateTime startDate, DateTime endDate, int? shiftId = null)
+        public async Task<EndOfDayReportViewModel?> GetEndOfDayAsync(
+            DateTime startDate,
+            DateTime endDate,
+            int? shiftId = null)
         {
             try
             {
@@ -30,33 +33,63 @@ namespace MIS.Web.Services
                 string endpoint = _config["ApiSettings:EndOfDayEndpoint"]?.TrimStart('/')
                     ?? throw new Exception("ApiSettings:EndOfDayEndpoint is missing in appsettings.json");
 
-                var query = $"startDate={Uri.EscapeDataString(startDate.ToString("dd/MM/yyyy"))}" +
-                            $"&endDate={Uri.EscapeDataString(endDate.ToString("dd/MM/yyyy"))}";
+                var queryParts = new List<string>
+                {
+                    $"startDate={Uri.EscapeDataString(startDate.ToString("yyyy-MM-ddTHH:mm:ss"))}",
+                    $"endDate={Uri.EscapeDataString(endDate.ToString("yyyy-MM-ddTHH:mm:ss"))}"
+                };
 
                 if (shiftId.HasValue)
                 {
-                    query += $"&shiftId={shiftId.Value}";
+                    queryParts.Add($"shiftId={shiftId.Value}");
                 }
 
+                string query = string.Join("&", queryParts);
                 string url = $"{baseUrl}/{endpoint}?{query}";
 
                 _logger.LogInformation(
-                    "Fetching End Of Day report from: {URL}. StartDate: {StartDate}, EndDate: {EndDate}, ShiftId: {ShiftId}",
+                    "Fetching End Of Day report from: {Url}. StartDate: {StartDate:yyyy-MM-dd HH:mm:ss}, EndDate: {EndDate:yyyy-MM-dd HH:mm:ss}, ShiftId: {ShiftId}",
                     url,
                     startDate,
                     endDate,
                     shiftId);
 
-                var result = await _http.GetFromJsonAsync<EndOfDayReportViewModel>(url);
+                using var response = await _http.GetAsync(url);
+                var responseBody = await response.Content.ReadAsStringAsync();
+
+                _logger.LogInformation("End Of Day raw response body: {ResponseBody}", responseBody);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogError(
+                        "End Of Day API request failed. StatusCode: {StatusCode}, Url: {Url}, Response: {Response}",
+                        (int)response.StatusCode,
+                        url,
+                        responseBody);
+
+                    return null;
+                }
+
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                };
+
+                var result = JsonSerializer.Deserialize<EndOfDayReportViewModel>(responseBody, options);
 
                 if (result == null)
                 {
                     _logger.LogWarning(
-                        "End Of Day API returned null data. StartDate: {StartDate}, EndDate: {EndDate}, ShiftId: {ShiftId}",
-                        startDate,
-                        endDate,
-                        shiftId);
+                        "End Of Day API returned data but deserialization resulted in null. Response: {Response}",
+                        responseBody);
+                    return null;
                 }
+
+                _logger.LogInformation(
+                    "End Of Day web model loaded successfully. Rows: {Rows}, ShiftName: {ShiftName}, TotalTheoreticalIncome: {TotalTheoreticalIncome}",
+                    result.TheoreticalIncome?.Count ?? 0,
+                    result.ShiftName,
+                    result.Totals?.TotalTheoreticalIncome ?? 0);
 
                 return result;
             }

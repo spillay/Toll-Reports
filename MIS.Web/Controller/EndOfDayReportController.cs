@@ -25,6 +25,7 @@ namespace MIS.Web.Controllers
 
             var model = new PageEndOfDayModel
             {
+                ReportDate = selectedDate,
                 StartDate = startDate,
                 EndDate = endDate,
                 ShiftId = shiftId,

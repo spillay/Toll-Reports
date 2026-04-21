@@ -4,114 +4,212 @@
 
 @{
     ViewData["Title"] = "Account History Report";
+
     var reportGeneratedAt = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
-    var currentUserId = User.Identity?.Name ?? "Lucky";
-    var reportVersion = "1.0.0";
+    var currentUserId = User.FindFirst("firstName")?.Value ?? (User.Identity?.Name ?? "Lucky");
+
+    var reportVersion = "3.0.0.0";
+
+    decimal totalAdd = Model?.PageData?.Items?.Sum(i => i.TopUpAmount) ?? 0;
+    decimal totalDeduct = Model?.PageData?.Items?.Sum(i => i.TransactionAmount) ?? 0;
+
+    var accountList = ViewBag.Accounts as List<string> ?? new List<string>();
 }
 
+<style>
+    .table-responsive {
+        max-height: 600px;
+        overflow-y: auto;
+    }
+
+    thead th {
+        position: sticky;
+        top: 0;
+        background: #f8f9fa !important;
+        z-index: 10;
+    }
+
+    .table-hover tbody tr:hover {
+        background-color: #eef5ff;
+    }
+
+    .amount-debit {
+        color: #d9534f;
+        font-weight: 600;
+    }
+
+    .amount-credit {
+        color: #28a745;
+        font-weight: 600;
+    }
+
+   
+
+    table {
+        font-size: 10pt;
+    }
+
+    }
+</style>
+
 <div class="card shadow-lg p-4 mb-4">
-    <!-- Header -->
-    <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
-        <h3 class="text-primary fw-bold">Account History Report</h3>
+
+    <!-- HEADER -->
+    <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
+        <h2 class="mb-0 fw-bold text-primary text-center w-100">ACCOUNT HISTORY REPORT</h2>
     </div>
 
-    <!-- FILTER SECTION -->
-    <form id="accountForm" method="get" class="row g-3 mb-4">
-        <div class="col-md-4">
-            <label class="form-label fw-semibold">Select Account</label>
-            <select name="accountNumber" id="accountSelect" class="form-select">
-                <option value="">-- Select Account --</option>
-                @if (ViewBag.Accounts != null)
-                {
-                    foreach (var acc in ViewBag.Accounts)
+    <!-- API MESSAGES -->
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger">@TempData["Error"]</div>
+    }
+    @if (TempData["Warning"] != null)
+    {
+        <div class="alert alert-warning">@TempData["Warning"]</div>
+    }
+
+    <!-- FILTERS -->
+    <form id="accountForm" method="get" class="row g-3">
+
+        <!-- ACCOUNT (FIRST) -->
+        <div class="col-md-3">
+            <label class="form-label fw-semibold">Account Number <span class="text-danger">*</span></label>
+
+            <div class="account-search-wrap">
+                <input type="hidden" id="AccountNumber" name="accountNumber" value="@Model?.AccountNumber" />
+
+                <select id="accountSearch" class="form-select" required>
+                    @if (!string.IsNullOrWhiteSpace(Model?.AccountNumber))
                     {
-                        <option value="@acc" @(Model.AccountNumber == acc ? "selected" : "")>@acc</option>
+                        <option value="@Model.AccountNumber" selected="selected">@Model.AccountNumber</option>
                     }
-                }
+                </select>
+            </div>
+
+            <small class="text-muted">Select account first to enable other filters.</small>
+        </div>
+
+        <!-- START DATE -->
+        <div class="col-md-3">
+            <label class="form-label fw-semibold">Start Date And Time</label>
+            <input type="datetime-local" name="startDate" id="startDateInput" class="form-control"
+                   value="@(Model.StartDate?.ToString("yyyy-MM-ddTHH:mm") ?? "")" />
+        </div>
+
+        <!-- END DATE -->
+        <div class="col-md-3">
+            <label class="form-label fw-semibold">End Date And Time</label>
+            <input type="datetime-local" name="endDate" id="endDateInput" class="form-control"
+                   value="@(Model.EndDate?.ToString("yyyy-MM-ddTHH:mm") ?? "")" />
+        </div>
+
+        <!-- OPERATIONAL -->
+        <div class="col-md-3">
+            <label class="form-label fw-semibold">Operational Period</label>
+            <select name="operational" id="operationalSelect" class="form-select">
+                <option value="">-- Select --</option>
+                <option value="true" @(Model.Operational == true ? "selected" : "")>Yes</option>
+                <option value="false" @(Model.Operational == false ? "selected" : "")>No</option>
             </select>
         </div>
+
+        <!-- BUTTON -->
+        <div class="col-md-2 mt-3">
+            <button type="submit" id="btnApply" class="btn btn-primary w-100">Apply Filters</button>
+        </div>
+
     </form>
 
     <!-- EXPORT BUTTONS -->
-    @if (Model?.PageData?.Items != null && Model.PageData.Items.Any())
+    @if (Model?.PageData?.Items?.Any() == true)
     {
-        <div class="text-end mt-3">
+        <div class="text-end mb-3">
             <button id="btnExportPdf" class="btn btn-danger me-2">
                 <i class="bi bi-file-earmark-pdf"></i> Export PDF
             </button>
-            <button id="btnExportExcel" class="btn btn-success">
+
+            <button id="btnExportExcel" class="btn btn-success me-2">
                 <i class="bi bi-file-earmark-excel"></i> Export Excel
             </button>
+
         </div>
     }
 
-    <!-- ACCOUNT INFO -->
+    <!-- ACCOUNT HEADER INFO -->
     @if (!string.IsNullOrEmpty(Model?.AccountNumber))
     {
         <div class="card mb-4 border-primary">
             <div class="card-header bg-primary text-white fw-bold">Account Information</div>
             <div class="card-body">
                 <div class="row g-3">
+
                     <div class="col-md-6">
                         <strong>Account Number:</strong> @Model.AccountNumber <br />
                         <strong>Account Holder:</strong> @Model.AccountHolder <br />
                         <strong>Account Status:</strong> @Model.AccountStatus
                     </div>
+
                     <div class="col-md-6">
-                        <strong>Account Type:</strong> @Model.AccountType <br />
+                        <strong>Account Type:</strong>  <br />
                         <strong>Mobile Number:</strong> @Model.MobileNumber <br />
                         <strong>Email:</strong> @Model.Email
                     </div>
+
                     <div class="col-md-12 mt-2">
                         <strong>Account Balance:</strong>
-                        <span class="fw-bold text-success">
-                            @Model.AccountBalance.ToString("N2", CultureInfo.InvariantCulture)
-                        </span>
+                        <span class="fw-bold text-success">@Model.AccountBalance.ToString("N2")</span>
                     </div>
+
                 </div>
             </div>
         </div>
     }
 
-    <!-- DATA TABLE -->
-    @if (Model?.PageData?.Items != null && Model.PageData.Items.Any())
+    <!-- TABLE -->
+    @if (Model?.PageData?.Items?.Any() == true)
     {
-        var totalAmount = Model.PageData.Items.Sum(i => i.TopUpAmount + i.TransactionAmount);
         <div class="table-responsive">
-            <table id="accountHistoryTable" class="table table-bordered table-hover text-center align-middle">
-                <thead class="table-light">
+            <table id="accountHistoryTable" class="table table-bordered table-striped table-hover text-center align-middle">
+
+                <thead>
                     <tr>
-                        <th>Lane Name</th>
+                        <th>Plaza</th>
                         <th>Transaction Type</th>
-                        <th>Transaction Amount</th>
-                        <th>Top-Up Amount</th>
-                        <th>User Balance</th>
-                        <th>Payment Method</th>
-                        <th>Date & Time</th>
-                        <th>Registered Identifier</th>
-                        <th>Number Plate</th>
+                        <th>Deduct</th>
+                        <th>Add</th>
+                        <th>Balance</th>
+                        <th>E-ID Number</th>
+                        <th>Vehicle Registration Number</th>
+                        <th>Method of Payment</th>
+                        <th>Transaction Date & Time</th>
                     </tr>
                 </thead>
+
                 <tbody>
+
                     @foreach (var item in Model.PageData.Items)
                     {
                         <tr>
                             <td>@item.LaneName</td>
                             <td>@item.TransactionType</td>
-                            <td>@item.TransactionAmount.ToString("N2", CultureInfo.InvariantCulture)</td>
-                            <td>@item.TopUpAmount.ToString("N2", CultureInfo.InvariantCulture)</td>
-                            <td>@item.UserBalance.ToString("N2", CultureInfo.InvariantCulture)</td>
+                            <td class="amount-debit">@item.TransactionAmount.ToString("N2")</td>
+                            <td class="amount-credit">@item.TopUpAmount.ToString("N2")</td>
+                            <td>@item.UserBalance.ToString("N2")</td>
+                            <td>@item.RegisteredIdentifier</td>
+                            <td>@item.NumberPlateDetails</td>
                             <td>@item.PaymentMethod</td>
                             <td>@(item.TransactionDateTime?.ToString("dd/MM/yyyy HH:mm") ?? "-")</td>
-                            <td>@item.RegisteredIdentifier</td>
-                            <td>@item.NumberPlate</td>
                         </tr>
                     }
-                    <tr class="fw-bold table-light">
-                        <td colspan="2" class="text-end">Total:</td>
-                        <td colspan="2">@totalAmount.ToString("N2", CultureInfo.InvariantCulture)</td>
+
+                    <tr class="fw-bold table-primary">
+                        <td colspan="2">TOTALS</td>
+                        <td>@totalDeduct.ToString("N2")</td>
+                        <td>@totalAdd.ToString("N2")</td>
                         <td colspan="5"></td>
                     </tr>
+
                 </tbody>
             </table>
         </div>
@@ -122,90 +220,405 @@
     }
 
     <!-- FOOTER -->
-    <div class="mt-4 p-3 border-top bg-light small text-muted">
-        <div class="row">
-            <div class="col-md-4"><strong>Report:</strong> Account History Report</div>
-            <div class="col-md-4"><strong>Generated:</strong> @reportGeneratedAt</div>
-            <div class="col-md-4 text-end">
-                <strong>User:</strong> @currentUserId <br />
-                Version: @reportVersion
-            </div>
-        </div>
+    <div class="mt-4 p-3 border-top ">
+        <table class="table table-borderless w-100 mb-0 align-middle">
+            <tr>
+                <td class="fw-bold text-dark">Account History Report</td>
+                <td><strong>Date and Time:</strong> @reportGeneratedAt</td>
+                <td><strong>User:</strong> @currentUserId</td>
+                <td class="text-end">
+                    Page <strong>1</strong> of <strong>1</strong>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="4">
+                    <small class="text-muted">
+                        Reports Module Version Number: <strong>@reportVersion</strong>
+                    </small>
+                </td>
+            </tr>
+        </table>
     </div>
 
-    
 </div>
 
+
 @section Scripts {
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.4/jquery.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/js/select2.min.js"></script>
+    <!-- Select2 -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/css/select2.min.css" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/js/select2.min.js"></script>
 
-    <script>
-        $(document).ready(function () {
-            $('#accountSelect').select2({
-                placeholder: '-- Select Account --',
-                allowClear: true,
-                width: '100%'
-            });
-
-            $('#accountSelect').on('change', function () {
-                $('#accountForm').submit();
-            });
-        });
-    </script>
-
+    <!-- Export libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 
     <script>
-        // === PDF EXPORT ===
-        document.getElementById("btnExportPdf")?.addEventListener("click", async function () {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
-            const pageWidth = doc.internal.pageSize.getWidth();
-            const margin = 40;
+        // =========================================================
+        // Account History Page Script
+        // Refactored for:
+        // 1. Stable account search on all PCs
+        // 2. Hidden input submission pattern
+        // 3. Cleaner Select2 initialization
+        // 4. Consistent PDF / Excel exports
+        // =========================================================
 
-            const leftLogo = new Image();
-            leftLogo.src = '/images/lCC Logo.jpg';
-            const rightLogo = new Image();
-            rightLogo.src = '/images/ICT-Works Logo.jpg';
-            await new Promise(r => { leftLogo.onload = rightLogo.onload = r; });
-            doc.addImage(leftLogo, "JPEG", margin, 20, 60, 60);
-            doc.addImage(rightLogo, "JPEG", pageWidth - 100, 20, 60, 60);
+        // -----------------------------
+        // Razor values -> safe JS values
+        // -----------------------------
+        const reportMeta = {
+        currentUserId: '@currentUserId',
+        generatedAt: '@reportGeneratedAt',
+        version: '@reportVersion',
+        accountNumber: '@(!string.IsNullOrWhiteSpace(Model?.AccountNumber) ? Model.AccountNumber : "N/A")',
+        startDate: '@(Model?.StartDate?.ToString("dd/MM/yyyy HH:mm") ?? "N/A")',
+        endDate: '@(Model?.EndDate?.ToString("dd/MM/yyyy HH:mm") ?? "N/A")',
+        operational: '@(Model?.Operational.HasValue == true ? (Model.Operational.Value ? "Yes" : "No") : "N/A")'
+        };
 
-            doc.setFontSize(14);
-            doc.text("ACCOUNT HISTORY REPORT", pageWidth / 2, 50, { align: "center" });
+        // -----------------------------
+        // Shared DOM helpers
+        // -----------------------------
+        function getHiddenAccountValue() {
+        return ($("#AccountNumber").val() || "").toString().trim();
+        }
 
-            const account = document.querySelector("#accountSelect").value || "N/A";
-            const filters = [`Account: ${account}`];
-            doc.setFontSize(10);
-            doc.text(filters, margin, 100);
+        function hasSelectedAccount() {
+        return getHiddenAccountValue().length > 0;
+        }
 
-            doc.autoTable({
-                html: "#accountHistoryTable",
-                startY: 120,
-                theme: "grid",
-                headStyles: { fillColor: [13, 110, 253], textColor: 255 },
-                styles: { fontSize: 8, cellPadding: 3 },
-                didDrawPage: function () {
-                    const pageCount = doc.internal.getNumberOfPages();
-                    const pageHeight = doc.internal.pageSize.height;
-                    doc.setFontSize(8);
-                    doc.text(`User: ${"@currentUserId"}`, margin, pageHeight - 20);
-                    doc.text(`Generated: ${"@reportGeneratedAt"}`, pageWidth / 2.5, pageHeight - 20);
-                    doc.text(`Page ${pageCount}`, pageWidth - margin, pageHeight - 20, { align: "right" });
-                }
-            });
+        function setFiltersEnabled(enabled) {
+        $("#startDateInput").prop("disabled", !enabled);
+        $("#endDateInput").prop("disabled", !enabled);
+        $("#operationalSelect").prop("disabled", !enabled);
 
-            doc.save(`Account_History_Report_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
+        // Business rule:
+        // If no account is selected, clear dependent filters
+        if (!enabled) {
+        $("#startDateInput").val("");
+        $("#endDateInput").val("");
+        $("#operationalSelect").val("");
+        }
+        }
+
+        // -----------------------------
+        // Image helper for PDF logos
+        // -----------------------------
+        function loadImage(url) {
+        return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = function () {
+        resolve(img);
+        };
+        img.onerror = function () {
+        reject(new Error("Failed to load image: " + url));
+        };
+        img.src = url;
+        });
+        }
+
+        // -----------------------------
+        // Select2 initialization
+        // Uses hidden input for actual submitted value
+        // -----------------------------
+        function initializeAccountSearch() {
+        const $accountSearch = $("#accountSearch");
+        const $accountNumber = $("#AccountNumber");
+        const existingAccount = ($accountNumber.val() || "").trim();
+
+        if (!$accountSearch.length) {
+        console.error("Account search dropdown (#accountSearch) was not found.");
+        return;
+        }
+
+        $accountSearch.select2({
+        placeholder: "Search account number / name...",
+        allowClear: true,
+        width: "100%",
+        minimumInputLength: 3,
+        dropdownParent: $accountSearch.closest(".account-search-wrap"),
+        ajax: {
+        url: '@Url.Action("SearchAccounts", "AccountHistory")',
+        dataType: "json",
+        delay: 500,
+        data: function (params) {
+        return {
+        q: params.term || "",
+        take: 20
+        };
+        },
+        processResults: function (data) {
+        return {
+        results: $.map(data || [], function (item) {
+        const accountNumber = item.accountNumber || item.AccountNumber || "";
+        const description = item.description || item.Description || "";
+
+        return {
+        id: accountNumber,
+        text: description && description.trim() !== ""
+        ? description
+        : accountNumber,
+        accountNumber: accountNumber,
+        description: description
+        };
+        })
+        };
+        },
+        cache: true,
+        error: function (xhr, status, error) {
+        console.error("Account search failed:", {
+        status: xhr.status,
+        statusText: xhr.statusText,
+        responseText: xhr.responseText,
+        error: error
+        });
+        }
+        },
+
+        templateSelection: function (item) {
+        return item.text || item.id || "";
+        },
+
+        templateResult: function (item) {
+        if (item.loading) return item.text;
+
+        const acc = item.accountNumber || item.id || "";
+        const desc = item.description || item.text || "";
+
+        if (desc && desc !== acc) {
+        return $("<span>").text(desc + " (" + acc + ")");
+        }
+
+        return $("<span>").text(acc);
+        },
+
+        escapeMarkup: function (markup) {
+        return markup;
+        }
         });
 
-        // === EXCEL EXPORT ===
-        document.getElementById("btnExportExcel")?.addEventListener("click", function () {
-            const wb = XLSX.utils.table_to_book(document.querySelector("#accountHistoryTable"), { sheet: "AccountHistory" });
-            XLSX.writeFile(wb, `Account_History_Report_${new Date().toISOString().replace(/[:.]/g, '-')}.xlsx`);
+        // When account is selected
+        $accountSearch.on("select2:select", function (e) {
+        const selected = e.params.data;
+        const selectedValue = selected && selected.id ? selected.id : "";
+
+        $accountNumber.val(selectedValue);
+        setFiltersEnabled(hasSelectedAccount());
+        });
+
+        // When cleared
+        $accountSearch.on("select2:clear", function () {
+        $accountNumber.val("");
+        setFiltersEnabled(false);
+        });
+
+        // Backup sync on normal change
+        $accountSearch.on("change", function () {
+        const selected = $(this).select2("data");
+        const account = selected && selected.length
+        ? (selected[0].accountNumber || selected[0].id || "")
+        : "";
+
+        $accountNumber.val(account);
+        });
+
+        // Rehydrate existing selected value on page load
+        if (existingAccount) {
+        const option = new Option(existingAccount, existingAccount, true, true);
+        $accountSearch.append(option).trigger("change");
+        $accountNumber.val(existingAccount);
+        setFiltersEnabled(true);
+        } else {
+        setFiltersEnabled(false);
+        }
+        }
+
+        // -----------------------------
+        // Form validation
+        // -----------------------------
+        function validateAccountOnSubmit(e) {
+        if (!hasSelectedAccount()) {
+        e.preventDefault();
+        alert("Please select an Account Number first.");
+        $("#accountSearch").focus();
+        return false;
+        }
+
+        console.log("Submitting accountNumber:", getHiddenAccountValue());
+        return true;
+        }
+
+        // -----------------------------
+        // PDF Export
+        // -----------------------------
+        async function exportAccountHistoryPdf() {
+        try {
+        const table = document.querySelector("#accountHistoryTable");
+        if (!table) {
+        alert("Account history table was not found.");
+        return;
+        }
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({
+        orientation: "landscape",
+        unit: "pt",
+        format: "a4"
+        });
+
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const margin = 40;
+
+        const logoWidth = 90;
+        const logoHeight = 45;
+        const headerTop = 25;
+
+        const leftLogoUrl = "/images/lCC Logo.jpg";
+        const rightLogoUrl = "/images/ICT-Works Logo.jpg";
+
+        let leftLogo = null;
+        let rightLogo = null;
+
+        try {
+        [leftLogo, rightLogo] = await Promise.all([
+        loadImage(leftLogoUrl),
+        loadImage(rightLogoUrl)
+        ]);
+        } catch (logoError) {
+        console.warn("Logo loading failed. PDF will continue without one or more logos.", logoError);
+        }
+
+        function drawHeader() {
+        if (leftLogo) {
+        doc.addImage(leftLogo, "JPEG", margin, headerTop, logoWidth, logoHeight);
+        }
+
+        if (rightLogo) {
+        doc.addImage(rightLogo, "JPEG", pageWidth - margin - logoWidth, headerTop, logoWidth, logoHeight);
+        }
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(13);
+        doc.text("LEKKI CONCESSION COMPANY (LCC)", pageWidth / 2, headerTop + 15, { align: "center" });
+
+        doc.setFontSize(11);
+        doc.text("MIS REPORTING SYSTEM", pageWidth / 2, headerTop + 30, { align: "center" });
+
+        doc.setFontSize(14);
+        doc.text("ACCOUNT HISTORY REPORT", pageWidth / 2, headerTop + 52, { align: "center" });
+
+        let y = headerTop + 85;
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+        doc.text("Generated By: " + reportMeta.currentUserId, margin, y); y += 12;
+        doc.text("Generated On: " + reportMeta.generatedAt, margin, y); y += 12;
+        doc.text("Version: " + reportMeta.version, margin, y); y += 18;
+
+        doc.setFont("helvetica", "bold");
+        doc.text("Filters Used:", margin, y); y += 12;
+
+        doc.setFont("helvetica", "normal");
+        doc.text("Account: " + reportMeta.accountNumber, margin, y); y += 12;
+        doc.text("Start Date: " + reportMeta.startDate, margin, y); y += 12;
+        doc.text("End Date: " + reportMeta.endDate, margin, y); y += 12;
+        doc.text("Operational: " + reportMeta.operational, margin, y);
+
+        return y + 14;
+        }
+
+        const tableStartY = drawHeader();
+
+        doc.autoTable({
+        html: "#accountHistoryTable",
+        startY: tableStartY,
+        theme: "grid",
+        margin: { left: margin, right: margin },
+        headStyles: {
+        fillColor: [41, 128, 185],
+        textColor: 255
+        },
+        styles: {
+        fontSize: 8,
+        halign: "center",
+        valign: "middle"
+        },
+        didDrawPage: function () {
+        drawHeader();
+
+        const footerY = pageHeight - 30;
+        const pageNumber = doc.internal.getNumberOfPages();
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+
+        doc.text("Account History Report", margin, footerY);
+        doc.text("Printed On: " + reportMeta.generatedAt, pageWidth / 2, footerY, { align: "center" });
+        doc.text("Page " + pageNumber, pageWidth - margin, footerY, { align: "right" });
+        }
+        });
+
+        const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+        doc.save("Account_History_" + timestamp + ".pdf");
+        } catch (error) {
+        console.error("PDF export failed:", error);
+        alert("An error occurred while exporting the PDF.");
+        }
+        }
+
+        // -----------------------------
+        // Excel Export
+        // -----------------------------
+        function exportAccountHistoryExcel() {
+        try {
+        const table = document.querySelector("#accountHistoryTable");
+        if (!table) {
+        alert("Account history table was not found.");
+        return;
+        }
+
+        const workbook = XLSX.utils.book_new();
+        const worksheet = XLSX.utils.table_to_sheet(table);
+
+        XLSX.utils.book_append_sheet(workbook, worksheet, "AccountHistory");
+
+        const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+        XLSX.writeFile(workbook, "Account_History_" + timestamp + ".xlsx");
+        } catch (error) {
+        console.error("Excel export failed:", error);
+        alert("An error occurred while exporting Excel.");
+        }
+        }
+
+        // -----------------------------
+        // Wire page events
+        // -----------------------------
+        function bindPageEvents() {
+        $("#accountForm").on("submit", validateAccountOnSubmit);
+
+        document.getElementById("btnExportPdf")?.addEventListener("click", exportAccountHistoryPdf);
+        document.getElementById("btnExportExcel")?.addEventListener("click", exportAccountHistoryExcel);
+        }
+
+        // -----------------------------
+        // Page startup
+        // -----------------------------
+        $(document).ready(function () {
+        if (!window.jQuery) {
+        console.error("jQuery is not loaded.");
+        return;
+        }
+
+        if (!$.fn.select2) {
+        console.error("Select2 is not loaded.");
+        return;
+        }
+
+        initializeAccountSearch();
+        setFiltersEnabled(hasSelectedAccount());
+        bindPageEvents();
         });
     </script>
 }
+

@@ -1,11 +1,7 @@
-﻿using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
-using MIS.Web.Models.AccountHistory;
+﻿using MIS.Web.Models.AccountHistory;
+using Microsoft.AspNetCore.Http;
 using Newtonsoft.Json;
-using System;
-using System.Collections.Generic;
-using System.Net.Http;
-using System.Threading.Tasks;
+using System.Net.Http.Headers;
 
 namespace MIS.Web.Services
 {
@@ -14,132 +10,266 @@ namespace MIS.Web.Services
         private readonly HttpClient _httpClient;
         private readonly IConfiguration _config;
         private readonly ILogger<AccountHistoryService> _logger;
+        private readonly IHttpContextAccessor _httpContextAccessor;
 
-        public AccountHistoryService(HttpClient httpClient, IConfiguration config, ILogger<AccountHistoryService> logger)
+        public AccountHistoryService(
+            HttpClient httpClient,
+            IConfiguration config,
+            ILogger<AccountHistoryService> logger,
+            IHttpContextAccessor httpContextAccessor)
         {
             _httpClient = httpClient;
             _config = config;
             _logger = logger;
+            _httpContextAccessor = httpContextAccessor;
         }
 
         public async Task<List<string>> GetAccountsAsync()
         {
-            string baseUrl = _config["BaseApiUrl:Link"];
-            string endpoint = _config["ApiSettings:AccountListEndpoint"];
-            string fullUrl = $"{baseUrl}{endpoint}";
-
             try
             {
-                _logger.LogInformation("📡 Fetching account numbers from {Url}", fullUrl);
+                var url = BuildUrl("ApiSettings:AccountListEndpoint");
+                _logger.LogInformation("Fetching account numbers → {Url}", url);
 
-                using var response = await _httpClient.GetAsync(fullUrl);
+                using var request = CreateAuthorizedGetRequest(url);
+                using var response = await _httpClient.SendAsync(request);
+
                 if (!response.IsSuccessStatusCode)
                 {
-                    _logger.LogWarning("⚠️ Failed to fetch account list. HTTP {StatusCode}", response.StatusCode);
-                    return new List<string>();
+                    _logger.LogWarning("Account list fetch failed: HTTP {Code}", response.StatusCode);
+                    return new();
                 }
 
-                // The backend returns an array of strings: ["0100001", "0100002", ...]
                 var json = await response.Content.ReadAsStringAsync();
-                var accounts = JsonConvert.DeserializeObject<List<string>>(json);
-
-                // Defensive check — avoid returning null
-                return accounts ?? new List<string>();
+                return JsonConvert.DeserializeObject<List<string>>(json) ?? new();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "🔥 Error fetching account numbers");
-                return new List<string>();
+                _logger.LogError(ex, "Error fetching accounts");
+                return new();
             }
         }
 
-        public async Task<AccountHistoryInputModel> GetAccountHistoryAsync(string accountNumber)
+        public async Task<AccountHistoryInputModel> GetAccountHistoryAsync(
+            string? accountNumber,
+            DateTime? startDate,
+            DateTime? endDate,
+            bool? operational)
         {
-            // Return empty model if no account number is passed
-            if (string.IsNullOrWhiteSpace(accountNumber))
-                return new AccountHistoryInputModel();
+            if (startDate == null && endDate == null && string.IsNullOrWhiteSpace(accountNumber))
+                return new AccountHistoryInputModel { PageData = new PageAccountHistoryModel() };
 
-            string baseUrl = _config["BaseApiUrl:Link"];
-            string endpoint = _config["ApiSettings:AccountHistoryEndpoint"];
-            string fullUrl = $"{baseUrl}{endpoint}?accountNumber={Uri.EscapeDataString(accountNumber)}";
+            var query = new Dictionary<string, string>();
+
+            if (!string.IsNullOrWhiteSpace(accountNumber))
+                query["accountNumber"] = accountNumber.Trim();
+
+            if (startDate.HasValue)
+                query["startDate"] = startDate.Value.ToString("yyyy-MM-ddTHH:mm:ss");
+
+            if (endDate.HasValue)
+                query["endDate"] = endDate.Value.ToString("yyyy-MM-ddTHH:mm:ss");
+
+            if (operational.HasValue)
+                query["operational"] = operational.Value ? "true" : "false";
+
+            var url = BuildUrl("ApiSettings:AccountHistoryEndpoint", query);
 
             try
             {
-                _logger.LogInformation("📡 Fetching account history for account {AccountNumber}", accountNumber);
+                _logger.LogInformation("Requesting Account History → {Url}", url);
 
-                using var response = await _httpClient.GetAsync(fullUrl);
+                using var request = CreateAuthorizedGetRequest(url);
+                using var response = await _httpClient.SendAsync(request);
+
+                var json = await response.Content.ReadAsStringAsync();
+
                 if (!response.IsSuccessStatusCode)
                 {
-                    _logger.LogWarning("⚠️ Failed to load account history for {AccountNumber}. HTTP {StatusCode}",
-                        accountNumber, response.StatusCode);
-                    return new AccountHistoryInputModel();
+                    _logger.LogError("Account history API failed. Status={Status} Url={Url} Body={Body}",
+                        (int)response.StatusCode, url, json);
+
+                    return new AccountHistoryInputModel { PageData = new PageAccountHistoryModel() };
                 }
 
-                // Deserialize the returned JSON structure
-                var json = await response.Content.ReadAsStringAsync();
                 var payload = JsonConvert.DeserializeObject<AccountHistoryApiResponse>(json);
 
-                if (payload == null || payload.AccountHeader == null)
+                if (payload == null)
                 {
-                    _logger.LogWarning("⚠️ No valid data received for account {AccountNumber}", accountNumber);
-                    return new AccountHistoryInputModel();
+                    _logger.LogWarning("Invalid JSON payload for account {Acc}. Raw={Raw}", accountNumber, json);
+                    return new AccountHistoryInputModel { PageData = new PageAccountHistoryModel() };
                 }
 
-                // Map API response to view model
+                var records = payload.HistoryRecords ?? new List<AccountHistoryModel>();
+
+                var pageData = new PageAccountHistoryModel
+                {
+                    Items = records,
+                    totalCount = records.Count,
+                    page = 1,
+                    pageSize = Math.Max(records.Count, 50),
+                    totalPages = 1
+                };
+
                 return new AccountHistoryInputModel
                 {
-                    AccountNumber = payload.AccountHeader.AccountNumber,
-                    AccountHolder = payload.AccountHeader.AccountHolder,
-                    AccountStatus = payload.AccountHeader.AccountStatus,
-                    AccountType = payload.AccountHeader.AccountType,
-                    MobileNumber = payload.AccountHeader.MobileNumber,
-                    Email = payload.AccountHeader.Email,
-                    AccountBalance = payload.AccountHeader.AccountBalance,
-                    PageData = new PageAccountHistoryModel
-                    {
-                        Items = payload.HistoryRecords ?? new List<AccountHistoryModel>()
-                    }
+                    AccountNumber = payload.AccountHeader?.AccountNumber ?? accountNumber,
+                    AccountHolder = payload.AccountHeader?.AccountHolder,
+                    AccountStatus = payload.AccountHeader?.AccountStatus,
+                    AccountType = payload.AccountHeader?.AccountType,
+                    MobileNumber = payload.AccountHeader?.MobileNumber,
+                    Email = payload.AccountHeader?.Email,
+                    AccountBalance = (double)(payload.AccountHeader?.AccountBalance ?? 0),
+
+                    StartDate = startDate,
+                    EndDate = endDate,
+                    Operational = operational,
+
+                    PageData = pageData,
+                    FullRecords = new()
                 };
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "🔥 Error loading account history for {AccountNumber}", accountNumber);
-                return new AccountHistoryInputModel();
+                _logger.LogError(ex, "Error fetching account history for {Acc}", accountNumber);
+                return new AccountHistoryInputModel { PageData = new PageAccountHistoryModel() };
             }
         }
-    }
 
-  
-    public class AccountHistoryApiResponse
-    {
-        [JsonProperty("accountHeader")]
-        public AccountHeader AccountHeader { get; set; }
+        public async Task<List<AccountSearchItem>> SearchAccountsAsync(string q, int take = 20)
+        {
+            q = (q ?? "").Trim();
 
-        [JsonProperty("historyRecords")]
-        public List<AccountHistoryModel> HistoryRecords { get; set; }
-    }
+            if (q.Length < 3)
+                return new();
 
-    public class AccountHeader
-    {
-        [JsonProperty("accountNumber")]
-        public string AccountNumber { get; set; }
+            take = Math.Clamp(take, 1, 50);
 
-        [JsonProperty("accountHolder")]
-        public string AccountHolder { get; set; }
+            var query = new Dictionary<string, string>
+            {
+                ["q"] = q,
+                ["take"] = take.ToString()
+            };
 
-        [JsonProperty("accountStatus")]
-        public string AccountStatus { get; set; }
+            var url = BuildUrl("ApiSettings:AccountHistorySearchEndpoint", query);
 
-        [JsonProperty("accountType")]
-        public string AccountType { get; set; }
+            try
+            {
+                _logger.LogInformation("Searching accounts → {Url}", url);
 
-        [JsonProperty("mobileNumber")]
-        public string MobileNumber { get; set; }
+                using var request = CreateAuthorizedGetRequest(url);
 
-        [JsonProperty("email")]
-        public string Email { get; set; }
+                // Shorter timeout just for live search
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
 
-        [JsonProperty("accountBalance")]
-        public decimal AccountBalance { get; set; }
+                using var response = await _httpClient.SendAsync(request, cts.Token);
+
+                if (!response.IsSuccessStatusCode)
+                    return new();
+
+                var json = await response.Content.ReadAsStringAsync(cts.Token);
+                var raw = JsonConvert.DeserializeObject<List<dynamic>>(json) ?? new();
+
+                return raw.Select(x => new AccountSearchItem
+                {
+                    AccountNumber = (string?)x.accountNumber,
+                    Description = (string?)x.description,
+                    Balance = x.balance != null ? (decimal)x.balance : 0m
+                }).ToList();
+            }
+            catch (TaskCanceledException ex)
+            {
+                _logger.LogWarning(ex, "Account search timed out for query {Query}", q);
+                return new();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error searching accounts");
+                return new();
+            }
+        }
+
+        private HttpRequestMessage CreateAuthorizedGetRequest(string url)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            AddBearerToken(request);
+            return request;
+        }
+
+        private void AddBearerToken(HttpRequestMessage request)
+        {
+            var token = _httpContextAccessor.HttpContext?.User?.FindFirst("access_token")?.Value;
+
+            if (string.IsNullOrWhiteSpace(token))
+                throw new UnauthorizedAccessException("No JWT token found for current user.");
+
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+
+        private string BuildUrl(string endpointConfigKey, IDictionary<string, string>? query = null)
+        {
+            var baseUrl = (_config["BaseApiUrl:Link"] ?? "").TrimEnd('/');
+            var endpoint = (_config[endpointConfigKey] ?? "").TrimStart('/');
+
+            if (string.IsNullOrWhiteSpace(baseUrl))
+                throw new InvalidOperationException("BaseApiUrl:Link is missing in configuration.");
+
+            if (string.IsNullOrWhiteSpace(endpoint))
+                throw new InvalidOperationException($"{endpointConfigKey} is missing in configuration.");
+
+            var url = $"{baseUrl}/{endpoint}";
+
+            if (query != null && query.Count > 0)
+            {
+                var queryString = string.Join("&",
+                    query.Select(x => $"{x.Key}={Uri.EscapeDataString(x.Value)}"));
+
+                url += "?" + queryString;
+            }
+
+            return url;
+        }
+
+        private class AccountHistoryApiResponse
+        {
+            [JsonProperty("accountHeader")]
+            public AccountHeader? AccountHeader { get; set; }
+
+            [JsonProperty("historyRecords")]
+            public List<AccountHistoryModel>? HistoryRecords { get; set; }
+
+            [JsonProperty("totalTopUps")]
+            public decimal TotalTopUps { get; set; }
+
+            [JsonProperty("totalTransactions")]
+            public decimal TotalTransactions { get; set; }
+
+            [JsonProperty("netMovement")]
+            public decimal NetMovement { get; set; }
+        }
+
+        private class AccountHeader
+        {
+            [JsonProperty("accountNumber")]
+            public string? AccountNumber { get; set; }
+
+            [JsonProperty("accountHolder")]
+            public string? AccountHolder { get; set; }
+
+            [JsonProperty("accountStatus")]
+            public string? AccountStatus { get; set; }
+
+            [JsonProperty("accountType")]
+            public string? AccountType { get; set; }
+
+            [JsonProperty("mobileNumber")]
+            public string? MobileNumber { get; set; }
+
+            [JsonProperty("email")]
+            public string? Email { get; set; }
+
+            [JsonProperty("accountBalance")]
+            public decimal AccountBalance { get; set; }
+        }
     }
 }

@@ -10,5 +10,6 @@ namespace MIS.Web.Models.Traffic.Daily
         public string? Classification { get; set; }
         public List<int> Shifts { get; set; } = new List<int>();
         public bool OperationalDay { get; set; } = false;
+        public List<string> ClassificationList { get; set; } = new();
     }
 }

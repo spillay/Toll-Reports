@@ -1,377 +1,800 @@
 ﻿@model MIS.Web.Models.DailyCashup.PageDailyCashupModel
 @removeTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+@using System
+@using System.Linq
+@using System.Collections.Generic
 
 @{
-    var startQuery = Context.Request.Query["StartDate"].ToString();
-    var endQuery = Context.Request.Query["EndDate"].ToString();
-    var shiftQuery = Context.Request.Query["OperationalShift"].ToString();
-    var operatorQuery = Context.Request.Query["TollOperators"].ToString();
-}
+    var req = ViewContext.HttpContext.Request;
 
+    var startQuery = req.Query["startDate"].ToString();
+    var endQuery = req.Query["endDate"].ToString();
+
+    var selectedShiftIdsQuery = req.Query["shiftIds"];
+    var selectedUserIdsQuery = req.Query["systemUserIds"];
+
+    var reportGeneratedAt = DateTime.Now;
+    var currentUser = User.FindFirst("firstName")?.Value ?? User.Identity?.Name ?? "Unknown User";
+    var reportVersion = "3.0.0.0";
+
+    var pagedItems = Model?.Items ?? new List<MIS.Web.Models.DailyCashup.DailyCashupModel>();
+    var exportItems = (Model?.FullItems != null && Model.FullItems.Any())
+        ? Model.FullItems
+        : pagedItems;
+
+    var shiftTotals = Model?.ShiftTotals ?? new List<MIS.Web.Models.DailyCashup.DailyCashupShiftTotalModel>();
+    var grandTotal = Model?.GrandTotal ?? new MIS.Web.Models.DailyCashup.DailyCashupGrandTotalModel();
+
+    var groupedPagedItems = pagedItems
+        .OrderBy(x => x.ShiftDescription ?? "")
+        .ThenBy(x => x.TollOperator ?? "")
+        .ThenBy(x => x.ShiftDate)
+        .GroupBy(x => x.ShiftDescription ?? "-- Unknown Shift --")
+        .ToList();
+
+    var currentPage = Model?.page ?? 1;
+    var pageSize = Model?.pageSize ?? 20;
+    var totalPages = Model?.totalPages ?? 0;
+    var totalCount = Model?.totalCount ?? pagedItems.Count;
+
+    var selectedShiftNames = (Model?.ShiftOptions ?? new List<MIS.Web.Models.DailyCashup.CheckItemModel<int>>())
+        .Where(x => x.Selected || selectedShiftIdsQuery.Contains(x.Id.ToString()))
+        .Select(x => x.Name)
+        .ToList();
+
+    var selectedOperatorNames = (Model?.TollOperatorOptions ?? new List<MIS.Web.Models.DailyCashup.CheckItemModel<long>>())
+        .Where(x => x.Selected || selectedUserIdsQuery.Contains(x.Id.ToString()))
+        .Select(x => x.Name)
+        .ToList();
+
+    var shiftDisplay = selectedShiftNames.Any() ? string.Join(", ", selectedShiftNames) : "All";
+    var opDisplay = selectedOperatorNames.Any() ? string.Join(", ", selectedOperatorNames) : "All";
+
+    string fmtDate(DateTime dt) => dt.ToString("dd/MM/yyyy");
+    string fmtDateTime(DateTime dt) => dt.ToString("yyyy-MM-ddTHH:mm");
+}
 <div class="card shadow-lg mb-4">
     <div class="card-body">
-        <!-- Header -->
-        <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
-            <h2 class="mb-0 fw-bold text-primary">Daily Cashup Report</h2>
-            <div>
-                <button id="btnExportPDF" class="btn btn-danger btn-sm me-2">
+
+        <div class="position-relative border-bottom pb-2 mb-3">
+            <h2 class="fw-bold text-primary text-center mb-0">DAILY CASH REPORT</h2>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-2 me-2">
+                <button id="btnExportPDF" class="btn btn-danger w-100 shadow-sm" type="button">
                     <i class="bi bi-file-earmark-pdf"></i> Export PDF
                 </button>
-                <button id="btnExportExcel" class="btn btn-success btn-sm">
+            </div>
+
+            <div class="col-md-2">
+                <button id="btnExportExcel" class="btn btn-success w-100 shadow-sm" type="button">
                     <i class="bi bi-file-earmark-excel"></i> Export Excel
                 </button>
             </div>
         </div>
 
-        <!-- Filters -->
-        <form method="get" asp-controller="DailyCashup" asp-action="Index" class="row g-3 mb-3">
+        <form method="get" action="@Url.Action("Index", "DailyCashup")" class="row g-3 mb-4">
+
             <div class="col-md-3">
-                <label class="form-label">Start Date</label>
-                <input type="datetime-local" name="StartDate" class="form-control"
-                       value="@(!string.IsNullOrEmpty(startQuery)
-                                 ? startQuery
-                                 : Model?.StartDate.ToString("yyyy-MM-ddTHH:mm"))" />
+                <label class="form-label fw-semibold">Start Date</label>
+                <input type="datetime-local"
+                       name="startDate"
+                       class="form-control"
+                       value="@(!string.IsNullOrEmpty(startQuery) ? startQuery : fmtDateTime(Model?.StartDate ?? DateTime.Today))" />
             </div>
 
             <div class="col-md-3">
-                <label class="form-label">End Date</label>
-                <input type="datetime-local" name="EndDate" class="form-control"
-                       value="@(!string.IsNullOrEmpty(endQuery)
-                                 ? endQuery
-                                 : Model?.EndDate.ToString("yyyy-MM-ddTHH:mm"))" />
+                <label class="form-label fw-semibold">End Date</label>
+                <input type="datetime-local"
+                       name="endDate"
+                       class="form-control"
+                       value="@(!string.IsNullOrEmpty(endQuery) ? endQuery : fmtDateTime(Model?.EndDate ?? DateTime.Today))" />
             </div>
 
             <div class="col-md-3">
-                <label class="form-label">Shift</label>
-                <select name="OperationalShift" class="form-select">
-                    <option value="">-- All --</option>
-                    @foreach (var shift in ViewBag.Shifts ?? new List<string>())
+                <label class="form-label fw-semibold">Operational Shift</label>
+                <div class="border rounded p-2" style="max-height:180px; overflow:auto; background:#fff;">
+                    @if (Model?.ShiftOptions != null && Model.ShiftOptions.Any())
                     {
-                        var isSelected = shiftQuery == shift;
-                        <option value="@shift" selected="@(isSelected ? "selected" : null)">@shift</option>
+                        foreach (var s in Model.ShiftOptions)
+                        {
+                            var isChecked = selectedShiftIdsQuery.Contains(s.Id.ToString()) || s.Selected;
+
+                            <div class="form-check">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       name="shiftIds"
+                                       value="@s.Id"
+                                       id="shift_@s.Id"
+                                       @(isChecked ? "checked" : null) />
+                                <label class="form-check-label" for="shift_@s.Id">@s.Name</label>
+                            </div>
+                        }
                     }
-                </select>
+                    else
+                    {
+                        <div class="text-muted">No shifts loaded.</div>
+                    }
+                </div>
             </div>
 
             <div class="col-md-3">
-                <label class="form-label">Toll Operator</label>
-                <select name="TollOperators" class="form-select">
-                    <option value="">-- All --</option>
-                    @foreach (var op in ViewBag.TollOperators ?? new List<string>())
+                <label class="form-label fw-semibold">Toll Operator</label>
+                <div class="border rounded p-2" style="max-height:180px; overflow:auto; background:#fff;">
+                    @if (Model?.TollOperatorOptions != null && Model.TollOperatorOptions.Any())
                     {
-                        var isSelected = operatorQuery == op;
-                        <option value="@op" selected="@(isSelected ? "selected" : null)">@op</option>
+                        foreach (var op in Model.TollOperatorOptions)
+                        {
+                            var isChecked = selectedUserIdsQuery.Contains(op.Id.ToString()) || op.Selected;
+
+                            <div class="form-check">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       name="systemUserIds"
+                                       value="@op.Id"
+                                       id="op_@op.Id"
+                                       @(isChecked ? "checked" : null) />
+                                <label class="form-check-label" for="op_@op.Id">@op.Name</label>
+                            </div>
+                        }
                     }
-                </select>
+                    else
+                    {
+                        <div class="text-muted">No operators loaded.</div>
+                    }
+                </div>
             </div>
 
-            <div class="col-md-12 text-end">
-                <button type="submit" class="btn btn-primary px-4">Filter</button>
+            <div class="col-md-3 d-flex align-items-end">
+                <button class="btn btn-primary w-100 px-4" type="submit">Apply Filters</button>
             </div>
         </form>
 
-        <!-- Table -->
-        @if (Model?.Items != null && Model.Items.Any())
-        {
-            <div class="table-responsive">
-                <table id="dailyCashupTable" class="table table-bordered align-middle">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Operational Shift</th>
-                            <th>Toll Operator ID</th>
-                            <th class="text-end">Lane Cash</th>
-                            <th class="text-end">Top-ups</th>
-                            <th class="text-end">Total Cash Expected</th>
-                            <th class="text-end">Cash Declared</th>
-                            <th class="text-end">Surplus / Shortage</th>
-                            <th class="text-end">Total Banked</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @{
-                            var grouped = Model.Items.GroupBy(i => i.ShiftDescription).ToList();
-                            double dayTotalLaneCash = 0;
-                            double dayTotalExpected = 0;
-                            double dayTotalDeclared = 0;
-                            double dayTotalDifference = 0;
-                            double dayTotalBanked = 0;
-                        }
-
-                        @foreach (var group in grouped)
+        <div class="table-responsive">
+            <table class="table table-bordered align-middle" id="dailyCashupTable">
+                <thead class="table-light text-center">
+                    <tr>
+                        <th>Operational Day</th>
+                        <th>Operational Shift</th>
+                        <th>Toll Operator ID</th>
+                        <th class="text-end">Lane Cash</th>
+                        <th class="text-end">Top-ups</th>
+                        <th class="text-end">Total Cash Expected</th>
+                        <th class="text-end">Cash Declared</th>
+                        <th class="text-end">Surplus /- Shortage</th>
+                        <th class="text-end">Total Banked</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (pagedItems.Any())
+                    {
+                        foreach (var shiftGroup in groupedPagedItems)
                         {
-                            double shiftLaneCash = 0;
-                            double shiftExpected = 0;
-                            double shiftDeclared = 0;
-                            double shiftDifference = 0;
-                            double shiftBanked = 0;
-
-                            <tr class="table-secondary fw-bold">
-                                <td colspan="8">Shift: @group.Key</td>
-                            </tr>
-
-                            foreach (var item in group)
+                            foreach (var item in shiftGroup)
                             {
-                                double difference = item.ActualAmount - item.TotalDeclared;
-                                double totalBanked = item.NettAmount + difference;
-
-                                shiftLaneCash += item.NettAmount;
-                                shiftExpected += item.ActualAmount;
-                                shiftDeclared += item.TotalDeclared;
-                                shiftDifference += difference;
-                                shiftBanked += totalBanked;
-
-                                string diffClass = difference > 0 ? "text-primary fw-bold"
-                                    : difference < 0 ? "text-danger fw-bold" : "text-muted fw-bold";
-
-                                string formattedDiff = difference < 0
-                                    ? $"-{Math.Abs(difference).ToString("N2")}"
-                                    : difference.ToString("N2");
+                                var diff = item.Difference;
+                                var diffClass = diff > 0
+                                    ? "text-primary fw-bold"
+                                    : diff < 0
+                                        ? "text-danger fw-bold"
+                                        : "text-muted fw-bold";
 
                                 <tr>
-                                    <td>@item.ShiftDescription</td>
-                                    <td>@item.TollOperator</td>
+                                    <td>@fmtDate(item.ShiftDate)</td>
+                                    <td>@(item.ShiftDescription ?? "")</td>
+                                    <td>@(item.TollOperator ?? "")</td>
                                     <td class="text-end">@item.NettAmount.ToString("N2")</td>
-                                    <td class="text-end">0.00</td>
                                     <td class="text-end">@item.ActualAmount.ToString("N2")</td>
+                                    <td class="text-end">@item.TotalCashExpected.ToString("N2")</td>
                                     <td class="text-end">@item.TotalDeclared.ToString("N2")</td>
-                                    <td class="text-end @diffClass">@formattedDiff</td>
-                                    <td class="text-end fw-bold">@totalBanked.ToString("N2")</td>
+                                    <td class="text-end @diffClass">@Math.Abs(diff).ToString("N2")</td>
+                                    <td class="text-end fw-bold">@item.TotalBanked.ToString("N2")</td>
                                 </tr>
                             }
 
-                            <tr class="fw-bold table-light">
-                                <td colspan="7" class="text-end">Total @group.Key</td>
-                                <td class="text-end">@shiftBanked.ToString("N2")</td>
-                            </tr>
+                            var shiftTotal = shiftTotals.FirstOrDefault(x => x.ShiftDescription == shiftGroup.Key);
 
-                            dayTotalLaneCash += shiftLaneCash;
-                            dayTotalExpected += shiftExpected;
-                            dayTotalDeclared += shiftDeclared;
-                            dayTotalDifference += shiftDifference;
-                            dayTotalBanked += shiftBanked;
-                        }
-
-                        <tr class="fw-bold text-white" style="background-color:#1b4b72;">
-                            <td colspan="7" class="text-end">Operational Day Total</td>
-                            <td class="text-end">@dayTotalBanked.ToString("N2")</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- Pagination -->
-            @if (Model.totalPages > 1)
-            {
-                var startDateVal = !string.IsNullOrEmpty(startQuery) ? startQuery : Model.StartDate.ToString("yyyy-MM-ddTHH:mm:ss");
-                var endDateVal = !string.IsNullOrEmpty(endQuery) ? endQuery : Model.EndDate.ToString("yyyy-MM-ddTHH:mm:ss");
-
-                <div class="d-flex justify-content-center mt-3">
-                    <nav aria-label="Page navigation">
-                        <ul class="pagination">
-                            <li class="page-item @(Model.page <= 1 ? "disabled" : "")">
-                                <a class="page-link"
-                                   href="@Url.Action("Index", new {
-                                       page = Model.page - 1,
-                                       pageSize = Model.pageSize,
-                                       StartDate = startDateVal,
-                                       EndDate = endDateVal,
-                                       OperationalShift = shiftQuery,
-                                       TollOperators = operatorQuery
-                                   })">« Previous</a>
-                            </li>
-
-                            @for (int i = Math.Max(1, Model.page - 1); i <= Math.Min(Model.totalPages, Model.page + 1); i++)
+                            if (shiftTotal != null)
                             {
-                                <li class="page-item @(Model.page == i ? "active" : "")">
-                                    <a class="page-link"
-                                       href="@Url.Action("Index", new {
-                                           page = i,
-                                           pageSize = Model.pageSize,
-                                           StartDate = startDateVal,
-                                           EndDate = endDateVal,
-                                           OperationalShift = shiftQuery,
-                                           TollOperators = operatorQuery
-                                       })">@i</a>
-                                </li>
+                                var shiftDiffClass = shiftTotal.Difference > 0
+                                    ? "text-primary fw-bold"
+                                    : shiftTotal.Difference < 0
+                                        ? "text-danger fw-bold"
+                                        : "text-muted fw-bold";
+
+                                <tr class="fw-bold table-light">
+                                    <td colspan="3" class="text-end">Total Shift @shiftGroup.Key</td>
+                                    <td class="text-end">@shiftTotal.NettAmount.ToString("N2")</td>
+                                    <td class="text-end">@shiftTotal.ActualAmount.ToString("N2")</td>
+                                    <td class="text-end">@shiftTotal.TotalCashExpected.ToString("N2")</td>
+                                    <td class="text-end">@shiftTotal.TotalDeclared.ToString("N2")</td>
+                                    <td class="text-end @shiftDiffClass">@Math.Abs(shiftTotal.Difference).ToString("N2")</td>
+                                    <td class="text-end">@shiftTotal.TotalBanked.ToString("N2")</td>
+                                </tr>
                             }
 
-                            <li class="page-item @(Model.page >= Model.totalPages ? "disabled" : "")">
+                            <tr>
+                                <td colspan="9" style="border-top:none;border-bottom:none;"></td>
+                            </tr>
+                        }
+
+                        var grandDiffClass = grandTotal.Difference > 0
+                            ? "text-white fw-bold"
+                            : grandTotal.Difference < 0
+                                ? "text-white fw-bold"
+                                : "text-white fw-bold";
+
+                        <tr class="fw-bold text-white" style="background-color:#1b4b72;">
+                            <td colspan="3" class="text-end">Operational Day Total</td>
+                            <td class="text-end">@grandTotal.NettAmount.ToString("N2")</td>
+                            <td class="text-end">@grandTotal.ActualAmount.ToString("N2")</td>
+                            <td class="text-end">@grandTotal.TotalCashExpected.ToString("N2")</td>
+                            <td class="text-end">@grandTotal.TotalDeclared.ToString("N2")</td>
+                            <td class="text-end @grandDiffClass">@Math.Abs(grandTotal.Difference).ToString("N2")</td>
+                            <td class="text-end">@grandTotal.TotalBanked.ToString("N2")</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="9" class="text-center text-muted py-4">No records found for the selected filters.</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (totalPages > 1)
+        {
+            var startVal = !string.IsNullOrEmpty(startQuery) ? startQuery : fmtDateTime(Model?.StartDate ?? DateTime.Today);
+            var endVal = !string.IsNullOrEmpty(endQuery) ? endQuery : fmtDateTime(Model?.EndDate ?? DateTime.Today);
+
+            <div class="d-flex justify-content-center mt-3">
+                <nav aria-label="Daily Cashup Page Navigation">
+                    <ul class="pagination">
+
+                        <li class="page-item @(currentPage <= 1 ? "disabled" : "")">
+                            <a class="page-link"
+                               href="@Url.Action("Index", new {
+                                   page = currentPage - 1,
+                                   pageSize = pageSize,
+                                   startDate = startVal,
+                                   endDate = endVal,
+                                   shiftIds = selectedShiftIdsQuery.ToArray(),
+                                   systemUserIds = selectedUserIdsQuery.ToArray()
+                               })">« Prev</a>
+                        </li>
+
+                        @for (int i = Math.Max(1, currentPage - 2); i <= Math.Min(totalPages, currentPage + 2); i++)
+                        {
+                            <li class="page-item @(currentPage == i ? "active" : "")">
                                 <a class="page-link"
                                    href="@Url.Action("Index", new {
-                                       page = Model.page + 1,
-                                       pageSize = Model.pageSize,
-                                       StartDate = startDateVal,
-                                       EndDate = endDateVal,
-                                       OperationalShift = shiftQuery,
-                                       TollOperators = operatorQuery
-                                   })">Next »</a>
+                                       page = i,
+                                       pageSize = pageSize,
+                                       startDate = startVal,
+                                       endDate = endVal,
+                                       shiftIds = selectedShiftIdsQuery.ToArray(),
+                                       systemUserIds = selectedUserIdsQuery.ToArray()
+                                   })">@i</a>
                             </li>
-                        </ul>
-                    </nav>
-                </div>
-            }
+                        }
 
-            <!-- Footer -->
-            <div class="border-top pt-3 mt-3 small text-muted">
-                <div class="row">
-                    <div class="col-md-6 fw-bold">
-                        Daily Cash Report
-                        <div class="text-secondary">Reports Module Version: 1.0.0</div>
-                    </div>
-                    <div class="col-md-3">
-                        <strong>Date and Time:</strong> @DateTime.Now.ToString("dd-MM-yyyy HH:mm:ss")
-                    </div>
-                    <div class="col-md-3 text-end">
-                        <strong>User ID:</strong> @(User?.Identity?.Name ?? "Lucky")
-                    </div>
-                </div>
+                        <li class="page-item @(currentPage >= totalPages ? "disabled" : "")">
+                            <a class="page-link"
+                               href="@Url.Action("Index", new {
+                                   page = currentPage + 1,
+                                   pageSize = pageSize,
+                                   startDate = startVal,
+                                   endDate = endVal,
+                                   shiftIds = selectedShiftIdsQuery.ToArray(),
+                                   systemUserIds = selectedUserIdsQuery.ToArray()
+                               })">Next »</a>
+                        </li>
+
+                    </ul>
+                </nav>
             </div>
         }
-        else
-        {
-            <div class="alert alert-warning text-center">
-                No data found for the selected range.
-            </div>
-        }
+
+        <div class="mt-4 p-3 border-top bg-light">
+            <table class="table table-borderless w-100 mb-0">
+                <tr>
+                    <td style="width:35%;"><strong>Daily Cash Report</strong></td>
+                    <td style="width:30%;"><strong>Date and Time:</strong> <em>@reportGeneratedAt.ToString("dd/MM/yyyy HH:mm:ss")</em></td>
+                    <td style="width:25%;"><strong>User ID:</strong> <em>@currentUser</em></td>
+                    <td style="width:10%;" class="text-end">Page @currentPage of @(totalPages == 0 ? 1 : totalPages)</td>
+                </tr>
+                <tr>
+                    <td colspan="4"><strong>Reports Module Version Number:</strong> @reportVersion</td>
+                </tr>
+            </table>
+        </div>
+
     </div>
 </div>
 
 @section Scripts {
-    <!-- Dependencies -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 
     <script>
+        function fileStamp() {
+            const d = new Date();
+            const pad = n => String(n).padStart(2, "0");
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
+        }
 
-        document.getElementById("btnExportPDF").addEventListener("click", async function () {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+        function toNum(v) {
+            const n = Number(v);
+            return Number.isFinite(n) ? n : 0;
+        }
 
-            const pageWidth = doc.internal.pageSize.getWidth();
-            const pageHeight = doc.internal.pageSize.getHeight();
-            const margin = 40;
+        function fmt2(n) {
+            return toNum(n).toFixed(2);
+        }
 
-            // Report metadata
-            const reportGeneratedAt = new Date().toLocaleString();
-            const currentUser = '@(User?.Identity?.Name ?? "Lucky")';
-            const reportVersion = "1.0.0";
+        function safeDateText(value) {
+            try {
+                const dt = new Date(value);
+                if (isNaN(dt.getTime())) return "";
+                const dd = String(dt.getDate()).padStart(2, "0");
+                const mm = String(dt.getMonth() + 1).padStart(2, "0");
+                const yyyy = dt.getFullYear();
+                return `${dd}/${mm}/${yyyy}`;
+            } catch {
+                return "";
+            }
+        }
 
-            // Filters
-            const filters = {
-                "Start Date": "@(Model?.StartDate.ToString("dd/MM/yyyy HH:mm") ?? "-")",
-                "End Date": "@(Model?.EndDate.ToString("dd/MM/yyyy HH:mm") ?? "-")",
-                "Shift": "@(shiftQuery ?? "All")",
-                "Operator": "@(operatorQuery ?? "All")"
+        function groupByShift(rows) {
+            const groups = {};
+            (rows || []).forEach(r => {
+                const key = r.ShiftDescription || "-- Unknown Shift --";
+                if (!groups[key]) groups[key] = [];
+                groups[key].push(r);
+            });
+
+            return {
+                groups,
+                keys: Object.keys(groups).sort()
+            };
+        }
+
+        function computeTotals(rows) {
+            const t = {
+                lane: 0,
+                top: 0,
+                expected: 0,
+                declared: 0,
+                difference: 0,
+                banked: 0
             };
 
-            // Load logos
-            const logoWidth = 90, logoHeight = 90, logoY = 25;
-            const leftLogo = '/images/LCC Logo.jpg';
-            const rightLogo = '/images/ICT-Works Logo.jpg';
-            const loadImage = src => new Promise(resolve => {
+            (rows || []).forEach(r => {
+                t.lane += toNum(r.NettAmount);
+                t.top += toNum(r.ActualAmount);
+                t.expected += toNum(r.TotalCashExpected);
+                t.declared += toNum(r.TotalDeclared);
+                t.difference += toNum(r.Difference);
+                t.banked += toNum(r.TotalBanked);
+            });
+
+            return t;
+        }
+
+        function getExportMeta() {
+            return {
+                company: "LEKKI CONCESSION COMPANY (LCC)",
+                bridge: "MIS REPORTING SYSTEM",
+                title: "DAILY CASH REPORT",
+                generatedAt: new Date().toLocaleString(),
+                userId: "@currentUser",
+                version: "@reportVersion",
+                startDate: "@((Model?.StartDate ?? DateTime.Today).ToString("dd/MM/yyyy HH:mm"))",
+                endDate: "@((Model?.EndDate ?? DateTime.Today).ToString("dd/MM/yyyy HH:mm"))",
+                shift: "@shiftDisplay",
+                operator: "@opDisplay",
+                leftLogo: "/images/LCC Logo.jpg",
+                rightLogo: "/images/ICT-Works Logo.jpg"
+            };
+        }
+
+        function loadImage(src) {
+            return new Promise(resolve => {
+                if (!src) {
+                    resolve(null);
+                    return;
+                }
+
                 const img = new Image();
-                img.crossOrigin = 'Anonymous';
+                img.crossOrigin = "anonymous";
                 img.onload = () => resolve(img);
                 img.onerror = () => resolve(null);
                 img.src = src;
             });
-            const [lLogo, rLogo] = await Promise.all([loadImage(leftLogo), loadImage(rightLogo)]);
-            if (lLogo) doc.addImage(lLogo, 'JPEG', margin, logoY, logoWidth, logoHeight);
-            if (rLogo) doc.addImage(rLogo, 'JPEG', pageWidth - margin - logoWidth, logoY, logoWidth, logoHeight);
+        }
 
-            // Title
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(16);
-            doc.text("Daily Cashup Report", pageWidth / 2, logoY + 50, { align: "center" });
+        function drawPdfHeader(doc, pageWidth, margin, meta, leftLogo, rightLogo) {
+            const logoW = 60;
+            const logoH = 60;
+            const topY = 20;
 
-            // Filters section
-            let y = logoY + logoHeight + 10;
-            doc.setFont("helvetica", "normal");
-            doc.setFontSize(10);
-            doc.text("Filters Used:", margin, y);
-            y += 14;
-            for (const [key, value] of Object.entries(filters)) {
-                doc.text(`${key}: ${value}`, margin, y);
-                y += 14;
+            if (leftLogo) {
+                doc.addImage(leftLogo, "JPEG", margin, topY, logoW, logoH);
             }
 
-            // Table data
-            const cashupData = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Items ?? new List<MIS.Web.Models.DailyCashup.DailyCashupModel>()));
-            const headers = [
+            if (rightLogo) {
+                doc.addImage(rightLogo, "JPEG", pageWidth - margin - logoW, topY, logoW, logoH);
+            }
+
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(14);
+            doc.text(meta.company, pageWidth / 2, 40, { align: "center" });
+
+            doc.setFontSize(12);
+            doc.text(meta.bridge, pageWidth / 2, 58, { align: "center" });
+
+            doc.setFontSize(16);
+            doc.text(meta.title, pageWidth / 2, 80, { align: "center" });
+        }
+
+        function drawPdfFilters(doc, margin, startY, meta) {
+            let y = startY;
+
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(10);
+            doc.text("Filters Used:", margin, y);
+
+            y += 14;
+            doc.setFont("helvetica", "normal");
+            doc.text(`Start Date: ${meta.startDate}`, margin, y);
+            y += 14;
+            doc.text(`End Date: ${meta.endDate}`, margin, y);
+            y += 14;
+            doc.text(`Shift: ${meta.shift}`, margin, y);
+            y += 14;
+            doc.text(`Operator: ${meta.operator}`, margin, y);
+            y += 16;
+
+            return y;
+        }
+
+        function drawPdfFooter(doc, pageWidth, pageHeight, margin, meta, pageNumber, totalPages) {
+            const row1Y = pageHeight - 28;
+            const row2Y = pageHeight - 14;
+
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(9);
+            doc.text(`${meta.title} (Report name)`, margin, row1Y);
+
+            doc.setFont("helvetica", "normal");
+            doc.text(`Date and Time: ${meta.generatedAt}`, pageWidth / 2, row1Y, { align: "center" });
+            doc.text(`User ID: ${meta.userId}`, pageWidth - 170, row1Y);
+            doc.text(`Page ${pageNumber} of ${totalPages}`, pageWidth - margin, row1Y, { align: "right" });
+
+            doc.setFontSize(8);
+            doc.text(`Reports Module Version Number: ${meta.version}`, margin, row2Y);
+        }
+
+        function addPdfFooters(doc, meta) {
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
+            const margin = 40;
+            const totalPages = doc.internal.getNumberOfPages();
+
+            for (let i = 1; i <= totalPages; i++) {
+                doc.setPage(i);
+                drawPdfFooter(doc, pageWidth, pageHeight, margin, meta, i, totalPages);
+            }
+        }
+
+        function buildPdfBody(rows) {
+            const { groups, keys } = groupByShift(rows);
+            const body = [];
+            const dayTotals = computeTotals(rows);
+
+            keys.forEach(shift => {
+                const shiftRows = groups[shift] || [];
+                const shiftTotals = computeTotals(shiftRows);
+
+                body.push([
+                    {
+                        content: `SHIFT: ${shift}`,
+                        colSpan: 9,
+                        styles: {
+                            halign: "left",
+                            fillColor: [230, 230, 230],
+                            fontStyle: "bold"
+                        }
+                    }
+                ]);
+
+                shiftRows.forEach(r => {
+                    body.push([
+                        safeDateText(r.ShiftDate),
+                        r.ShiftDescription || "",
+                        r.TollOperator || "",
+                        fmt2(r.NettAmount),
+                        fmt2(r.ActualAmount),
+                        fmt2(r.TotalCashExpected),
+                        fmt2(r.TotalDeclared),
+                        fmt2(Math.abs(toNum(r.Difference))),
+                        fmt2(r.TotalBanked)
+                    ]);
+                });
+
+                body.push([
+                    {
+                        content: `Total Shift ${shift}`,
+                        colSpan: 3,
+                        styles: {
+                            halign: "right",
+                            fillColor: [245, 245, 245],
+                            fontStyle: "bold"
+                        }
+                    },
+                    fmt2(shiftTotals.lane),
+                    fmt2(shiftTotals.top),
+                    fmt2(shiftTotals.expected),
+                    fmt2(shiftTotals.declared),
+                    fmt2(Math.abs(shiftTotals.difference)),
+                    fmt2(shiftTotals.banked)
+                ]);
+
+                body.push([
+                    {
+                        content: "",
+                        colSpan: 9,
+                        styles: {
+                            lineWidth: 0,
+                            minCellHeight: 6
+                        }
+                    }
+                ]);
+            });
+
+            body.push([
+                {
+                    content: "Operational Day Total",
+                    colSpan: 3,
+                    styles: {
+                        halign: "right",
+                        fillColor: [27, 75, 114],
+                        textColor: 255,
+                        fontStyle: "bold"
+                    }
+                },
+                fmt2(dayTotals.lane),
+                fmt2(dayTotals.top),
+                fmt2(dayTotals.expected),
+                fmt2(dayTotals.declared),
+                fmt2(Math.abs(dayTotals.difference)),
+                fmt2(dayTotals.banked)
+            ]);
+
+            return body;
+        }
+
+        function buildExcelRows(rows) {
+            const { groups, keys } = groupByShift(rows);
+            const sheet = [];
+
+            sheet.push([
+                "Operational Day",
                 "Operational Shift",
                 "Toll Operator ID",
                 "Lane Cash",
                 "Top-ups",
                 "Total Cash Expected",
                 "Cash Declared",
-                "Surplus / Shortage",
+                "Surplus /- Shortage",
                 "Total Banked"
-            ];
-
-            const rows = (cashupData || []).map(d => [
-                d.ShiftDescription,
-                d.TollOperator,
-                (Number(d.NettAmount) || 0).toFixed(2),
-                "0.00",
-                (Number(d.ActualAmount) || 0).toFixed(2),
-                (Number(d.TotalDeclared) || 0).toFixed(2),
-                (Number(d.ActualAmount - d.TotalDeclared) || 0).toFixed(2),
-                (Number(d.NettAmount + (d.ActualAmount - d.TotalDeclared)) || 0).toFixed(2)
             ]);
 
-            // Draw the table
-            doc.autoTable({
-                head: [headers],
-                body: rows,
-                startY: y + 10,
-                theme: 'grid',
-                styles: { fontSize: 9, cellPadding: 4 },
-                headStyles: { fillColor: [41, 128, 185], textColor: 255, halign: "center" },
-                columnStyles: { 0: { halign: "left" }, 1: { halign: "left" } },
-                margin: { left: margin, right: margin },
-                didDrawPage: function (data) {
-                    const pageCount = doc.internal.getNumberOfPages();
-                    const currentPage = doc.internal.getCurrentPageInfo().pageNumber;
-                    const footerY = pageHeight - 50;
+            const dayTotals = computeTotals(rows);
 
-                    doc.setFont("helvetica", "normal");
-                    doc.setFontSize(10);
-                    doc.text("Daily Cashup Report", margin, footerY);
-                    doc.text(`Date and Time: ${reportGeneratedAt}`, pageWidth / 2.5, footerY);
-                    doc.text(`User ID: ${currentUser}`, pageWidth / 1.5, footerY);
-                    doc.text(`Page ${currentPage} of ${pageCount}`, pageWidth - margin, footerY, { align: 'right' });
-                    doc.setFontSize(9);
-                    doc.text(`Reports Module Version Number: ${reportVersion}`, margin, footerY + 14);
+            keys.forEach(shift => {
+                const shiftRows = groups[shift] || [];
+                const shiftTotals = computeTotals(shiftRows);
+
+                sheet.push([`SHIFT: ${shift}`, "", "", "", "", "", "", "", ""]);
+
+                shiftRows.forEach(r => {
+                    sheet.push([
+                        safeDateText(r.ShiftDate),
+                        r.ShiftDescription || "",
+                        r.TollOperator || "",
+                        fmt2(r.NettAmount),
+                        fmt2(r.ActualAmount),
+                        fmt2(r.TotalCashExpected),
+                        fmt2(r.TotalDeclared),
+                        fmt2(Math.abs(toNum(r.Difference))),
+                        fmt2(r.TotalBanked)
+                    ]);
+                });
+
+                sheet.push([
+                    `Total Shift ${shift}`,
+                    "",
+                    "",
+                    fmt2(shiftTotals.lane),
+                    fmt2(shiftTotals.top),
+                    fmt2(shiftTotals.expected),
+                    fmt2(shiftTotals.declared),
+                    fmt2(Math.abs(shiftTotals.difference)),
+                    fmt2(shiftTotals.banked)
+                ]);
+
+                sheet.push(["", "", "", "", "", "", "", "", ""]);
+            });
+
+            sheet.push([
+                "Operational Day Total",
+                "",
+                "",
+                fmt2(dayTotals.lane),
+                fmt2(dayTotals.top),
+                fmt2(dayTotals.expected),
+                fmt2(dayTotals.declared),
+                fmt2(Math.abs(dayTotals.difference)),
+                fmt2(dayTotals.banked)
+            ]);
+
+            return sheet;
+        }
+
+        function buildExcelWorkbook(rows, meta) {
+            const wb = XLSX.utils.book_new();
+
+            const aoa = [
+                [meta.company],
+                [meta.bridge],
+                [meta.title],
+                [],
+                ["Filters Used:"],
+                [`Start Date: ${meta.startDate}`],
+                [`End Date: ${meta.endDate}`],
+                [`Shift: ${meta.shift}`],
+                [`Operator: ${meta.operator}`],
+                []
+            ];
+
+            const tableRows = buildExcelRows(rows);
+            const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+            XLSX.utils.sheet_add_aoa(ws, tableRows, { origin: `A${aoa.length + 1}` });
+
+            ws["!cols"] = [
+                { wch: 18 },
+                { wch: 18 },
+                { wch: 18 },
+                { wch: 14 },
+                { wch: 14 },
+                { wch: 18 },
+                { wch: 16 },
+                { wch: 18 },
+                { wch: 14 }
+            ];
+
+            ws["!margins"] = {
+                left: 0.3,
+                right: 0.3,
+                top: 0.6,
+                bottom: 0.6,
+                header: 0.3,
+                footer: 0.4
+            };
+
+            ws["!pageSetup"] = {
+                orientation: "landscape",
+                paperSize: 9,
+                fitToWidth: 1,
+                fitToHeight: 0
+            };
+
+            ws["!printHeader"] =
+                `&C&16&"Arial,Bold"${meta.company}\n` +
+                `&C&12&"Arial,Bold"${meta.bridge}\n` +
+                `&C&14&"Arial,Bold"${meta.title}`;
+
+            ws["!printFooter"] =
+                `&L${meta.title} (Report name)` +
+                `&CDate and Time: ${meta.generatedAt}` +
+                `&RUser ID: ${meta.userId}    Page &P of &N\n` +
+                `&LReports Module Version Number: ${meta.version}`;
+
+            wb.Workbook = wb.Workbook || {};
+            wb.Workbook.Views = [{ RTL: false }];
+
+            XLSX.utils.book_append_sheet(wb, ws, "Daily Cashup Report");
+            return wb;
+        }
+
+        const rawDailyCashup = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
+            exportItems ?? new List<MIS.Web.Models.DailyCashup.DailyCashupModel>()
+        ));
+
+        document.getElementById("btnExportPDF")?.addEventListener("click", async function () {
+            if (!rawDailyCashup || !rawDailyCashup.length) {
+                alert("No data to export.");
+                return;
+            }
+
+            const meta = getExportMeta();
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({
+                orientation: "landscape",
+                unit: "pt",
+                format: "a4"
+            });
+
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const margin = 40;
+
+            const [leftLogo, rightLogo] = await Promise.all([
+                loadImage(meta.leftLogo),
+                loadImage(meta.rightLogo)
+            ]);
+
+            drawPdfHeader(doc, pageWidth, margin, meta, leftLogo, rightLogo);
+            const startY = drawPdfFilters(doc, margin, 110, meta);
+
+            doc.autoTable({
+                head: [[
+                    "Operational Day",
+                    "Operational Shift",
+                    "Toll Operator ID",
+                    "Lane Cash",
+                    "Top-ups",
+                    "Total Cash Expected",
+                    "Cash Declared",
+                    "Surplus /- Shortage",
+                    "Total Banked"
+                ]],
+                body: buildPdfBody(rawDailyCashup),
+                startY: startY,
+                theme: "grid",
+                styles: {
+                    fontSize: 8,
+                    cellPadding: 4,
+                    overflow: "linebreak",
+                    valign: "middle",
+                    halign: "center"
+                },
+                headStyles: {
+                    fillColor: [41, 128, 185],
+                    textColor: 255,
+                    fontStyle: "bold"
+                },
+                margin: {
+                    top: 40,
+                    right: margin,
+                    bottom: 46,
+                    left: margin
+                },
+                didDrawPage: function (data) {
+                    if (data.pageNumber > 1) {
+                        drawPdfHeader(doc, pageWidth, margin, meta, leftLogo, rightLogo);
+                    }
                 }
             });
 
-            // Save the PDF
-            doc.save(`Daily_Cashup_Report_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
+            addPdfFooters(doc, meta);
+            doc.save(`Daily_Cashup_Report_${fileStamp()}.pdf`);
         });
 
+        document.getElementById("btnExportExcel")?.addEventListener("click", function () {
+            if (!rawDailyCashup || !rawDailyCashup.length) {
+                alert("No data to export.");
+                return;
+            }
 
-        document.getElementById("btnExportExcel").addEventListener("click", function () {
-        const cashupData = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Items ?? new List<MIS.Web.Models.DailyCashup.DailyCashupModel>()));
-            if (!cashupData.length) { alert("No data to export."); return; }
-
-            const wb = XLSX.utils.book_new();
-            const headers = [["Operational Shift", "Toll Operator ID", "Lane Cash", "Top-ups", "Total Cash Expected", "Cash Declared", "Surplus / Shortage", "Total Banked"]];
-            const rows = cashupData.map(d => [
-                d.ShiftDescription,
-                d.TollOperator,
-                d.NettAmount?.toFixed(2) ?? "0.00",
-                "0.00",
-                d.ActualAmount?.toFixed(2) ?? "0.00",
-                d.TotalDeclared?.toFixed(2) ?? "0.00",
-                (d.ActualAmount - d.TotalDeclared)?.toFixed(2) ?? "0.00",
-                (d.NettAmount + (d.ActualAmount - d.TotalDeclared))?.toFixed(2) ?? "0.00"
-            ]);
-
-            const ws = XLSX.utils.aoa_to_sheet([...headers, ...rows]);
-            XLSX.utils.book_append_sheet(wb, ws, "Daily Cashup Report");
-            XLSX.writeFile(wb, `Daily_Cashup_Report_${new Date().toISOString().replace(/[:.]/g, '-')}.xlsx`);
+            const meta = getExportMeta();
+            const wb = buildExcelWorkbook(rawDailyCashup, meta);
+            XLSX.writeFile(wb, `Daily_Cashup_Report_${fileStamp()}.xlsx`);
         });
     </script>
 }
-

@@ -1,0 +1,602 @@
+﻿@model MIS.Web.Models.AccountUsageSummary.PageAccountUsageSummaryModel
+@using System.Globalization
+
+@{
+    ViewData["Title"] = "Account Usage Summary Report";
+
+    DateTime startDate = Model?.Filters?.StartDate ?? DateTime.Now.AddDays(-30);
+    DateTime endDate = Model?.Filters?.EndDate ?? DateTime.Now;
+    string accountNumber = Model?.Filters?.AccountNumber ?? string.Empty;
+
+    var reportGeneratedAt = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
+    var currentUserId = User.FindFirst("firstName")?.Value ?? (User.Identity?.Name ?? "Lucky");
+    var reportVersion = "3.0.0.0";
+
+    var summary = Model?.Summary ?? new MIS.Web.Models.AccountUsageSummary.AccountUsageSummarySummaryModel();
+    var items = Model?.Items ?? new List<MIS.Web.Models.AccountUsageSummary.AccountUsageSummaryModel>();
+
+    var currentPage = Model?.page ?? 1;
+    var pageSize = Model?.pageSize ?? 20;
+    var totalPages = Model?.totalPages ?? 0;
+    var totalCount = Model?.totalCount ?? 0;
+
+    decimal totalOpeningBalance = items.Sum(x => x.OpeningBalance);
+    decimal totalClosingBalance = items.Sum(x => x.ClosingBalance);
+    int totalLaneTransactionCount = items.Sum(x => x.LaneTransactionCount);
+    decimal totalLaneTransactionValue = items.Sum(x => x.LaneTransactionValue);
+
+    int totalLaneDiscountCount = items.Sum(x => x.LaneDiscountCount);
+    decimal totalLaneDiscountValue = items.Sum(x => x.LaneDiscountValue);
+
+    int totalFrequentUserDiscountCount = items.Sum(x => x.FrequentUserDiscountCount);
+    decimal totalFrequentUserDiscountValue = items.Sum(x => x.FrequentUserDiscountValue);
+
+    int totalHappyHourDiscountCount = items.Sum(x => x.HappyHourDiscountCount);
+    decimal totalHappyHourDiscountValue = items.Sum(x => x.HappyHourDiscountValue);
+
+    int totalJourneyDiscountCount = items.Sum(x => x.JourneyDiscountCount);
+    decimal totalJourneyDiscountValue = items.Sum(x => x.JourneyDiscountValue);
+
+    decimal totalReceiptTopUp = items.Sum(x => x.ReceiptTopUp);
+    decimal totalReceiptDeposit = items.Sum(x => x.ReceiptDeposit);
+    decimal totalPaymentFees = items.Sum(x => x.PaymentFees);
+    decimal totalPaymentRefunds = items.Sum(x => x.PaymentRefunds);
+    decimal totalRefundAccount = items.Sum(x => x.RefundAccount);
+    decimal totalRefundDeposit = items.Sum(x => x.RefundDeposit);
+}
+
+<div class="card shadow-lg p-4 mb-4">
+
+    <!-- HEADER -->
+    <div class="position-relative border-bottom pb-2 mb-3">
+        <h2 class="fw-bold text-primary text-center mb-0">
+            ACCOUNT USAGE SUMMARY REPORT
+        </h2>
+
+        <div class="position-absolute top-0 end-0 d-flex gap-2">
+            <button id="btnDownloadPdf" type="button" class="btn btn-danger btn-sm">
+                <i class="fa fa-file-pdf"></i> Export PDF
+            </button>
+            <button id="btnDownloadExcel" type="button" class="btn btn-success btn-sm">
+                <i class="fa fa-file-excel"></i> Export Excel
+            </button>
+        </div>
+    </div>
+
+    <!-- FILTERS -->
+    <form method="get" class="row g-3 mb-4">
+
+        <div class="col-md-3">
+            <label class="form-label fw-semibold">Start Date and Time</label>
+            <input type="datetime-local"
+                   name="StartDate"
+                   class="form-control"
+                   value="@startDate.ToString("yyyy-MM-ddTHH:mm")" />
+        </div>
+
+        <div class="col-md-3">
+            <label class="form-label fw-semibold">End Date and Time</label>
+            <input type="datetime-local"
+                   name="EndDate"
+                   class="form-control"
+                   value="@endDate.ToString("yyyy-MM-ddTHH:mm")" />
+        </div>
+
+        <div class="col-md-3">
+            <label class="form-label fw-semibold">Account Number</label>
+            <input type="text"
+                   name="AccountNumber"
+                   class="form-control"
+                   value="@accountNumber"
+                   placeholder="Optional account number" />
+        </div>
+
+        <div class="col-md-2 align-self-end d-flex gap-2">
+            <input type="hidden" name="Page" value="1" />
+            <button class="btn btn-primary w-100" type="submit">Apply Filters</button>
+        </div>
+    </form>
+
+    <!-- SUMMARY -->
+    <div class="border rounded p-3 mb-4 bg-light">
+        <h5 class="fw-bold text-secondary mb-3">SUMMARY</h5>
+
+        <div class="row g-3">
+            <div class="col-md-4">
+                <strong>Registered Accounts:</strong>
+                <span class="float-end">@summary.TotalAccounts</span>
+            </div>
+
+            <div class="col-md-4">
+                <strong>Active:</strong>
+                <span class="float-end">@summary.Active</span>
+            </div>
+
+            <div class="col-md-4">
+                <strong>Dormant:</strong>
+                <span class="float-end">@summary.Dormant</span>
+            </div>
+
+            <div class="col-md-4">
+                <strong>Terminated:</strong>
+                <span class="float-end">@summary.Terminated</span>
+            </div>
+
+            <div class="col-md-4">
+                <strong>Registered E-ID Devices:</strong>
+                <span class="float-end">@summary.TotalEIdDevices</span>
+            </div>
+
+            <div class="col-md-4">
+                <strong>ETC Tags:</strong>
+                <span class="float-end">@summary.TotalEtcTags</span>
+            </div>
+
+            <div class="col-md-4">
+                <strong>Smart Cards:</strong>
+                <span class="float-end">@summary.TotalSmartCards</span>
+            </div>
+
+            <div class="col-md-4">
+                <strong>Number of Registered Vehicles:</strong>
+                <span class="float-end">@summary.TotalVehicles</span>
+            </div>
+
+            <div class="col-md-4">
+                <strong>Total Records:</strong>
+                <span class="float-end">@totalCount</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- TABLE -->
+    <div class="table-responsive">
+        <table id="detailsTable" class="table table-bordered table-striped table-sm text-center align-middle">
+            <thead>
+                <tr class="table-primary fw-bold">
+                    <th rowspan="2">Account Number</th>
+                    <th rowspan="2">Account Status</th>
+                    <th rowspan="2">Opening Balance</th>
+                    <th rowspan="2">Closing Balance</th>
+
+                    <th colspan="2" class="bg-light">Lane Transactions</th>
+                    <th colspan="2" class="bg-light">Lane Discount</th>
+                    <th colspan="2" class="bg-light">Frequent User Discount</th>
+                    <th colspan="2" class="bg-light">Happy Hour Discount</th>
+                    <th colspan="2" class="bg-light">Journey Discount</th> 
+                    <th colspan="2" class="bg-light">Receipts</th>
+                    <th colspan="2" class="bg-light">Payments</th>
+                    <th colspan="2" class="bg-light">Refund</th>
+                </tr>
+
+                <tr class="table-secondary">
+                    <th>Count</th>
+                    <th>Value</th>
+
+                    <th>Count</th>
+                    <th>Value</th>
+
+                    <th>Count</th>
+                    <th>Value</th>
+
+                    <th>Count</th>
+                    <th>Value</th>
+
+                    <th>Count</th>
+                    <th>Value</th>
+
+                    <th>Top-ups</th>
+                    <th>Deposits</th>
+
+                    <th>Fees</th>
+                    <th>Refunds</th>
+
+                    <th>Account</th>
+                    <th>Deposit</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                @if (items.Any())
+                {
+                    foreach (var item in items)
+                    {
+                        <tr>
+                            <td>@item.AccountNumber</td>
+                            <td>@item.AccountStatus</td>
+                            <td class="text-end">@item.OpeningBalance.ToString("N2")</td>
+                            <td class="text-end">@item.ClosingBalance.ToString("N2")</td>
+
+                            <td class="text-end">@item.LaneTransactionCount</td>
+                            <td class="text-end">@item.LaneTransactionValue.ToString("N2")</td>
+
+                            <td class="text-end">@item.LaneDiscountCount</td>
+                            <td class="text-end">@item.LaneDiscountValue.ToString("N2")</td>
+
+                            <td class="text-end">@item.FrequentUserDiscountCount</td>
+                            <td class="text-end">@item.FrequentUserDiscountValue.ToString("N2")</td>
+
+                            <td class="text-end">@item.HappyHourDiscountCount</td>
+                            <td class="text-end">@item.HappyHourDiscountValue.ToString("N2")</td>
+
+                            <td class="text-end">@item.JourneyDiscountCount</td>
+                            <td class="text-end">@item.JourneyDiscountValue.ToString("N2")</td>
+
+                            <td class="text-end">@item.ReceiptTopUp.ToString("N2")</td>
+                            <td class="text-end">@item.ReceiptDeposit.ToString("N2")</td>
+
+                            <td class="text-end">@item.PaymentFees.ToString("N2")</td>
+                            <td class="text-end">@item.PaymentRefunds.ToString("N2")</td>
+
+                            <td class="text-end">@item.RefundAccount.ToString("N2")</td>
+                            <td class="text-end">@item.RefundDeposit.ToString("N2")</td>
+                        </tr>
+                    }
+
+                    <tr class="table-warning fw-bold">
+                        <td colspan="2" class="text-start">TOTAL (Current Page)</td>
+                        <td class="text-end">@totalOpeningBalance.ToString("N2")</td>
+                        <td class="text-end">@totalClosingBalance.ToString("N2")</td>
+
+                        <td class="text-end">@totalLaneTransactionCount</td>
+                        <td class="text-end">@totalLaneTransactionValue.ToString("N2")</td>
+
+                        <td class="text-end">@totalLaneDiscountCount</td>
+                        <td class="text-end">@totalLaneDiscountValue.ToString("N2")</td>
+
+                        <td class="text-end">@totalFrequentUserDiscountCount</td>
+                        <td class="text-end">@totalFrequentUserDiscountValue.ToString("N2")</td>
+
+                        <td class="text-end">@totalHappyHourDiscountCount</td>
+                        <td class="text-end">@totalHappyHourDiscountValue.ToString("N2")</td>
+
+                        <td class="text-end">@totalJourneyDiscountCount</td>
+                        <td class="text-end">@totalJourneyDiscountValue.ToString("N2")</td>
+
+                        <td class="text-end">@totalReceiptTopUp.ToString("N2")</td>
+                        <td class="text-end">@totalReceiptDeposit.ToString("N2")</td>
+
+                        <td class="text-end">@totalPaymentFees.ToString("N2")</td>
+                        <td class="text-end">@totalPaymentRefunds.ToString("N2")</td>
+
+                        <td class="text-end">@totalRefundAccount.ToString("N2")</td>
+                        <td class="text-end">@totalRefundDeposit.ToString("N2")</td>
+                    </tr>
+                }
+                else
+                {
+                    <tr>
+                        <td colspan="20" class="text-muted text-center">No records found.</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <!-- PAGINATION -->
+    @if (totalPages > 1)
+    {
+        <nav aria-label="Account usage summary pages" class="mt-3">
+            <ul class="pagination justify-content-center flex-wrap">
+
+                <li class="page-item @(currentPage <= 1 ? "disabled" : "")">
+                    <a class="page-link"
+                       href="@Url.Action(null, new {
+                           StartDate = startDate.ToString("yyyy-MM-ddTHH:mm"),
+                           EndDate = endDate.ToString("yyyy-MM-ddTHH:mm"),
+                           AccountNumber = accountNumber,
+                           Page = currentPage - 1,
+                           PageSize = pageSize
+                       })">
+                        Previous
+                    </a>
+                </li>
+
+                @for (int i = 1; i <= totalPages; i++)
+                {
+                    if (i == currentPage || i == 1 || i == totalPages || Math.Abs(i - currentPage) <= 2)
+                    {
+                        <li class="page-item @(i == currentPage ? "active" : "")">
+                            <a class="page-link"
+                               href="@Url.Action(null, new {
+                                   StartDate = startDate.ToString("yyyy-MM-ddTHH:mm"),
+                                   EndDate = endDate.ToString("yyyy-MM-ddTHH:mm"),
+                                   AccountNumber = accountNumber,
+                                   Page = i,
+                                   PageSize = pageSize
+                               })">
+                                @i
+                            </a>
+                        </li>
+                    }
+                    else if (i == currentPage - 3 || i == currentPage + 3)
+                    {
+                        <li class="page-item disabled">
+                            <span class="page-link">...</span>
+                        </li>
+                    }
+                }
+
+                <li class="page-item @(currentPage >= totalPages ? "disabled" : "")">
+                    <a class="page-link"
+                       href="@Url.Action(null, new {
+                           StartDate = startDate.ToString("yyyy-MM-ddTHH:mm"),
+                           EndDate = endDate.ToString("yyyy-MM-ddTHH:mm"),
+                           AccountNumber = accountNumber,
+                           Page = currentPage + 1,
+                           PageSize = pageSize
+                       })">
+                        Next
+                    </a>
+                </li>
+            </ul>
+        </nav>
+    }
+
+    <!-- FOOTER -->
+    <div class="mt-4 p-3 border-top">
+        <table class="table table-borderless w-100 mb-0 align-middle">
+            <tr>
+                <td class="fw-bold text-dark">Account Usage Summary Report</td>
+                <td><strong>Date and Time:</strong> @reportGeneratedAt</td>
+                <td><strong>User ID:</strong> @currentUserId</td>
+                <td class="text-end">
+                    Page <strong>@currentPage</strong> of <strong>@(totalPages == 0 ? 1 : totalPages)</strong>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="4">
+                    <small class="text-muted">
+                        Reports Module Version Number: <strong>@reportVersion</strong>
+                    </small>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+</div>
+
+@section Scripts {
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+
+    <script>
+        (() => {
+            // ==========================
+            // REPORT META
+            // ==========================
+            const REPORT_TITLE = "ACCOUNT USAGE SUMMARY REPORT";
+            const COMPANY_LINE_1 = "LEKKI CONCESSION COMPANY LIMITED";
+            const COMPANY_LINE_2 = "LEKKI-IKOYI LINK BRIDGE";
+
+            const GENERATED_BY = "@currentUserId";
+            const GENERATED_ON = "@reportGeneratedAt";
+            const REPORT_VERSION = "@reportVersion";
+
+            const LEFT_LOGO_URL = "/images/lCC Logo.jpg";
+            const RIGHT_LOGO_URL = "/images/ICT-Works Logo.jpg";
+
+            const tableElement = document.getElementById("detailsTable");
+            const btnPdf = document.getElementById("btnDownloadPdf");
+            const btnExcel = document.getElementById("btnDownloadExcel");
+
+            // ==========================
+            // HELPERS
+            // ==========================
+            function fileStamp() {
+                return new Date().toISOString().replace(/[:.]/g, "-");
+            }
+
+            function safe(value) {
+                return (value ?? "").toString().trim();
+            }
+
+            function loadImage(src) {
+                return new Promise(resolve => {
+                    const img = new Image();
+                    img.crossOrigin = "Anonymous";
+
+                    img.onload = () => resolve(img);
+                    img.onerror = () => resolve(null);
+
+                    img.src = src;
+                });
+            }
+
+            function getFilters() {
+                return {
+                    startDate: safe("@(Model?.Filters?.StartDate?.ToString("dd-MM-yyyy HH:mm") ?? "")"),
+                    endDate: safe("@(Model?.Filters?.EndDate?.ToString("dd-MM-yyyy HH:mm") ?? "")"),
+                    accountNumber: safe("@(Model?.Filters?.AccountNumber ?? "")")
+                };
+            }
+
+            // ==========================
+            // PDF DRAW HELPERS
+            // ==========================
+            function drawHeader(doc, pageWidth, leftLogo, rightLogo) {
+                const topY = 20;
+
+                // Left logo
+                if (leftLogo) {
+                    doc.addImage(leftLogo, "JPEG", 30, topY, 85, 60);
+                }
+
+                // Right logo
+                if (rightLogo) {
+                    doc.addImage(rightLogo, "JPEG", pageWidth - 125, topY + 5, 85, 50);
+                }
+
+                // Center text
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(0, 0, 0);
+
+                doc.setFontSize(13);
+                doc.text(COMPANY_LINE_1, pageWidth / 2, topY + 20, { align: "center" });
+
+                doc.setFontSize(12);
+                doc.text(COMPANY_LINE_2, pageWidth / 2, topY + 42, { align: "center" });
+
+                doc.setFontSize(16);
+                doc.text(REPORT_TITLE, pageWidth / 2, topY + 72, { align: "center" });
+            }
+
+            function drawFiltersBlock(doc) {
+                const filters = getFilters();
+                let y = 120;
+
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(9);
+                doc.setTextColor(0, 0, 0);
+
+                doc.text("FILTERS USED:", 30, y);
+                y += 16;
+
+                if (filters.startDate) {
+                    doc.text(`Start Date And Time: ${filters.startDate}`, 30, y);
+                    y += 14;
+                }
+
+                if (filters.endDate) {
+                    doc.text(`End Date And Time: ${filters.endDate}`, 30, y);
+                    y += 14;
+                }
+
+                doc.text(`Account Number: ${filters.accountNumber || "All"}`, 30, y);
+                y += 14;
+
+                doc.text(`Generated By: ${GENERATED_BY}`, 30, y);
+                y += 14;
+
+                doc.text(`Generated On: ${GENERATED_ON}`, 30, y);
+                y += 14;
+
+                doc.text(`Version: ${REPORT_VERSION}`, 30, y);
+                y += 10;
+
+                return y;
+            }
+
+            function drawFooter(doc, pageNumber, totalPages) {
+                const pageWidth = doc.internal.pageSize.getWidth();
+                const pageHeight = doc.internal.pageSize.getHeight();
+
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(8);
+                doc.setTextColor(0, 0, 0);
+
+                doc.text(REPORT_TITLE, 30, pageHeight - 20);
+                doc.text(`Date and Time: ${GENERATED_ON}`, pageWidth / 2 - 60, pageHeight - 20);
+                doc.text(`User ID: ${GENERATED_BY}`, pageWidth - 180, pageHeight - 20);
+
+                doc.text(`Reports Module Version Number: ${REPORT_VERSION}`, 30, pageHeight - 8);
+                doc.text(`Page ${pageNumber} of ${totalPages}`, pageWidth - 30, pageHeight - 8, { align: "right" });
+            }
+
+            // ==========================
+            // PDF EXPORT
+            // ==========================
+            async function exportPdf() {
+                if (!tableElement) {
+                    console.error("detailsTable not found.");
+                    return;
+                }
+
+                if (!window.jspdf) {
+                    alert("jsPDF not loaded. Check layout scripts.");
+                    return;
+                }
+
+                const { jsPDF } = window.jspdf;
+
+                const doc = new jsPDF({
+                    orientation: "landscape",
+                    unit: "pt",
+                    format: "a4"
+                });
+
+                const pageWidth = doc.internal.pageSize.getWidth();
+
+                const [leftLogo, rightLogo] = await Promise.all([
+                    loadImage(LEFT_LOGO_URL),
+                    loadImage(RIGHT_LOGO_URL)
+                ]);
+
+                drawHeader(doc, pageWidth, leftLogo, rightLogo);
+                const startY = drawFiltersBlock(doc) + 12;
+
+                doc.autoTable({
+                    html: "#detailsTable",
+                    startY: startY,
+                    theme: "grid",
+                    margin: {
+                        top: 40,
+                        left: 30,
+                        right: 30,
+                        bottom: 35
+                    },
+                    styles: {
+                        font: "helvetica",
+                        fontSize: 8,
+                        cellPadding: 4,
+                        overflow: "linebreak",
+                        valign: "middle",
+                        textColor: [0, 0, 0],
+                        lineColor: [160, 160, 160],
+                        lineWidth: 0.4
+                    },
+                    headStyles: {
+                        fillColor: [61, 149, 216],
+                        textColor: [255, 255, 255],
+                        fontStyle: "bold",
+                        halign: "center",
+                        valign: "middle"
+                    },
+                    alternateRowStyles: {
+                        fillColor: [245, 249, 252]
+                    },
+                    didDrawPage: function () {
+                        drawHeader(doc, pageWidth, leftLogo, rightLogo);
+                    }
+                });
+
+                const totalPages = doc.internal.getNumberOfPages();
+
+                for (let i = 1; i <= totalPages; i++) {
+                    doc.setPage(i);
+                    drawFooter(doc, i, totalPages);
+                }
+
+                doc.save(`AccountUsageSummary_${fileStamp()}.pdf`);
+            }
+
+            // ==========================
+            // EXCEL EXPORT
+            // ==========================
+            function exportExcel() {
+                if (!tableElement) {
+                    console.error("detailsTable not found.");
+                    return;
+                }
+
+                if (!window.XLSX) {
+                    alert("XLSX not loaded. Check layout scripts.");
+                    return;
+                }
+
+                const wb = XLSX.utils.book_new();
+                const ws = XLSX.utils.table_to_sheet(tableElement);
+
+                XLSX.utils.book_append_sheet(wb, ws, "Summary");
+                XLSX.writeFile(wb, `AccountUsageSummary_${fileStamp()}.xlsx`);
+            }
+
+            // ==========================
+            // EVENTS
+            // ==========================
+            btnPdf?.addEventListener("click", exportPdf);
+            btnExcel?.addEventListener("click", exportExcel);
+        })();
+    </script>
+}

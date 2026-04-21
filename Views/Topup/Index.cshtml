@@ -1,119 +1,217 @@
 ﻿@model MIS.Web.Models.TopUpInputModel
 @using System.Globalization
+@using System.Linq
+@removeTagHelper "Microsoft.AspNetCore.Mvc.TagHelpers.OptionTagHelper, Microsoft.AspNetCore.Mvc.TagHelpers"
 
 @{
     ViewData["Title"] = "Top-Up Report";
-    var now = DateTime.Now;
-    var reportGeneratedAt = now.ToString("dd/MM/yyyy HH:mm:ss");
-    var currentUserId = User.Identity?.Name ?? "Lucky";
-    var reportVersion = "1.0.0";
-    var totalAmount = Model.PageData?.items?.Sum(i => i.AmountPaid) ?? 0;
+
+    var reportGeneratedAt = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
+    var currentUserId = User.FindFirst("firstName")?.Value ?? "Unknown User";
+    var reportVersion = "3.0.0.0";
+    var reportName = "TOP-UP REPORT";
+
+    var items = Model.PageData != null && Model.PageData.Items != null
+        ? Model.PageData.Items
+        : Enumerable.Empty<dynamic>();
+
+    var totalAmount = items.Sum(i => (decimal)(i.AmountPaid ?? 0));
+
+    int maxPagesToShow = 3;
+
+    int currentPage = Model.PageData != null ? Model.PageData.page : 1;
+    int pageSize = Model.PageData != null ? Model.PageData.pageSize : Model.pageSize;
+    if (pageSize <= 0)
+    {
+        pageSize = 20;
+    }
+
+    int totalCount = Model.PageData != null ? Model.PageData.totalCount : 0;
+
+    int apiTotalPages = Model.PageData != null ? Model.PageData.totalPages : 0;
+    int calculatedTotalPages = pageSize > 0
+        ? (int)Math.Ceiling((double)totalCount / pageSize)
+        : 1;
+
+    int totalPages = apiTotalPages > 0 ? apiTotalPages : Math.Max(1, calculatedTotalPages);
+
+    currentPage = Math.Max(1, Math.Min(currentPage, totalPages));
+
+    int startPage = Math.Max(1, currentPage - 1);
+    int endPage = Math.Min(totalPages, startPage + maxPagesToShow - 1);
+
+    if (endPage - startPage + 1 < maxPagesToShow && startPage > 1)
+    {
+        startPage = Math.Max(1, endPage - maxPagesToShow + 1);
+    }
 }
 
 <div class="card shadow-lg p-4 mb-4">
-    <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
-        <h3 class="text-primary fw-bold">Top-Up Report</h3>
-        <span class="text-muted">Generated: @reportGeneratedAt</span>
+
+    <!-- HEADER -->
+    <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
+        <h2 class="mb-0 fw-bold text-primary text-center w-100">TOP-UP REPORT</h2>
     </div>
 
-    <!-- Filters -->
-    <form method="get" class="row g-3 mb-4">
-        <!-- Start Date -->
-        <div class="col-md-3">
-            <label class="form-label fw-semibold">Start Date & Time</label>
-            <input type="datetime-local" name="StartDate" class="form-control"
-                   value="@(Model.StartDate?.ToString("yyyy-MM-ddTHH:mm") ?? DateTime.Now.AddDays(-1).ToString("yyyy-MM-ddTHH:mm"))" />
-        </div>
-
-        <!-- End Date -->
-        <div class="col-md-3">
-            <label class="form-label fw-semibold">End Date & Time</label>
-            <input type="datetime-local" name="EndDate" class="form-control"
-                   value="@(Model.EndDate?.ToString("yyyy-MM-ddTHH:mm") ?? DateTime.Now.ToString("yyyy-MM-ddTHH:mm"))" />
-        </div>
-
-        <!-- Operational -->
-        <div class="col-md-2">
-            <label class="form-label fw-semibold">Operational Date</label>
-            <select name="OperationalDate" id="operationalDate" class="form-select">
-                <option value="">- Select -</option>
-                <option value="true" selected="@((Model.OperationalDate == true) ? "selected" : null)">Yes</option>
-                <option value="false" selected="@((Model.OperationalDate == false) ? "selected" : null)">No</option>
-            </select>
-        </div>
-
-        <!-- Shift -->
-        <div class="col-md-2">
-            <label class="form-label fw-semibold">Shift</label>
-            <select name="Shift" id="shiftSelect" class="form-select">
-                <option value="">- All -</option>
-                @foreach (var s in ViewBag.Shifts ?? new List<string>())
-                {
-                    <option value="@s" selected="@(Model.Shift == s ? "selected" : null)">@s</option>
-                }
-            </select>
-        </div>
-
-        <!-- Lane -->
-        <div class="col-md-2">
-            <label class="form-label fw-semibold">Lane / Workstation</label>
-            <select name="Lane" id="laneSelect" class="form-select">
-                <option value="">- All -</option>
-                @foreach (var lane in ViewBag.Lanes ?? new List<string>())
-                {
-                    <option value="@lane" selected="@(Model.Lane == lane ? "selected" : null)">@lane</option>
-                }
-            </select>
-        </div>
-
-        <!-- Account -->
-        <div class="col-md-2">
-            <label class="form-label fw-semibold">Account Number</label>
-            <select name="AccountNumber" id="accountSelect" class="form-select">
-                <option value="">- All -</option>
-                @foreach (var acc in ViewBag.AccountNumbers ?? new List<string>())
-                {
-                    <option value="@acc" selected="@(Model.AccountNumber == acc ? "selected" : null)">@acc</option>
-                }
-            </select>
-        </div>
-
-        <div class="col-md-2 d-flex align-items-end">
-            <button type="submit" class="btn btn-primary w-100">Filter</button>
-        </div>
-
-        <!-- Export Buttons -->
-        <div class="mt-3 text-end">
-            <button id="btnDownloadPdf" type="button" class="btn btn-danger me-2">
-                <i class="bi bi-file-earmark-pdf me-1"></i> Download PDF
+    <!-- EXPORT BUTTONS -->
+    <div class="row mb-3">
+        <div class="col-md-2 me-2">
+            <button id="btnDownloadPdf" class="btn btn-danger w-100 shadow-sm" type="button">
+                <i class="bi bi-file-earmark-pdf"></i> Export PDF
             </button>
-            <button id="btnDownloadExcel" type="button" class="btn btn-success">
-                <i class="bi bi-file-earmark-excel me-1"></i> Download Excel
+        </div>
+
+        <div class="col-md-2">
+            <button id="btnDownloadExcel" class="btn btn-success w-100 shadow-sm" type="button">
+                <i class="bi bi-file-earmark-excel"></i> Export Excel
             </button>
+        </div>
+    </div>
+
+    <!-- FILTER FORM -->
+    <form method="get" asp-controller="TopUp" asp-action="Index">
+        <div class="row g-3 mb-4">
+
+            <!-- Start Date -->
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">Start Date & Time</label>
+                <input type="datetime-local"
+                       name="StartDate"
+                       class="form-control"
+                       value="@(Model.StartDate?.ToString("yyyy-MM-ddTHH:mm")
+                                ?? DateTime.Now.AddDays(-1).ToString("yyyy-MM-ddTHH:mm"))" />
+            </div>
+
+            <!-- End Date -->
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">End Date & Time</label>
+                <input type="datetime-local"
+                       name="EndDate"
+                       class="form-control"
+                       value="@(Model.EndDate?.ToString("yyyy-MM-ddTHH:mm")
+                                ?? DateTime.Now.ToString("yyyy-MM-ddTHH:mm"))" />
+            </div>
+
+            <!-- Operational Date -->
+            <div class="col-md-2">
+                <label class="form-label fw-semibold">Operational Date</label>
+                <select name="OperationalDate" id="operationalDate" class="form-select">
+                    <option value="">- Select -</option>
+                    <option value="true" @(Model.OperationalDate == true ? "selected" : "")>Yes</option>
+                    <option value="false" @(Model.OperationalDate == false ? "selected" : "")>No</option>
+                </select>
+            </div>
+
+            <!-- Operational Shift -->
+            <div class="col-md-2">
+                <label class="form-label fw-semibold">Operational Shift</label>
+                <div class="border rounded p-2"
+                     style="max-height:160px; overflow:auto;"
+                     @(Model.OperationalDate == false ? "aria-disabled=true" : "")>
+
+                    @foreach (var s in (Model.ShiftOptions ?? new List<string>()))
+                    {
+                        var isChecked = Model.Shifts != null && Model.Shifts.Contains(s);
+
+                        <div class="form-check">
+                            <input class="form-check-input"
+                                   type="checkbox"
+                                   name="Shifts"
+                                   value="@s"
+                                   @(isChecked ? "checked" : "")
+                                   @(Model.OperationalDate == false ? "disabled" : "") />
+                            <label class="form-check-label">@s</label>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Toll Operator -->
+            <div class="col-md-2">
+                <label class="form-label fw-semibold">Toll Operator</label>
+                <div class="border rounded p-2" style="max-height:160px; overflow:auto;">
+                    @foreach (var opId in (Model.OperatorOptions ?? new List<string>()))
+                    {
+                        var isChecked = Model.OperatorIds != null && Model.OperatorIds.Contains(opId);
+
+                        <div class="form-check">
+                            <input class="form-check-input"
+                                   type="checkbox"
+                                   name="OperatorIds"
+                                   value="@opId"
+                                   @(isChecked ? "checked" : "") />
+                            <label class="form-check-label">@opId</label>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Lane -->
+            <div class="col-md-2">
+                <label class="form-label fw-semibold">Lane</label>
+                <div class="border rounded p-2" style="max-height:160px; overflow:auto;">
+                    @foreach (var lane in (Model.LaneOptions ?? new List<string>()))
+                    {
+                        var isChecked = Model.Lanes != null && Model.Lanes.Contains(lane);
+
+                        <div class="form-check">
+                            <input class="form-check-input"
+                                   type="checkbox"
+                                   name="Lanes"
+                                   value="@lane"
+                                   @(isChecked ? "checked" : "") />
+                            <label class="form-check-label">@lane</label>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Account Number -->
+            <div class="col-md-3 position-relative">
+                <label class="form-label fw-semibold">Account Number</label>
+                <input type="text"
+                       id="accountSearch"
+                       name="AccountNumber"
+                       class="form-control"
+                       placeholder="Enter account number..."
+                       value="@Model.AccountNumber"
+                       autocomplete="off" />
+
+                <div id="accountSuggestions"
+                     class="list-group position-absolute shadow-sm"
+                     style="z-index:1000; display:none; max-height:200px; overflow-y:auto; width:100%;">
+                </div>
+            </div>
+
+            <!-- Filter Button -->
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">Apply Filters</button>
+            </div>
         </div>
     </form>
 
-    <!-- Table -->
+    <!-- TABLE -->
     <div class="table-responsive">
-        <table id="reportTable" class="table table-bordered table-hover text-center align-middle">
+        <table id="pagedTable" class="table table-bordered table-hover text-center align-middle">
             <thead class="table-light">
                 <tr>
-                    <th>Top-Up number</th>
-                    <th>Receipt number</th>
-                    <th>Date & Time</th>
+                    <th>Top-Up Number</th>
+                    <th>Receipt Number</th>
+                    <th>Top-up Date-Time</th>
                     <th>Lane/Workstation</th>
                     <th>Shift</th>
                     <th>Operator</th>
-                    <th>Account number</th>
+                    <th>Account Number</th>
                     <th>Account Name</th>
                     <th>Amount Paid</th>
-                    <th>Payment Method</th>
+                    <th>Method Of Payment</th>
                 </tr>
             </thead>
+
             <tbody>
-                @if (Model.PageData?.items != null && Model.PageData.items.Any())
+                @if (Model.PageData?.Items != null && Model.PageData.Items.Any())
                 {
-                    foreach (var item in Model.PageData.items)
+                    foreach (var item in Model.PageData.Items)
                     {
                         <tr>
                             <td>@item.TopUpNumber</td>
@@ -128,132 +226,402 @@
                             <td>@item.MethodOfPayment</td>
                         </tr>
                     }
+
                     <tr class="fw-bold table-light">
-                        <td colspan="7" class="text-end">Total Amount Paid:</td>
+                        <td colspan="8" class="text-end">Total Top-ups for the Selection:</td>
                         <td colspan="2">@totalAmount.ToString("N2", CultureInfo.InvariantCulture)</td>
                     </tr>
                 }
                 else
                 {
-                    <tr><td colspan="9" class="text-muted">No records found</td></tr>
+                    <tr>
+                        <td colspan="10" class="text-muted">No records found</td>
+                    </tr>
                 }
             </tbody>
         </table>
-    </div>
 
-    <!-- Footer -->
-    <div class="mt-4 p-3 border-top bg-light small text-secondary">
-        <div class="row">
-            <div class="col-md-4">
-                <strong>Report Name:</strong> Top-Up Report<br />
-                <strong>Date Generated:</strong> @reportGeneratedAt
-            </div>
-            <div class="col-md-4">
-                <strong>User ID:</strong> @currentUserId
-            </div>
-            <div class="col-md-4 text-end">
-                <strong>Version:</strong> @reportVersion
-            </div>
+        <!-- SCREEN FOOTER -->
+        <div class="mt-4 border-top pt-3">
+            <table class="table table-borderless mb-0">
+                <tr>
+                    <td><strong>@reportName</strong></td>
+                    <td><strong>Date And Time:</strong> @reportGeneratedAt</td>
+                    <td><strong>User ID:</strong> @currentUserId</td>
+                    <td class="text-end"><strong>Page @currentPage of @totalPages</strong></td>
+                </tr>
+                <tr>
+                    <td colspan="4">
+                        <small class="text-muted">
+                            Reports Module Version Number: <strong>@reportVersion</strong>
+                        </small>
+                    </td>
+                </tr>
+            </table>
         </div>
     </div>
+
+    <!-- PAGINATION -->
+    @if (totalPages > 1)
+    {
+        <nav aria-label="TopUp pagination" class="mt-3">
+            <ul class="pagination justify-content-center">
+
+                <li class="page-item @(currentPage <= 1 ? "disabled" : "")">
+                    <a class="page-link"
+                       href="@(Url.Action("Index", new {
+                            StartDate = Model.StartDate?.ToString("yyyy-MM-ddTHH:mm"),
+                            EndDate = Model.EndDate?.ToString("yyyy-MM-ddTHH:mm"),
+                            OperationalDate = Model.OperationalDate,
+                            Shifts = Model.Shifts,
+                            OperatorIds = Model.OperatorIds,
+                            Lanes = Model.Lanes,
+                            AccountNumber = Model.AccountNumber,
+                            page = currentPage - 1,
+                            pageSize = Model.pageSize
+                       }))">
+                        Previous
+                    </a>
+                </li>
+
+                @for (int i = startPage; i <= endPage; i++)
+                {
+                    <li class="page-item @(i == currentPage ? "active" : "")">
+                        <a class="page-link"
+                           href="@(Url.Action("Index", new {
+                                StartDate = Model.StartDate?.ToString("yyyy-MM-ddTHH:mm"),
+                                EndDate = Model.EndDate?.ToString("yyyy-MM-ddTHH:mm"),
+                                OperationalDate = Model.OperationalDate,
+                                Shifts = Model.Shifts,
+                                OperatorIds = Model.OperatorIds,
+                                Lanes = Model.Lanes,
+                                AccountNumber = Model.AccountNumber,
+                                page = i,
+                                pageSize = Model.pageSize
+                           }))">
+                            @i
+                        </a>
+                    </li>
+                }
+
+                <li class="page-item @(currentPage >= totalPages ? "disabled" : "")">
+                    <a class="page-link"
+                       href="@(Url.Action("Index", new {
+                            StartDate = Model.StartDate?.ToString("yyyy-MM-ddTHH:mm"),
+                            EndDate = Model.EndDate?.ToString("yyyy-MM-ddTHH:mm"),
+                            OperationalDate = Model.OperationalDate,
+                            Shifts = Model.Shifts,
+                            OperatorIds = Model.OperatorIds,
+                            Lanes = Model.Lanes,
+                            AccountNumber = Model.AccountNumber,
+                            page = currentPage + 1,
+                            pageSize = Model.pageSize
+                       }))">
+                        Next
+                    </a>
+                </li>
+            </ul>
+        </nav>
+    }
 </div>
 
-<!-- JS for PDF & Excel Export -->
+<!-- EXPORT SCRIPTS -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 
 <script>
-    document.getElementById("btnDownloadPdf").addEventListener("click", async function () {
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+    function getCheckedValues(name) {
+        return Array.from(document.querySelectorAll(`input[name="${name}"]:checked`))
+            .map(x => x.value);
+    }
 
-        // Load Logos
-        const logoLeft = new Image();
-        logoLeft.src = '/images/lCC Logo.jpg';
-        const logoRight = new Image();
-        logoRight.src = '/images/ICT-Works Logo.jpg';
-        await new Promise(r => { logoLeft.onload = logoRight.onload = r; });
+    function getFilters() {
+        return {
+            StartDate: document.querySelector('[name="StartDate"]')?.value || "",
+            EndDate: document.querySelector('[name="EndDate"]')?.value || "",
+            OperationalDate: document.querySelector('[name="OperationalDate"]')?.value || "",
+            Shifts: getCheckedValues("Shifts"),
+            OperatorIds: getCheckedValues("OperatorIds"),
+            Lanes: getCheckedValues("Lanes"),
+            AccountNumber: document.getElementById("accountSearch")?.value || ""
+        };
+    }
 
-        // Header
-        doc.addImage(logoLeft, "JPEG", 40, 25, 60, 60);
-        doc.addImage(logoRight, "JPEG", 740, 25, 60, 60);
-        doc.setFontSize(16);
-        doc.text("LEKKI-IKOYI LINK BRIDGE", 310, 45);
-        doc.setFontSize(14);
-        doc.text("TOP-UP REPORT", 355, 70);
+    const reportName = "@reportName";
+    const reportGeneratedAt = "@reportGeneratedAt";
+    const currentUserId = "@currentUserId";
+    const reportVersion = "@reportVersion";
 
-        // ✅ Filters used
-        const filters = [
-            `Start Date: ${document.querySelector('[name="StartDate"]').value || "N/A"}`,
-            `End Date: ${document.querySelector('[name="EndDate"]').value || "N/A"}`,
-            `Operational Date: ${document.querySelector('[name="OperationalDate"]').value || "N/A"}`,
-            `Shift: ${document.querySelector('[name="Shift"]').value || "All"}`,
-            `Lane: ${document.querySelector('[name="Lane"]').value || "All"}`,
-            `Account number: ${document.querySelector('[name="AccountNumber"]').value || "All"}`
-        ];
-        doc.setFontSize(10);
-        let y = 105;
-        filters.forEach(f => { doc.text(f, 40, y); y += 14; });
+    function buildExportUrl() {
+        const f = getFilters();
+        const params = new URLSearchParams();
 
-        // Table
-        doc.autoTable({
-            html: "#reportTable",
-            startY: y + 5,
-            theme: "grid",
-            headStyles: { fillColor: [13, 110, 253] },
-            styles: { fontSize: 8, cellPadding: 3 },
-            didDrawPage: function (data) {
-                const footerY = doc.internal.pageSize.height - 40;
-                doc.setFontSize(9);
-                doc.text(`Report Version: 1.0.0`, 40, footerY);
-                doc.text(`Generated by: ${'@currentUserId'}`, 250, footerY);
-                doc.text(`Date & Time: ${'@reportGeneratedAt'}`, 500, footerY);
-                doc.text(`© 2025 Lekki Concession Company / ICT-Works`, 680, footerY);
-            }
+        params.set("StartDate", f.StartDate);
+        params.set("EndDate", f.EndDate);
+        params.set("OperationalDate", f.OperationalDate);
+        params.set("AccountNumber", f.AccountNumber);
+
+        (f.Shifts || []).forEach(v => params.append("Shifts", v));
+        (f.OperatorIds || []).forEach(v => params.append("OperatorIds", v));
+        (f.Lanes || []).forEach(v => params.append("Lanes", v));
+
+        return `/TopUp/export?${params.toString()}`;
+    }
+
+    function formatDateTime(value) {
+        if (!value) return "";
+        const d = new Date(value);
+        if (isNaN(d.getTime())) return value;
+        return d.toLocaleString();
+    }
+
+    function formatAmount(value) {
+        const num = Number(value || 0);
+        return num.toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
         });
+    }
 
-        doc.save("TopUpReport.pdf");
+    function drawPdfFooter(doc) {
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageCount = doc.internal.getNumberOfPages();
+        const pageNumber = doc.internal.getCurrentPageInfo().pageNumber;
+
+        const footerTopY = pageHeight - 42;
+        const footerBottomY = pageHeight - 26;
+
+        doc.setDrawColor(180);
+        doc.line(40, pageHeight - 52, pageWidth - 40, pageHeight - 52);
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+
+        doc.text(reportName, 40, footerTopY);
+        doc.text(`Date & Time: ${reportGeneratedAt}`, pageWidth / 2, footerTopY, { align: "center" });
+        doc.text(`User ID: ${currentUserId}`, pageWidth - 40, footerTopY, { align: "right" });
+
+        doc.text(`Reports Module Version Number: ${reportVersion}`, 40, footerBottomY);
+        doc.text(`Page ${pageNumber} of ${pageCount}`, pageWidth - 40, footerBottomY, { align: "right" });
+    }
+
+    async function loadImage(src) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = reject;
+            img.src = src;
+        });
+    }
+
+    document.getElementById("btnDownloadPdf").addEventListener("click", async () => {
+        try {
+            const response = await fetch(buildExportUrl());
+            const fullData = await response.json();
+
+            if (!fullData || fullData.length === 0) {
+                alert("No data available for export.");
+                return;
+            }
+
+            const grandTotal = fullData.reduce((sum, r) => sum + Number(r.amountPaid || 0), 0);
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({
+                orientation: "landscape",
+                unit: "pt",
+                format: "a4"
+            });
+
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
+
+            let leftLogo = null;
+            let rightLogo = null;
+
+            try {
+                [leftLogo, rightLogo] = await Promise.all([
+                    loadImage("/images/lCC Logo.jpg"),
+                    loadImage("/images/ICT-Works Logo.jpg")
+                ]);
+            } catch (e) {
+                console.warn("Logo loading failed, continuing without logos.", e);
+            }
+
+            if (leftLogo) doc.addImage(leftLogo, "JPEG", 40, 25, 60, 60);
+            if (rightLogo) doc.addImage(rightLogo, "JPEG", pageWidth - 100, 25, 60, 60);
+
+            doc.setFont("helvetica", "bold");
+
+            let centerY = 45;
+            doc.setFontSize(14);
+            doc.text("LEKKI CONCESSION COMPANY LIMITED", pageWidth / 2, centerY, { align: "center" });
+
+            centerY += 18;
+            doc.setFontSize(12);
+            doc.text("LEKKI-IKOYI LINK BRIDGE", pageWidth / 2, centerY, { align: "center" });
+
+            centerY += 22;
+            doc.setFontSize(16);
+            doc.text(reportName, pageWidth / 2, centerY, { align: "center" });
+
+            const f = getFilters();
+            const filterLines = [
+                `Start Date & Time: ${f.StartDate || "N/A"}`,
+                `End Date & Time: ${f.EndDate || "N/A"}`,
+                `Operational Date: ${f.OperationalDate || "N/A"}`,
+                `Operational Shift: ${(f.Shifts && f.Shifts.length ? f.Shifts.join(", ") : "All")}`,
+                `Toll Operator: ${(f.OperatorIds && f.OperatorIds.length ? f.OperatorIds.join(", ") : "All")}`,
+                `Lane / Workstation: ${(f.Lanes && f.Lanes.length ? f.Lanes.join(", ") : "All")}`,
+                `Account Number: ${f.AccountNumber || "All"}`
+            ];
+
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(10);
+
+            let yPos = 110;
+            filterLines.forEach(line => {
+                doc.text(line, 40, yPos);
+                yPos += 14;
+            });
+
+            const tableRows = fullData.map(r => [
+                r.topUpNumber ?? "",
+                r.topUpNumber ?? "",
+                formatDateTime(r.topUpDateTime),
+                r.laneWorkstation ?? "",
+                r.shift ?? "",
+                r.tollOperator ?? r.operator ?? "",
+                r.accountNumber ?? "",
+                r.accountName ?? "",
+                formatAmount(r.amountPaid),
+                r.methodOfPayment ?? ""
+            ]);
+
+            doc.autoTable({
+                head: [[
+                    "Top-Up Number",
+                    "Receipt Number",
+                    "Top-Up Date & Time",
+                    "Lane / Workstation",
+                    "Shift",
+                    "Operator",
+                    "Account Number",
+                    "Account Name",
+                    "Amount Paid",
+                    "Method of Payment"
+                ]],
+                body: tableRows,
+                startY: yPos + 5,
+                theme: "grid",
+                margin: { left: 40, right: 40, bottom: 65 },
+                headStyles: {
+                    fillColor: [41, 128, 185],
+                    textColor: 255,
+                    halign: "center",
+                    valign: "middle"
+                },
+                styles: {
+                    fontSize: 8,
+                    cellPadding: 3,
+                    overflow: "linebreak"
+                },
+                bodyStyles: {
+                    valign: "middle"
+                },
+                didDrawPage: function () {
+                    drawPdfFooter(doc);
+                }
+            });
+
+            let finalY = doc.lastAutoTable.finalY + 20;
+
+            if (finalY > pageHeight - 80) {
+                doc.addPage();
+                finalY = 60;
+            }
+
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(11);
+            doc.text(
+                `TOTAL TOP-UP AMOUNT: ${formatAmount(grandTotal)}`,
+                40,
+                finalY
+            );
+
+            drawPdfFooter(doc);
+
+            doc.save("TopUpReport.pdf");
+        } catch (error) {
+            console.error("PDF export failed:", error);
+            alert("Failed to export PDF.");
+        }
     });
 
-    document.getElementById("btnDownloadExcel").addEventListener("click", function () {
-        const wb = XLSX.utils.book_new();
-        const ws_name = "TopUpReport";
+    document.getElementById("btnDownloadExcel").addEventListener("click", async () => {
+        try {
+            const response = await fetch(buildExportUrl());
+            const fullData = await response.json();
 
-        // Collect filters for Excel header
-        const filters = [
-            ["Start Date", document.querySelector('[name="StartDate"]').value || "N/A"],
-            ["End Date", document.querySelector('[name="EndDate"]').value || "N/A"],
-            ["Operational Date", document.querySelector('[name="OperationalDate"]').value || "N/A"],
-            ["Shift", document.querySelector('[name="Shift"]').value || "All"],
-            ["Lane", document.querySelector('[name="Lane"]').value || "All"],
-            ["Account number", document.querySelector('[name="AccountNumber"]').value || "All"],
-            [],
-        ];
+            if (!fullData || fullData.length === 0) {
+                alert("No data available for export.");
+                return;
+            }
 
-        // Convert table to sheet
-        const table = document.querySelector("#reportTable");
-        const tableSheet = XLSX.utils.table_to_sheet(table);
+            const grandTotal = fullData.reduce((sum, r) => sum + Number(r.amountPaid || 0), 0);
 
-        // Combine filters + table data
-        XLSX.utils.sheet_add_aoa(tableSheet, filters, { origin: "A1" });
-        XLSX.utils.book_append_sheet(wb, tableSheet, ws_name);
-        XLSX.writeFile(wb, `TopUpReport_${new Date().toISOString().replace(/[:.]/g, '-')}.xlsx`);
-    });
+            const header = [[
+                "Top-Up Number",
+                "Receipt Number",
+                "Top-Up Date & Time",
+                "Lane/Workstation",
+                "Shift",
+                "Operator",
+                "Account Number",
+                "Account Name",
+                "Amount Paid",
+                "Method of Payment"
+            ]];
 
-    // Disable Shift when Operational Date = No
-    document.getElementById("operationalDate").addEventListener("change", function () {
-        const shiftDropdown = document.getElementById("shiftSelect");
-        shiftDropdown.disabled = this.value === "false";
-        if (shiftDropdown.disabled) shiftDropdown.value = "";
-    });
+            const rows = fullData.map(r => [
+                r.topUpNumber ?? "",
+                r.topUpNumber ?? "",
+                formatDateTime(r.topUpDateTime),
+                r.laneWorkstation ?? "",
+                r.shift ?? "",
+                r.tollOperator ?? r.operator ?? "",
+                r.accountNumber ?? "",
+                r.accountName ?? "",
+                Number(r.amountPaid || 0),
+                r.methodOfPayment ?? ""
+            ]);
 
-    window.addEventListener("load", function () {
-        const operational = document.getElementById("operationalDate").value;
-        const shiftDropdown = document.getElementById("shiftSelect");
-        if (operational === "false") {
-            shiftDropdown.value = "";
-            shiftDropdown.disabled = true;
+            rows.push([]);
+            rows.push(["", "", "", "", "", "", "", "TOTAL TOP-UP AMOUNT", grandTotal, ""]);
+
+            const ws = XLSX.utils.aoa_to_sheet([...header, ...rows]);
+
+            ws["!cols"] = [
+                { wch: 14 },
+                { wch: 14 },
+                { wch: 22 },
+                { wch: 18 },
+                { wch: 10 },
+                { wch: 18 },
+                { wch: 18 },
+                { wch: 28 },
+                { wch: 14 },
+                { wch: 18 }
+            ];
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "TopUpReport");
+            XLSX.writeFile(wb, `TopUpReport_${new Date().toISOString().replace(/[:.]/g, "-")}.xlsx`);
+        } catch (error) {
+            console.error("Excel export failed:", error);
+            alert("Failed to export Excel.");
         }
     });
 </script>

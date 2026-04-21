@@ -1,337 +1,853 @@
 ﻿@model MIS.Web.Models.Discrepancy.PageDiscrepancyModel
-@using System.Text.Json
+@using System.Linq
 @using Microsoft.AspNetCore.Http
+@using System.Text.Json
+@using MIS.Web.Models.Discrepancy
+@using System.Globalization
 @removeTagHelper "Microsoft.AspNetCore.Mvc.TagHelpers.OptionTagHelper, Microsoft.AspNetCore.Mvc.TagHelpers"
 
 @{
-    ViewData["Title"] = "Discrepancy Report";
+    var reportVersion   = "3.0.0.0";
+    var currentUserId = User.FindFirst("firstName")?.Value ?? "Unknown User";
+    var reportGenerated = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
 
-    var reportGeneratedAt = DateTime.Now;
-    var currentUser = User.Identity?.Name ?? "Lucky";
-    var reportVersion = "1.0.0";
-    var filters = Model.Filters;
+    var filters = Model.Filters ?? new DiscrepancyInputModel();
 
-    // Pagination range (max 3 visible pages)
-    int maxPagesToShow = 3;
-    int startPage = Math.Max(1, Model.page - 1);
-    int endPage = Math.Min(Model.totalPages, startPage + maxPagesToShow - 1);
+    var items = Model.Items ?? new List<DiscrepancyModel>();
 
-    if (endPage - startPage + 1 < maxPagesToShow && startPage > 1)
-        startPage = Math.Max(1, endPage - maxPagesToShow + 1);
+    // Prefer ExportItems for totals/summary (full dataset), else fallback to items
+    var summarySource = (Model.ExportItems != null && Model.ExportItems.Any())
+        ? Model.ExportItems
+        : items;
 
-    // Pagination link generator
-    Func<int, string> PageUrl = (p) =>
-    {
-        var q = new Dictionary<string, string?>
-        {
-            ["Filters.StartDate"] = filters.StartDate.ToString("s"),
-            ["Filters.EndDate"] = filters.EndDate.ToString("s"),
-            ["Filters.toll_Operator_ID"] = filters.toll_Operator_ID,
-            ["Filters.Shift"] = filters.Shift,
-            ["Filters.PaymentMethod"] = filters.PaymentMethod,
-            ["Filters.TakenAction"] = filters.TakenAction,
-            ["page"] = p.ToString(),
-            ["pageSize"] = Model.pageSize.ToString()
-        };
-        return Url.Action("Index", "Discrepancy") + QueryString.Create(q);
-    };
+    var summaryCount = summarySource.Count;
+
+    var totalDifference = summarySource.Sum(x => x.TariffDifference);
+
+    var operatorCorrect = summarySource.Count(x => string.Equals(x.TakenAction, "AVC Error", StringComparison.OrdinalIgnoreCase));
+    var avcCorrect      = summarySource.Count(x => string.Equals(x.TakenAction, "Toll Collector Error", StringComparison.OrdinalIgnoreCase));
+    var bothIncorrect   = summarySource.Count(x => string.Equals(x.TakenAction, "Both Incorrect", StringComparison.OrdinalIgnoreCase));
+
+    // Helpers for checkbox checked state (case-insensitive)
+    bool IsChecked(List<string> selected, string value)
+        => selected?.Any(x => string.Equals(x?.Trim(), value?.Trim(), StringComparison.OrdinalIgnoreCase)) == true;
 }
+
+<style>
+    /* Print: push summary onto its own last page */
+   
+
+    .filter-box {
+        border: 1px solid #e5e5e5;
+        border-radius: 10px;
+        padding: 10px 12px;
+        max-height: 180px;
+        overflow: auto;
+        background: #fff;
+    }
+
+    .filter-box .form-check {
+        margin-bottom: 6px;
+    }
+
+    .filter-box .form-check-label {
+        cursor: pointer;
+    }
+</style>
 
 <div class="card shadow-lg mb-4">
     <div class="card-body">
 
-        <!-- HEADER -->
-        <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
-            <h2 class="mb-0 fw-bold text-primary">Discrepancy Report</h2>
+        <!-- ====== HEADER ====== -->
+        <div class="text-center mb-3 border-bottom pb-2">
+            <h2 class="fw-bold text-primary mb-0">DISCREPANCY REPORT</h2>
         </div>
 
-        <!-- EXPORT BUTTONS -->
-        <div class="row mb-3">
-            <div class="col-md-2 d-flex align-items-end me-2">
-                <button id="btnDownloadPdf" type="button" class="btn btn-danger w-100 shadow-sm">
+        <!-- ====== EXPORT BUTTONS ====== -->
+        <div class="row mb-3 no-print">
+            <div class="col-md-2 me-2">
+                <button id="btnDownloadPdf" class="btn btn-danger w-100 shadow-sm" type="button">
                     <i class="bi bi-file-earmark-pdf"></i> Export PDF
                 </button>
             </div>
-            <div class="col-md-2 d-flex align-items-end">
-                <button id="btnDownloadExcel" type="button" class="btn btn-success w-100 shadow-sm">
+
+            <div class="col-md-2">
+                <button id="btnDownloadExcel" class="btn btn-success w-100 shadow-sm" type="button">
                     <i class="bi bi-file-earmark-excel"></i> Export Excel
                 </button>
             </div>
         </div>
 
-        <!-- FILTER FORM -->
-        <form method="get" asp-controller="Discrepancy" asp-action="Index" class="row g-3 mb-3">
-            <div class="col-md-2">
-                <label class="form-label fw-semibold">Start Date</label>
-                <input type="datetime-local" class="form-control" name="Filters.StartDate"
-                       value="@filters.StartDate.ToString("yyyy-MM-ddTHH:mm")" />
-            </div>
+        <!-- ====== FILTERS (CHECKLISTS) ====== -->
+        <form method="get"
+              asp-controller="Discrepancy"
+              asp-action="Index"
+              id="filterForm"
+              class="mb-4 no-print">
 
-            <div class="col-md-2">
-                <label class="form-label fw-semibold">End Date</label>
-                <input type="datetime-local" class="form-control" name="Filters.EndDate"
-                       value="@filters.EndDate.ToString("yyyy-MM-ddTHH:mm")" />
-            </div>
+            <div class="row g-3">
 
-            <div class="col-md-2">
-                <label class="form-label fw-semibold">Toll Operator</label>
-                <select class="form-select" name="Filters.toll_Operator_ID">
-                    <option value="">All</option>
-                    @foreach (var op in ViewBag.TollOperators as List<string> ?? [])
-                    {
-                        <option value="@op" @(filters.toll_Operator_ID == op ? "selected" : "")>@op</option>
-                    }
-                </select>
-            </div>
-
-            <div class="col-md-2">
-                <label class="form-label fw-semibold">Shift</label>
-                <select class="form-select" name="Filters.Shift">
-                    <option value="">All</option>
-                    @foreach (var s in ViewBag.Shifts as List<string> ?? [])
-                    {
-                        <option value="@s" @(filters.Shift == s ? "selected" : "")>@s</option>
-                    }
-                </select>
-            </div>
-
-            <div class="col-md-2">
-                <label class="form-label fw-semibold">Payment Method</label>
-                <select class="form-select" name="Filters.PaymentMethod">
-                    <option value="">All</option>
-                    @foreach (var p in ViewBag.PaymentMethods as List<string> ?? [])
-                    {
-                        <option value="@p" @(filters.PaymentMethod == p ? "selected" : "")>@p</option>
-                    }
-                </select>
-            </div>
-
-            <div class="col-md-2">
-                <label class="form-label fw-semibold">Action</label>
-                <select class="form-select" name="Filters.TakenAction">
-                    <option value="">All</option>
-                    @foreach (var a in ViewBag.TakenActions as List<string> ?? [])
-                    {
-                        <option value="@a" @(filters.TakenAction == a ? "selected" : "")>@a</option>
-                    }
-                </select>
-            </div>
-
-            <div class="col-12 text-end">
-                <button type="submit" class="btn btn-primary mt-3">Apply Filters</button>
-            </div>
-        </form>
-
-        <!-- TABLE -->
-        @if (Model.Items != null && Model.Items.Any())
-        {
-            <div class="table-responsive">
-                <table class="table table-striped table-bordered text-center align-middle">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Lane</th>
-                            <th>Sequence</th>
-                            <th>Date</th>
-                            <th>Time</th>
-                            <th>Shift</th>
-                            <th>Operator</th>
-                            <th>Lane Name</th>
-                            <th>Payment</th>
-                            <th>Collector Class</th>
-                            <th>AVC Class</th>
-                            <th>Final Class</th>
-                            <th>Tariff</th>
-                            <th>Updated Tariff</th>
-                            <th>Tariff Diff</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var d in Model.Items)
-                        {
-                            var diff = d.updated_tariff - d.tariff;
-                            <tr>
-                                <td>@d.lane_Nr</td>
-                                <td>@d.trx_Sequence_Nr</td>
-                                <td>@d.trx_Date</td>
-                                <td>@d.trx_Time</td>
-                                <td>@d.operational_Shift</td>
-                                <td>@d.toll_Operator_ID</td>
-                                <td>@d.lane_Name</td>
-                                <td>@d.method_of_Payment</td>
-                                <td>@d.toll_Collector_Class</td>
-                                <td>@d.avC_Class</td>
-                                <td>@d.final_Class</td>
-                                <td>@d.tariff</td>
-                                <td>@d.updated_tariff</td>
-                                <td>@diff</td>
-                                <td>@d.takenAction</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- PAGINATION -->
-            <div class="mt-4 d-flex flex-column flex-md-row justify-content-between align-items-center border-top pt-3">
-                <div class="text-muted mb-2 mb-md-0">
-                    Showing page <strong>@Model.page</strong> of <strong>@Model.totalPages</strong> |
-                    Total records: <strong>@Model.TotalRecords</strong>
+                <!-- Start Date -->
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">Start Date & Time</label>
+                    <input type="datetime-local"
+                           name="Filters.StartDate"
+                           class="form-control"
+                           value="@(filters.StartDate.ToString("yyyy-MM-ddTHH:mm"))" />
                 </div>
 
-                <nav aria-label="Discrepancy pagination">
-                    <ul class="pagination justify-content-center mb-0">
+                <!-- End Date -->
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">End Date & Time</label>
+                    <input type="datetime-local"
+                           name="Filters.EndDate"
+                           class="form-control"
+                           value="@(filters.EndDate.ToString("yyyy-MM-ddTHH:mm"))" />
+                </div>
+
+                <!-- Shift checklist -->
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">Operational Shift</label>
+                    <div class="filter-box">
+                        @foreach (var shift in filters.Shifts ?? new List<string>())
+                        {
+                            <div class="form-check">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       name="Filters.SelectedShifts"
+                                       value="@shift"
+                                       @(IsChecked(filters.SelectedShifts, shift) ? "checked" : "") />
+                                <label class="form-check-label">@shift</label>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Operator checklist -->
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">Toll Operator ID</label>
+                    <div class="filter-box">
+                        @foreach (var op in filters.TollOperators ?? new List<string>())
+                        {
+                            <div class="form-check">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       name="Filters.SelectedTollOperators"
+                                       value="@op"
+                                       @(IsChecked(filters.SelectedTollOperators, op) ? "checked" : "") />
+                                <label class="form-check-label">@op</label>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Lane checklist -->
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">Lane</label>
+                    <div class="filter-box">
+                        @foreach (var lane in filters.Lanes ?? new List<string>())
+                        {
+                            <div class="form-check">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       name="Filters.SelectedLanes"
+                                       value="@lane"
+                                       @(IsChecked(filters.SelectedLanes, lane) ? "checked" : "") />
+                                <label class="form-check-label">@lane</label>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Payment checklist -->
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">Method of Payment</label>
+                    <div class="filter-box">
+                        @foreach (var pm in filters.PaymentMethods ?? new List<string>())
+                        {
+                            <div class="form-check">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       name="Filters.SelectedPaymentMethods"
+                                       value="@pm"
+                                       @(IsChecked(filters.SelectedPaymentMethods, pm) ? "checked" : "") />
+                                <label class="form-check-label">@pm</label>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Taken Action checklist -->
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">Taken Action</label>
+                    <div class="filter-box">
+                        @foreach (var act in filters.TakenActions ?? new List<string>())
+                        {
+                            <div class="form-check">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       name="Filters.SelectedTakenActions"
+                                       value="@act"
+                                       @(IsChecked(filters.SelectedTakenActions, act) ? "checked" : "") />
+                                <label class="form-check-label">@act</label>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Apply -->
+                <div class="col-md-3 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        Apply Filters
+                    </button>
+                </div>
+            </div>
+
+            <!-- Reset to page 1 when applying filters -->
+            <input type="hidden" name="page" value="1" />
+            <input type="hidden" name="pageSize" value="@Model.pageSize" />
+        </form>
+
+        <!-- ====== TABLE ====== -->
+        <div class="table-responsive mt-3">
+            <table class="table table-striped table-bordered align-middle text-center">
+                <thead class="table-light">
+                    <tr>
+                        <th>Lane</th>
+                        <th>Sequence</th>
+                        <th>Date</th>
+                        <th>Time</th>
+                        <th>Shift</th>
+                        <th>Operator</th>
+                        <th>Payment</th>
+                        <th>Toll Collector</th>
+                        <th>AVC</th>
+                        <th>Updated Tariff</th>
+                        <th>Tariff</th>
+                        <th>Final Class</th>
+                        <th>Difference</th>
+                        <th>Taken Action</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @if (items.Any())
+                    {
+                        foreach (var t in items)
+                        {
+                            var hideClasses =
+                                string.Equals((t.Toll_Collector_Class ?? "").Trim(),
+                                              (t.AVC_Class ?? "").Trim(),
+                                              StringComparison.OrdinalIgnoreCase);
+
+                            <tr>
+                                <td>@t.Lane_Nr</td>
+                                <td>@t.Trx_Sequence_Nr</td>
+                                <td>@t.Trx_Date</td>
+                                <td>@t.Trx_Time</td>
+                                <td>@t.Operational_Shift</td>
+                                <td>@t.Toll_Operator_ID</td>
+                                <td>@t.Method_of_Payment</td>
+                                <td>@(hideClasses ? "" : t.Toll_Collector_Class)</td>
+                                <td>@(hideClasses ? "" : t.AVC_Class)</td>
+                                <td>@t.Updated_Tariff.ToString("N2")</td>
+                                <td>@t.Tariff.ToString("N2")</td>
+                                <td>@t.Final_Class</td>
+                                <td>@t.TariffDifference.ToString("N2")</td>
+                                <td>@t.TakenAction</td>
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="14" class="py-3 text-muted">
+                                No data available for the selected filters.
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <!-- ====== PAGINATION ====== -->
+        @if (Model.totalPages > 1)
+        {
+            int startPage = Math.Max(1, Model.page - 1);
+            int endPage   = Math.Min(Model.totalPages, Model.page + 1);
+
+            <div class="mt-4 d-flex flex-column flex-md-row justify-content-between align-items-center border-top pt-3 no-print">
+
+                <!-- Totals -->
+                <div class="mb-2 mb-md-0">
+                    <h6>Total Records: <strong>@Model.totalCount</strong></h6>
+                    <h6>Total Difference: <strong>@totalDifference.ToString("N2")</strong></h6>
+                </div>
+
+                <nav>
+                    <ul class="pagination">
+
+                        <!-- Prev -->
                         <li class="page-item @(Model.page <= 1 ? "disabled" : "")">
-                            <a class="page-link" href="@PageUrl(Model.page - 1)">&laquo; Previous</a>
+                            <a class="page-link"
+                               href="@($"{Url.Action("Index","Discrepancy")}?{BuildQueryString(filters, Model.page - 1, Model.pageSize)}")">
+                                Previous
+                            </a>
                         </li>
+
+                        <!-- Page Numbers -->
                         @for (int i = startPage; i <= endPage; i++)
                         {
                             <li class="page-item @(i == Model.page ? "active" : "")">
-                                <a class="page-link" href="@PageUrl(i)">@i</a>
+                                <a class="page-link"
+                                   href="@($"{Url.Action("Index","Discrepancy")}?{BuildQueryString(filters, i, Model.pageSize)}")">
+                                    @i
+                                </a>
                             </li>
                         }
+
+                        <!-- Next -->
                         <li class="page-item @(Model.page >= Model.totalPages ? "disabled" : "")">
-                            <a class="page-link" href="@PageUrl(Model.page + 1)">Next &raquo;</a>
+                            <a class="page-link"
+                               href="@($"{Url.Action("Index","Discrepancy")}?{BuildQueryString(filters, Model.page + 1, Model.pageSize)}")">
+                                Next
+                            </a>
                         </li>
                     </ul>
                 </nav>
             </div>
-
-            <!-- FOOTER -->
-            <hr class="my-3" />
-            <div class="row text-muted small">
-                <div class="col-md-4">
-                    <p class="fw-bold mb-1 text-dark">Discrepancy Report</p>
-                    <p class="mb-0">Reports Module Version: <strong>@reportVersion</strong></p>
-                </div>
-                <div class="col-md-4 text-center">
-                    <p class="fw-bold mb-1 text-dark">Date and Time:</p>
-                    <p class="mb-0">@reportGeneratedAt.ToString("dd/MM/yyyy HH:mm:ss")</p>
-                </div>
-                <div class="col-md-4 text-end">
-                    <p class="fw-bold mb-1 text-dark">User ID:</p>
-                    <p class="mb-0">@currentUser</p>
-                </div>
-            </div>
         }
-        else
+        <!-- ====== SUMMARY (LAST PAGE WHEN PRINTING) ====== -->
+        <div class="print-page-break"></div>
+
+        @if (Model.totalPages <= 1 || Model.page == Model.totalPages)
         {
-            <div class="alert alert-warning text-center mt-4">
-                No discrepancy records found for the selected filters.
+            <div class="card mt-4 border">
+                <div class="card-body">
+                    <h5 class="mb-3 fw-bold">Summary</h5>
+
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <div class="small text-muted">Total Count</div>
+                            <div class="fw-bold">@summaryCount</div>
+                        </div>
+
+                        <div class="col-md-3">
+                            <div class="small text-muted">Total Difference</div>
+                            <div class="fw-bold">@totalDifference.ToString("N2")</div>
+                        </div>
+
+                        <div class="col-md-2">
+                            <div class="small text-muted">Operator Correct</div>
+                            <div class="fw-bold">@operatorCorrect</div>
+                        </div>
+
+                        <div class="col-md-2">
+                            <div class="small text-muted">AVC Correct</div>
+                            <div class="fw-bold">@avcCorrect</div>
+                        </div>
+
+                        <div class="col-md-2">
+                            <div class="small text-muted">Both Incorrect</div>
+                            <div class="fw-bold">@bothIncorrect</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         }
     </div>
+        <!-- ====== FOOTER ====== -->
+        <div class="mt-4 border-top pt-3">
+            <table class="table table-borderless mb-0">
+                <tr>
+                    <td><strong>Discrepancy Report</strong></td>
+                    <td><strong>Date And Time:</strong> @reportGenerated</td>
+                    <td><strong>User:</strong> @currentUserId</td>
+                    <td class="text-end">Page <strong>@Model.page</strong> of <strong>@(Model.totalPages == 0 ? 1 : Model.totalPages)</strong></td>
+                </tr>
+                <tr>
+                    <td colspan="4">
+                        <small class="text-muted">Reports Module Version Number: <strong>@reportVersion</strong></small>
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        
 </div>
 
-<!-- SCRIPTS -->
+@functions {
+
+    private string BuildQueryString(DiscrepancyInputModel f, int page, int pageSize)
+    {
+        var q = new List<string>();
+
+        // dates
+        q.Add($"Filters.StartDate={Uri.EscapeDataString(f.StartDate.ToString("yyyy-MM-ddTHH:mm:ss"))}");
+        q.Add($"Filters.EndDate={Uri.EscapeDataString(f.EndDate.ToString("yyyy-MM-ddTHH:mm:ss"))}");
+
+        // paging
+        q.Add($"page={page}");
+        q.Add($"pageSize={pageSize}");
+
+        // lists
+        AddList(q, "Filters.SelectedShifts", f.SelectedShifts);
+        AddList(q, "Filters.SelectedTollOperators", f.SelectedTollOperators);
+        AddList(q, "Filters.SelectedLanes", f.SelectedLanes);
+        AddList(q, "Filters.SelectedPaymentMethods", f.SelectedPaymentMethods);
+        AddList(q, "Filters.SelectedTakenActions", f.SelectedTakenActions);
+
+        return string.Join("&", q);
+    }
+
+    private void AddList(List<string> q, string key, List<string> list)
+    {
+        if (list == null || list.Count == 0) return;
+
+        foreach (var v in list.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()))
+        {
+            q.Add($"{key}={Uri.EscapeDataString(v)}");
+        }
+    }
+}
+
+<!-- EXPORT LIBS -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 
+
 <script>
-    // ===== PDF EXPORT =====
-    document.getElementById("btnDownloadPdf").addEventListener("click", async function () {
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+    document.addEventListener("DOMContentLoaded", () => {
 
-        const pageWidth = doc.internal.pageSize.getWidth();
-        const pageHeight = doc.internal.pageSize.getHeight();
-        const margin = 40;
+    // ==========================
+    // DATA + META
+    // ==========================
+    const data = @Html.Raw(JsonSerializer.Serialize(
+                Model.ExportItems ?? new List<MIS.Web.Models.Discrepancy.DiscrepancyModel>()
+            ));
 
-        const reportGeneratedAt = '@reportGeneratedAt.ToString("dd/MM/yyyy HH:mm:ss")';
-        const currentUser = '@currentUser';
-        const reportVersion = '@reportVersion';
-        const discrepancyData = @Html.Raw(JsonSerializer.Serialize((object)Model.Items ?? new object[0]));
+    const reportGeneratedAt = '@DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")';
+    const currentUserId = '@(User.FindFirst("firstName")?.Value ?? "Unknown User")';
+    const reportVersion = "3.0.0.0";
 
-        // Load logos
-        const logoWidth = 90, logoHeight = 90, logoY = 25;
-        const leftLogo = '/images/lCC Logo.jpg';
-        const rightLogo = '/images/ICT-Works Logo.jpg';
-        const loadImage = src => new Promise(resolve => {
-            const img = new Image();
-            img.crossOrigin = 'Anonymous';
-            img.onload = () => resolve(img);
-            img.onerror = () => resolve(null);
-            img.src = src;
-        });
-        const [lLogo, rLogo] = await Promise.all([loadImage(leftLogo), loadImage(rightLogo)]);
-        if (lLogo) doc.addImage(lLogo, 'JPEG', margin, logoY, logoWidth, logoHeight);
-        if (rLogo) doc.addImage(rLogo, 'JPEG', pageWidth - margin - logoWidth, logoY, logoWidth, logoHeight);
+    const reportNamePdf = "DISCREPANCY REPORT";
+    const reportNameFooter = "Discrepancy Report";
+    const fileNamePrefix = "Discrepancy_Report";
 
-        // Title
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(16);
-        doc.text("Discrepancy Report", pageWidth / 2, logoY + 50, { align: "center" });
+    const fileStamp = () => new Date().toISOString().replace(/[:.]/g, "-");
+    const hasData = () => Array.isArray(data) && data.length > 0;
 
-        // Filters
-        let y = logoY + logoHeight + 10;
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(10);
-        const filters = {
-            "Start Date": '@filters.StartDate.ToString("dd/MM/yyyy HH:mm")',
-            "End Date": '@filters.EndDate.ToString("dd/MM/yyyy HH:mm")',
-            "Operator": '@(filters.toll_Operator_ID ?? "All")',
-            "Shift": '@(filters.Shift ?? "All")',
-            "Payment": '@(filters.PaymentMethod ?? "All")',
-            "Action": '@(filters.TakenAction ?? "All")'
-        };
-        doc.text("Filters Used:", margin, y);
-        y += 14;
-        for (const [k, v] of Object.entries(filters)) { doc.text(`${k}: ${v}`, margin, y); y += 14; }
+    // ==========================
+    // FILTERS
+    // ==========================
+    const allShifts = @Html.Raw(JsonSerializer.Serialize(Model.Filters?.Shifts ?? new List<string>()));
+    const allOperators = @Html.Raw(JsonSerializer.Serialize(Model.Filters?.TollOperators ?? new List<string>()));
+    const allLanes = @Html.Raw(JsonSerializer.Serialize(Model.Filters?.Lanes ?? new List<string>()));
+    const allPaymentMethods = @Html.Raw(JsonSerializer.Serialize(Model.Filters?.PaymentMethods ?? new List<string>()));
+    const allTakenActions = @Html.Raw(JsonSerializer.Serialize(Model.Filters?.TakenActions ?? new List<string>()));
 
-        // Table
-        const headers = ["Lane","Seq #","Date","Time","Shift","Operator","Payment","Tariff","Updated","Diff","Action"];
-        const rows = (discrepancyData || []).map(d => [
-            d.lane_Nr, d.trx_Sequence_Nr, d.trx_Date, d.trx_Time,
-            d.operational_Shift, d.toll_Operator_ID, d.method_of_Payment,
-            (Number(d.tariff || 0)).toFixed(2),
-            (Number(d.updated_tariff || 0)).toFixed(2),
-            (Number(d.updated_tariff - d.tariff || 0)).toFixed(2),
-            d.takenAction
-        ]);
+    const selectedShifts = @Html.Raw(JsonSerializer.Serialize(Model.Filters?.SelectedShifts ?? new List<string>()));
+    const selectedOperators = @Html.Raw(JsonSerializer.Serialize(Model.Filters?.SelectedTollOperators ?? new List<string>()));
+    const selectedLanes = @Html.Raw(JsonSerializer.Serialize(Model.Filters?.SelectedLanes ?? new List<string>()));
+    const selectedPaymentMethods = @Html.Raw(JsonSerializer.Serialize(Model.Filters?.SelectedPaymentMethods ?? new List<string>()));
+    const selectedTakenActions = @Html.Raw(JsonSerializer.Serialize(Model.Filters?.SelectedTakenActions ?? new List<string>()));
 
-        doc.autoTable({
-            head: [headers],
-            body: rows,
-            startY: y + 10,
-            theme: 'grid',
-            headStyles: { fillColor: [41, 128, 185], textColor: 255 },
-            styles: { fontSize: 9, cellPadding: 4 },
-            margin: { left: margin, right: margin },
-            didDrawPage: data => {
-                const pageCount = doc.internal.getNumberOfPages();
-                const currentPage = doc.internal.getCurrentPageInfo().pageNumber;
-                const footerY = pageHeight - 50;
+    function cleanList(arr) {
+    if (!Array.isArray(arr)) return [];
 
-                doc.setFont("helvetica", "normal");
-                doc.setFontSize(10);
-                doc.text("Discrepancy Report", margin, footerY);
-                doc.text(`Date and Time: ${reportGeneratedAt}`, pageWidth / 2.5, footerY);
-                doc.text(`User ID: ${currentUser}`, pageWidth / 1.5, footerY);
-                doc.text(`Page ${currentPage} of ${pageCount}`, pageWidth - margin, footerY, { align: 'right' });
-                doc.setFontSize(9);
-                doc.text(`Reports Module Version Number: ${reportVersion}`, margin, footerY + 14);
-            }
-        });
+    return arr
+    .filter(x => x !== null && x !== undefined)
+    .map(x => String(x).trim())
+    .filter(x => x.length > 0);
+    }
 
-        doc.save(`Discrepancy_Report_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
+    function labelAll(selectedList, allList) {
+    const selected = cleanList(selectedList);
+    const all = cleanList(allList);
+
+    if (selected.length === 0) return "All";
+    if (all.length > 0 && selected.length >= all.length) return "All";
+
+    return selected.join(", ");
+    }
+
+    const filtersUsed = {
+    "Start Date": "@(Model.Filters?.StartDate.ToString("dd/MM/yyyy HH:mm") ?? "")",
+    "End Date": "@(Model.Filters?.EndDate.ToString("dd/MM/yyyy HH:mm") ?? "")",
+    "Shift": labelAll(selectedShifts, allShifts),
+    "Toll Operator": labelAll(selectedOperators, allOperators),
+    "Lane": labelAll(selectedLanes, allLanes),
+    "Payment Method": labelAll(selectedPaymentMethods, allPaymentMethods),
+    "Taken Action": labelAll(selectedTakenActions, allTakenActions)
+    };
+
+    // ==========================
+    // HELPERS
+    // ==========================
+    function toNum(value) {
+    const n = Number(value);
+    return isNaN(n) ? 0 : n;
+    }
+
+    function safeStr(value) {
+    return value === null || value === undefined ? "" : String(value);
+    }
+
+    function equalsIgnoreCase(a, b) {
+    return safeStr(a).trim().toLowerCase() === safeStr(b).trim().toLowerCase();
+    }
+
+    function loadImage(src) {
+    return new Promise(resolve => {
+    const img = new Image();
+    img.crossOrigin = "Anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
+    });
+    }
+
+    function getSummary(items) {
+    return {
+    totalCount: items.length,
+    totalDifference: items.reduce((sum, item) => sum + toNum(item.TariffDifference), 0),
+    operatorCorrect: items.filter(item => equalsIgnoreCase(item.TakenAction, "AVC Error")).length,
+    avcCorrect: items.filter(item => equalsIgnoreCase(item.TakenAction, "Toll Collector Error")).length,
+    bothIncorrect: items.filter(item => equalsIgnoreCase(item.TakenAction, "Both Incorrect")).length
+    };
+    }
+
+    function getDisplayClasses(item) {
+    const collector = safeStr(item.Toll_Collector_Class).trim();
+    const avc = safeStr(item.AVC_Class).trim();
+    const hideClasses = collector.toLowerCase() === avc.toLowerCase();
+
+    return {
+    collector: hideClasses ? "" : collector,
+    avc: hideClasses ? "" : avc
+    };
+    }
+
+    // ==========================
+    // PDF HELPERS
+    // ==========================
+    function drawCenteredHeader(doc, pageWidth, margin, leftLogo, rightLogo, reportTitle) {
+    const topY = 25;
+
+    if (leftLogo) {
+    doc.addImage(leftLogo, "JPEG", margin, topY, 80, 80);
+    }
+
+    if (rightLogo) {
+    doc.addImage(rightLogo, "JPEG", pageWidth - margin - 80, topY, 80, 80);
+    }
+
+    let y = 60;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text("LEKKI CONCESSION COMPANY LIMITED", pageWidth / 2, y, { align: "center" });
+
+    y += 18;
+    doc.setFontSize(12);
+    doc.text("LEKKI-IKOYI LINK BRIDGE", pageWidth / 2, y, { align: "center" });
+
+    y += 26;
+    doc.setFontSize(16);
+    doc.text(reportTitle || "REPORT NAME", pageWidth / 2, y, { align: "center" });
+
+    return y;
+    }
+
+    function drawWrappedText(doc, text, x, y, maxWidth, lineHeight) {
+    const lines = doc.splitTextToSize(safeStr(text), maxWidth);
+    lines.forEach(line => {
+    doc.text(line, x, y);
+    y += lineHeight;
+    });
+    return y;
+    }
+
+    function drawFiltersBlock(doc, margin, startY, filters, pageWidth) {
+    let y = startY;
+    const maxWidth = pageWidth - (margin * 2);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.text("FILTERS USED:", margin, y);
+    y += 14;
+
+    doc.setFont("helvetica", "normal");
+
+    Object.entries(filters).forEach(([key, value]) => {
+    y = drawWrappedText(doc, `${key}: ${safeStr(value)}`, margin, y, maxWidth, 12);
+    y += 2;
     });
 
+    return y;
+    }
+
+    function addSummaryPage(doc, margin, summary) {
+    doc.addPage();
+
+    const y0 = 100;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text("SUMMARY", margin, y0);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
+
+    doc.text(`Total Record Count: ${summary.totalCount}`, margin, y0 + 25);
+    doc.text(`Total Difference Value: ${summary.totalDifference.toFixed(2)}`, margin, y0 + 45);
+    doc.text(`Operator Correct: ${summary.operatorCorrect}`, margin, y0 + 65);
+    doc.text(`AVC Correct: ${summary.avcCorrect}`, margin, y0 + 85);
+    doc.text(`Both Incorrect: ${summary.bothIncorrect}`, margin, y0 + 105);
+    }
+
+    function addFooters(doc, pageWidth, pageHeight, margin) {
+    const totalPages = doc.internal.getNumberOfPages();
+
+    for (let pageNumber = 1; pageNumber <= totalPages; pageNumber++) {
+    doc.setPage(pageNumber);
+
+    const footerY = pageHeight - 30;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+
+    doc.text(reportNameFooter, margin, footerY);
+    doc.text(`Date: ${reportGeneratedAt}`, pageWidth / 2.2, footerY);
+    doc.text(`User: ${currentUserId}`, pageWidth / 1.5, footerY);
+    doc.text(`Page ${pageNumber} of ${totalPages}`, pageWidth - margin, footerY, { align: "right" });
+
+    doc.setFontSize(9);
+    doc.text(`Reports Module Version Number: ${reportVersion}`, margin, footerY + 14);
+    }
+    }
+
+    // ==========================
+    // EXPORT TABLE DEFINITIONS
+    // Matches on-screen table order
+    // ==========================
+    const headers = [
+    "Lane",
+    "Sequence",
+    "Date",
+    "Time",
+    "Shift",
+    "Operator",
+    "Payment",
+    "Toll Collector",
+    "AVC",
+    "Updated Tariff",
+    "Tariff",
+    "Final Class",
+    "Difference",
+    "Taken Action"
+    ];
+
+    function buildPdfRows(items) {
+    return items.map(item => {
+    const displayClasses = getDisplayClasses(item);
+
+    return [
+    safeStr(item.Lane_Nr),
+    safeStr(item.Trx_Sequence_Nr),
+    safeStr(item.Trx_Date),
+    safeStr(item.Trx_Time),
+    safeStr(item.Operational_Shift),
+    safeStr(item.Toll_Operator_ID),
+    safeStr(item.Method_of_Payment),
+    displayClasses.collector,
+    displayClasses.avc,
+    toNum(item.Updated_Tariff).toFixed(2),
+    toNum(item.Tariff).toFixed(2),
+    safeStr(item.Final_Class),
+    toNum(item.TariffDifference).toFixed(2),
+    safeStr(item.TakenAction)
+    ];
+    });
+    }
+
+    function buildExcelRows(items) {
+    return items.map(item => {
+    const displayClasses = getDisplayClasses(item);
+
+    return [
+    safeStr(item.Lane_Nr),
+    safeStr(item.Trx_Sequence_Nr),
+    safeStr(item.Trx_Date),
+    safeStr(item.Trx_Time),
+    safeStr(item.Operational_Shift),
+    safeStr(item.Toll_Operator_ID),
+    safeStr(item.Method_of_Payment),
+    displayClasses.collector,
+    displayClasses.avc,
+    toNum(item.Updated_Tariff),
+    toNum(item.Tariff),
+    safeStr(item.Final_Class),
+    toNum(item.TariffDifference),
+    safeStr(item.TakenAction)
+    ];
+    });
+    }
+
+    // ==========================
+    // PDF EXPORT
+    // ==========================
+    document.getElementById("btnDownloadPdf")?.addEventListener("click", async () => {
+    if (!hasData()) {
+    alert("No data available to export.");
+    return;
+    }
+
+    if (!window.jspdf) {
+    alert("jsPDF not loaded. Check layout scripts.");
+    return;
+    }
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({
+    orientation: "landscape",
+    unit: "pt",
+    format: "a4"
+    });
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 50;
+
+    const [leftLogo, rightLogo] = await Promise.all([
+    loadImage("/images/lCC Logo.jpg"),
+    loadImage("/images/ICT-Works Logo.jpg")
+    ]);
+
+    const headerBottomY = drawCenteredHeader(
+    doc,
+    pageWidth,
+    margin,
+    leftLogo,
+    rightLogo,
+    reportNamePdf
+    );
+
+    const filtersBottomY = drawFiltersBlock(
+    doc,
+    margin,
+    headerBottomY + 35,
+    filtersUsed,
+    pageWidth
+    );
+
+    const rows = buildPdfRows(data);
+
+    doc.autoTable({
+    head: [headers],
+    body: rows,
+    startY: filtersBottomY + 10,
+    theme: "grid",
+    styles: {
+    fontSize: 8,
+    halign: "center",
+    valign: "middle",
+    cellPadding: 3,
+    overflow: "linebreak"
+    },
+    headStyles: {
+    fillColor: [41, 128, 185],
+    textColor: 255,
+    fontStyle: "bold"
+    },
+    margin: {
+    left: margin,
+    right: margin
+    }
+    });
+
+    const summary = getSummary(data);
+    addSummaryPage(doc, margin, summary);
+
+    addFooters(doc, pageWidth, pageHeight, margin);
+
+    doc.save(`${fileNamePrefix}_${fileStamp()}.pdf`);
+    });
+
+    // ==========================
     // EXCEL EXPORT
-    document.getElementById("btnDownloadExcel").addEventListener("click", function () {
-        const discrepancyData = @Html.Raw(JsonSerializer.Serialize((object)Model.Items ?? new object[0]));
-        if (!discrepancyData.length) { alert("No data to export."); return; }
+    // ==========================
+    document.getElementById("btnDownloadExcel")?.addEventListener("click", () => {
+    if (!hasData()) {
+    alert("No data available to export.");
+    return;
+    }
 
-        const wb = XLSX.utils.book_new();
-        const headers = [["Lane","Seq #","Date","Time","Shift","Operator","Payment","Tariff","Updated","Diff","Action"]];
-        const rows = discrepancyData.map(d => [
-            d.lane_Nr, d.trx_Sequence_Nr, d.trx_Date, d.trx_Time,
-            d.operational_Shift, d.toll_Operator_ID, d.method_of_Payment,
-            d.tariff, d.updated_tariff, d.updated_tariff - d.tariff, d.takenAction
-        ]);
+    if (!window.XLSX) {
+    alert("XLSX not loaded. Check layout scripts.");
+    return;
+    }
 
-        const ws = XLSX.utils.aoa_to_sheet([...headers, ...rows]);
-        XLSX.utils.book_append_sheet(wb, ws, "Discrepancy Report");
-        XLSX.writeFile(wb, `Discrepancy_Report_${new Date().toISOString().replace(/[:.]/g, '-')}.xlsx`);
+    const summary = getSummary(data);
+
+    const sheetRows = [];
+
+    // Title
+    sheetRows.push([reportNameFooter.toUpperCase()]);
+    sheetRows.push([]);
+
+    // Filters
+    sheetRows.push(["FILTERS USED"]);
+    Object.entries(filtersUsed).forEach(([key, value]) => {
+    sheetRows.push([key, value]);
+    });
+    sheetRows.push([]);
+
+    // Table
+    sheetRows.push(headers);
+    buildExcelRows(data).forEach(row => sheetRows.push(row));
+
+    // Summary
+    sheetRows.push([]);
+    sheetRows.push(["SUMMARY"]);
+    sheetRows.push(["Total Record Count", summary.totalCount]);
+    sheetRows.push(["Total Difference Value", summary.totalDifference]);
+    sheetRows.push(["Operator Correct", summary.operatorCorrect]);
+    sheetRows.push(["AVC Correct", summary.avcCorrect]);
+    sheetRows.push(["Both Incorrect", summary.bothIncorrect]);
+
+    // Footer meta
+    sheetRows.push([]);
+    sheetRows.push(["Generated", reportGeneratedAt]);
+    sheetRows.push(["User", currentUserId]);
+    sheetRows.push(["Reports Module Version Number", reportVersion]);
+
+    const ws = XLSX.utils.aoa_to_sheet(sheetRows);
+
+    ws["!cols"] = [
+    { wch: 12 }, // Lane
+    { wch: 14 }, // Sequence
+    { wch: 14 }, // Date
+    { wch: 12 }, // Time
+    { wch: 14 }, // Shift
+    { wch: 18 }, // Operator
+    { wch: 18 }, // Payment
+    { wch: 18 }, // Toll Collector
+    { wch: 18 }, // AVC
+    { wch: 16 }, // Updated Tariff
+    { wch: 14 }, // Tariff
+    { wch: 14 }, // Final Class
+    { wch: 14 }, // Difference
+    { wch: 20 }  // Taken Action
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Discrepancy Report");
+
+    XLSX.writeFile(wb, `${fileNamePrefix}_${fileStamp()}.xlsx`);
+    });
+
     });
 </script>
+

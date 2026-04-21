@@ -7,15 +7,15 @@ namespace MIS.Web.Services
 {
     public interface IDailyCashupReportService
     {
+
         Task<PageDailyCashupModel> GetDailyCashupAsync(
             DateTime startDate,
             DateTime endDate,
-            List<string>? operationalShift = null,
-            List<string>? tollOperators = null,
+            List<int>? shiftIds = null,
+            List<long>? systemUserIds = null,
             int page = 1,
             int pageSize = 10);
 
-        Task<List<string>> GetShiftsAsync();
-        Task<List<string>> GetTollOperatorsAsync();
+        Task<(List<CheckItemModel<int>> Shifts, List<CheckItemModel<long>> Operators)> GetFiltersAsync();
     }
 }

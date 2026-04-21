@@ -1,12 +1,12 @@
 ﻿using MIS.Web.Models.AccountHistory;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 
-namespace MIS.Web.Services
+public interface IAccountHistoryService
 {
-    public interface IAccountHistoryService
-    {
-        Task<AccountHistoryInputModel> GetAccountHistoryAsync(string accountNumber);
-        Task<List<string>> GetAccountsAsync(); // For dropdown
-    }
+    Task<AccountHistoryInputModel> GetAccountHistoryAsync(
+        string? accountNumber,
+        DateTime? startDate,
+        DateTime? endDate,
+        bool? operational);
+
+    Task<List<AccountSearchItem>> SearchAccountsAsync(string q, int take = 20);
 }

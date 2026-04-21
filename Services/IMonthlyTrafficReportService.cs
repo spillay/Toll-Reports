@@ -18,5 +18,6 @@ namespace MIS.Web.Services
         // Dropdown helpers
         Task<List<int>>? GetAvailableYearsAsync();
         Task<List<int>>? GetAvailableMonthsAsync(int year);
+        Task<List<string>> GetAvailableClassificationsAsync();
     }
 }

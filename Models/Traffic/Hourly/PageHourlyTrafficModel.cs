@@ -7,5 +7,7 @@
 
         // Filter input
         public HourlyTrafficInputModel Input { get; set; } = new HourlyTrafficInputModel();
+
+        public List<string> Classifications { get; set; } = new();
     }
 }

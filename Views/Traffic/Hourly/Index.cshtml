@@ -2,22 +2,93 @@
 @model PageHourlyTrafficModel
 @using System.Text.Json
 
-
 @{
-    var classifications = ViewBag.Classifications as List<string> ?? new List<string>();
+    var classifications = Model.Classifications ?? new List<string>();
+
+    var reportVersion = "3.0.0.0";
+    var currentUserId = User.FindFirst("firstName")?.Value ?? "Unknown User";
+    var reportGeneratedAt = DateTime.Now;
+
+    var hasData = Model.Items != null && Model.Items.Any();
+
+    var dayGroups = hasData
+        ? Model.Items!
+            .GroupBy(x => x.StartDate.Date)
+            .OrderBy(g => g.Key)
+            .ToList()
+        : new List<IGrouping<DateTime, HourlyTrafficModel>>();
+
+    // For HOURLY summary, stats must be based on DATE + HOUR rows
+    var hourlyTotalsList = new List<Dictionary<string, int>>();
+    var globalTotals = classifications.ToDictionary(c => c, c => 0);
+
+    if (hasData)
+    {
+        var groupedHourly = Model.Items!
+            .GroupBy(x => new { Date = x.StartDate.Date, Hour = x.StartDate.Hour })
+            .OrderBy(g => g.Key.Date)
+            .ThenBy(g => g.Key.Hour);
+
+        foreach (var hourGroup in groupedHourly)
+        {
+            var hourlyTotals = classifications.ToDictionary(c => c, c => 0);
+
+            foreach (var cls in classifications)
+            {
+                int count = hourGroup
+                    .Where(x => x.Classification == cls)
+                    .Sum(x => x.Count);
+
+                hourlyTotals[cls] = count;
+                globalTotals[cls] += count;
+            }
+
+            hourlyTotalsList.Add(hourlyTotals);
+        }
+    }
+
+    int totalHourRows = hourlyTotalsList.Count;
+    var globalGrandTotal = globalTotals.Values.Sum();
+
+    var globalPercentages = classifications.ToDictionary(
+        cls => cls,
+        cls => globalGrandTotal > 0
+            ? (double)globalTotals[cls] / globalGrandTotal * 100
+            : 0
+    );
+
+    var globalAveragePerHour = classifications.ToDictionary(
+        cls => cls,
+        cls => totalHourRows > 0
+            ? hourlyTotalsList.Average(h => h[cls])
+            : 0
+    );
+
+    var globalMaximumPerHour = classifications.ToDictionary(
+        cls => cls,
+        cls => totalHourRows > 0
+            ? hourlyTotalsList.Max(h => h[cls])
+            : 0
+    );
+
+    var globalAverageTotal = totalHourRows > 0
+        ? hourlyTotalsList.Average(h => h.Values.Sum())
+        : 0;
+
+    var globalMaximumTotal = totalHourRows > 0
+        ? hourlyTotalsList.Max(h => h.Values.Sum())
+        : 0;
 }
 
 <div class="card shadow-lg mb-4">
     <div class="card-body">
 
-        <!-- Header -->
         <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
             <div></div>
-            <h2 class="mb-0 fw-bold text-primary">Hourly Traffic Report</h2>
+            <h2 class="mb-0 fw-bold text-center text-primary">HOURLY TRAFFIC REPORT</h2>
             <div></div>
         </div>
 
-        <!-- Export Buttons -->
         <div class="row mb-3">
             <div class="col-md-2 d-flex align-items-end me-2">
                 <button id="btnDownloadPdf" type="button" class="btn btn-danger w-100 shadow-sm">
@@ -31,16 +102,14 @@
             </div>
         </div>
 
-        <!-- Filter Form -->
-        @Html.Partial("Hourly/_HourlyTrafficFilters", Model.Input)
+        @Html.Partial("Hourly/_HourlyTrafficFilters", Model)
 
-        <!-- Data Table -->
         <div class="table-responsive">
             <table class="table table-bordered table-striped align-middle">
                 <thead class="table-light text-center">
                     <tr>
                         <th>Date</th>
-                        <th>Hour</th>
+                        <th>Start Time</th>
                         @foreach (var cls in classifications)
                         {
                             <th>@cls</th>
@@ -48,16 +117,10 @@
                         <th>Total</th>
                     </tr>
                 </thead>
+
                 <tbody>
-                    @if (Model.Items.Any())
+                    @if (hasData)
                     {
-                        // Use the classifications declared at the top of the page
-                        var dayGroups = Model.Items.GroupBy(x => x.StartDate.Date).OrderBy(g => g.Key);
-
-                        // Global accumulators
-                        var globalTotals = classifications.ToDictionary(c => c, c => 0);
-                        int totalHours = 0;
-
                         foreach (var dayGroup in dayGroups)
                         {
                             var dailyTotals = classifications.ToDictionary(c => c, c => 0);
@@ -68,33 +131,46 @@
                                 </td>
                             </tr>
 
-                            var hourlyGroups = dayGroup.GroupBy(x => x.StartDate.Hour).OrderBy(h => h.Key);
+                            var hourlyGroups = dayGroup
+                            .GroupBy(x => x.StartDate.Hour)
+                            .OrderBy(h => h.Key)
+                            .ToList();
 
                             foreach (var hourGroup in hourlyGroups)
                             {
                                 int rowTotal = 0;
+
                                 <tr>
                                     <td></td>
                                     <td>@(new DateTime(1, 1, 1, hourGroup.Key, 0, 0).ToString("HH:mm"))</td>
 
                                     @foreach (var cls in classifications)
                                     {
-                                        int count = hourGroup.FirstOrDefault(x => x.Classification == cls)?.Count ?? 0;
-                                        <td>@count</td>
+                                        int count = hourGroup
+                                        .Where(x => x.Classification == cls)
+                                        .Sum(x => x.Count);
+
                                         rowTotal += count;
                                         dailyTotals[cls] += count;
-                                        globalTotals[cls] += count; // accumulate global totals
+
+                                        <td>@count</td>
                                     }
+
                                     <td>@rowTotal</td>
                                 </tr>
-                                totalHours++;
                             }
 
                             var dailyGrandTotal = dailyTotals.Values.Sum();
-                            var dailyPercentages = dailyTotals.ToDictionary(kv => kv.Key, kv => dailyGrandTotal > 0 ? (double)kv.Value / dailyGrandTotal * 100 : 0);
+
+                            var dailyPercentages = classifications.ToDictionary(
+                            cls => cls,
+                            cls => dailyGrandTotal > 0
+                            ? (double)dailyTotals[cls] / dailyGrandTotal * 100
+                            : 0
+                            );
 
                             <tr class="fw-bold bg-light">
-                                <td colspan="2">Total for the Day</td>
+                                <td colspan="2">Total for the Period</td>
                                 @foreach (var cls in classifications)
                                 {
                                     <td>@dailyTotals[cls]</td>
@@ -108,57 +184,27 @@
                                 {
                                     <td>@dailyPercentages[cls].ToString("0.00")%</td>
                                 }
-                                <td>100%</td>
+                                <td>@(dailyGrandTotal > 0 ? "100.00%" : "0.00%")</td>
                             </tr>
                         }
 
-                        // === GLOBAL SUMMARY ===
-                        var globalGrandTotal = globalTotals.Values.Sum();
-                        var globalPercentages = globalTotals.ToDictionary(kv => kv.Key, kv => globalGrandTotal > 0 ? (double)kv.Value / globalGrandTotal * 100 : 0);
-                        var globalAverage = globalTotals.ToDictionary(kv => kv.Key, kv => totalHours > 0 ? (int)Math.Round((double)kv.Value / totalHours) : 0);
-                        var globalMaximum = classifications.ToDictionary(cls => cls,
-                        cls => Model.Items
-                        .Where(x => x.Classification == cls)
-                        .GroupBy(x => x.StartDate.Date)
-                        .Select(g => g.Sum(x => x.Count))
-                        .DefaultIfEmpty(0)
-                        .Max());
-
-                        <!-- Global summary rows BELOW entire table -->
-                        <tr class="table-secondary fw-bold">
-                            <td colspan="2">Total for the Day</td>
-                            @foreach (var cls in classifications)
-                            {
-                                <td>@globalTotals[cls].ToString("N0")</td>
-                            }
-                            <td>@globalGrandTotal.ToString("N0")</td>
-                        </tr>
-
-                        <tr class="table-secondary fw-bold">
-                            <td colspan="2">Percentage</td>
-                            @foreach (var cls in classifications)
-                            {
-                                <td>@globalPercentages[cls].ToString("0.00")%</td>
-                            }
-                            <td>100%</td>
-                        </tr>
 
                         <tr class="table-secondary fw-bold">
                             <td colspan="2">Average</td>
                             @foreach (var cls in classifications)
                             {
-                                <td>@globalAverage[cls]</td>
+                                <td>@Math.Round(globalAveragePerHour[cls], 0)</td>
                             }
-                            <td>@globalAverage.Values.Sum()</td>
+                            <td>@Math.Round(globalAverageTotal, 0)</td>
                         </tr>
 
                         <tr class="table-secondary fw-bold">
                             <td colspan="2">Maximum</td>
                             @foreach (var cls in classifications)
                             {
-                                <td>@globalMaximum[cls]</td>
+                                <td>@globalMaximumPerHour[cls]</td>
                             }
-                            <td>@globalMaximum.Values.Sum()</td>
+                            <td>@globalMaximumTotal</td>
                         </tr>
                     }
                     else
@@ -171,9 +217,27 @@
                         </tr>
                     }
                 </tbody>
-
             </table>
         </div>
+
+        <div class="mt-4 p-3 border-top">
+            <table class="table table-borderless w-100 mb-0 align-middle">
+                <tr>
+                    <td class="fw-bold text-dark">Hourly Traffic Report</td>
+                    <td><strong>Date and Time:</strong> @reportGeneratedAt.ToString("dd/MM/yyyy HH:mm:ss")</td>
+                    <td><strong>User ID:</strong> @currentUserId</td>
+                    <td class="text-end">Page <strong>1</strong> of <strong>1</strong></td>
+                </tr>
+                <tr>
+                    <td colspan="4">
+                        <small class="text-muted">
+                            Reports Module Version Number: <strong>@reportVersion</strong>
+                        </small>
+                    </td>
+                </tr>
+            </table>
+        </div>
+
     </div>
 </div>
 
@@ -184,159 +248,318 @@
 
     <script>
         document.addEventListener("DOMContentLoaded", function () {
+            const { jsPDF } = window.jspdf;
+
             const currentUser = '@(User.Identity?.Name ?? "Unknown User")';
             const reportGeneratedAt = '@DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")';
-            const reportVersion = "1.0";
+            const reportVersion = "@reportVersion";
+
             const leftLogoPath = "/images/lCC Logo.jpg";
             const rightLogoPath = "/images/ICT-Works Logo.jpg";
 
+            const classifications = @Html.Raw(JsonSerializer.Serialize(Model.Classifications ?? new List<string>()));
+            const trafficData = @Html.Raw(JsonSerializer.Serialize(Model.Items ?? new List<MIS.Web.Models.Traffic.Hourly.HourlyTrafficModel>()));
+
             const filters = {
-                "Start Date": '@Model.Input.StartDate.ToString("dd/MM/yyyy")',
-                "End Date": '@Model.Input.EndDate.ToString("dd/MM/yyyy")',
+                "Start Date": '@Model.Input.StartDate.ToString("dd/MM/yyyy HH:mm")',
+                "End Date": '@Model.Input.EndDate.ToString("dd/MM/yyyy HH:mm")',
                 "Classification": '@(Model.Input.Classification ?? "All")',
                 "Operational Day": '@(Model.Input.OperationalDay ? "Yes" : "No")',
                 "Shifts": '@(Model.Input.Shifts != null && Model.Input.Shifts.Any() ? string.Join(", ", Model.Input.Shifts) : "All")'
             };
 
-            const trafficData = @Html.Raw(JsonSerializer.Serialize(Model.Items ?? new List<MIS.Web.Models.Traffic.Hourly.HourlyTrafficModel>()));
-            const classifications = @Html.Raw(JsonSerializer.Serialize(ViewBag.Classifications ?? new List<string>()));
+            const pad2 = (n) => String(n).padStart(2, "0");
 
-            // 🖼️ Helper to load images safely
-            const loadImage = src => new Promise(resolve => {
+            function isoStamp(d = new Date()) {
+                return d.toISOString().replace(/[:.]/g, "-");
+            }
+
+            function getDateKey(startDateStr) {
+                if (!startDateStr) return "";
+                return String(startDateStr).substring(0, 10);
+            }
+
+            function getHour(startDateStr) {
+                if (!startDateStr) return 0;
+                const dt = new Date(startDateStr);
+                const h = dt.getHours();
+                return Number.isFinite(h) ? h : 0;
+            }
+
+            const loadImage = (src) => new Promise(res => {
                 const img = new Image();
-                img.crossOrigin = 'Anonymous';
-                img.onload = () => resolve(img);
-                img.onerror = () => resolve(null);
+                img.crossOrigin = "Anonymous";
+                img.onload = () => res(img);
+                img.onerror = () => res(null);
                 img.src = src;
             });
 
-           
+            function drawStandardHeader(doc, reportName, pageWidth, margin) {
+                const topY = 55;
+                let centerY = topY;
+
+                doc.setFont("helvetica", "bold");
+
+                doc.setFontSize(14);
+                doc.text("LEKKI CONCESSION COMPANY LIMITED", pageWidth / 2, centerY, { align: "center" });
+
+                centerY += 18;
+                doc.setFontSize(12);
+                doc.text("LEKKI-IKOYI LINK BRIDGE", pageWidth / 2, centerY, { align: "center" });
+
+                centerY += 28;
+                doc.setFontSize(16);
+                doc.text(reportName || "REPORT", pageWidth / 2, centerY, { align: "center" });
+            }
+
+            function drawFilters(doc, filtersObj, margin, startY) {
+                let y = startY;
+
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(10);
+
+                doc.text("Filters Used:", margin, y);
+                y += 14;
+
+                for (const [key, val] of Object.entries(filtersObj || {})) {
+                    doc.text(`${key}: ${val}`, margin, y);
+                    y += 12;
+                }
+
+                return y;
+            }
+
+            function groupByDateHour(data) {
+                const grouped = {};
+
+                (data || []).forEach(item => {
+                    const startDate = item.StartDate || item.startDate;
+                    const dateKey = getDateKey(startDate);
+                    const hour = getHour(startDate);
+
+                    if (!grouped[dateKey]) grouped[dateKey] = {};
+                    if (!grouped[dateKey][hour]) grouped[dateKey][hour] = [];
+
+                    grouped[dateKey][hour].push({
+                        classification: item.Classification || item.classification,
+                        count: item.Count || item.count || 0
+                    });
+                });
+
+                return grouped;
+            }
+
+            function buildRows(grouped, classes) {
+                const rows = [];
+                const dateKeys = Object.keys(grouped).sort();
+
+                dateKeys.forEach(dateKey => {
+                    const hoursObj = grouped[dateKey] || {};
+                    const hours = Object.keys(hoursObj)
+                        .map(h => parseInt(h, 10))
+                        .sort((a, b) => a - b);
+
+                    rows.push([dateKey, "", ...Array(classes.length).fill(""), ""]);
+
+                    const dailyTotals = classes.map(() => 0);
+
+                    hours.forEach(hour => {
+                        const list = hoursObj[hour] || [];
+                        const hourLabel = `${pad2(hour)}:00`;
+
+                        let rowTotal = 0;
+                        const row = ["", hourLabel];
+
+                        classes.forEach((cls, idx) => {
+                            const value = list
+                                .filter(x => x.classification === cls)
+                                .reduce((sum, item) => sum + (item.count || 0), 0);
+
+                            row.push(value);
+                            rowTotal += value;
+                            dailyTotals[idx] += value;
+                        });
+
+                        row.push(rowTotal);
+                        rows.push(row);
+                    });
+
+                    const dailyGrandTotal = dailyTotals.reduce((a, b) => a + b, 0);
+                    const dailyPercents = dailyTotals.map(v =>
+                        dailyGrandTotal > 0 ? `${((v / dailyGrandTotal) * 100).toFixed(2)}%` : "0.00%"
+                    );
+
+                    rows.push(["", "Total for the Period", ...dailyTotals, dailyGrandTotal]);
+                    rows.push(["", "Percentage", ...dailyPercents, dailyGrandTotal > 0 ? "100.00%" : "0.00%"]);
+                });
+
+                return rows;
+            }
+
+            function buildMainRowsOnly(grouped, classes) {
+                return buildRows(grouped, classes);
+            }
+
+            function computeHourlySummary(grouped, classes) {
+                const dateKeys = Object.keys(grouped).sort();
+
+                const hourRows = [];
+                const globalTotals = classes.map(() => 0);
+
+                dateKeys.forEach(dateKey => {
+                    const hoursObj = grouped[dateKey] || {};
+                    const hours = Object.keys(hoursObj)
+                        .map(h => parseInt(h, 10))
+                        .sort((a, b) => a - b);
+
+                    hours.forEach(hour => {
+                        const list = hoursObj[hour] || [];
+
+                        const rowValues = classes.map(cls =>
+                            list
+                                .filter(x => x.classification === cls)
+                                .reduce((sum, item) => sum + (item.count || 0), 0)
+                        );
+
+                        rowValues.forEach((v, i) => globalTotals[i] += v);
+                        hourRows.push(rowValues);
+                    });
+                });
+
+                const totalHourRows = hourRows.length;
+                const grandTotal = globalTotals.reduce((a, b) => a + b, 0);
+
+                const globalPercentages = globalTotals.map(v =>
+                    grandTotal > 0 ? `${((v / grandTotal) * 100).toFixed(2)}%` : "0.00%"
+                );
+
+                const globalAverage = classes.map((cls, idx) =>
+                    totalHourRows > 0
+                        ? Math.round(hourRows.reduce((sum, row) => sum + row[idx], 0) / totalHourRows)
+                        : 0
+                );
+
+                const globalMax = classes.map((cls, idx) =>
+                    totalHourRows > 0
+                        ? Math.max(...hourRows.map(row => row[idx]))
+                        : 0
+                );
+
+                const averageTotal = totalHourRows > 0
+                    ? Math.round(
+                        hourRows.reduce((sum, row) => sum + row.reduce((a, b) => a + b, 0), 0) / totalHourRows
+                    )
+                    : 0;
+
+                const maxTotal = totalHourRows > 0
+                    ? Math.max(...hourRows.map(row => row.reduce((a, b) => a + b, 0)))
+                    : 0;
+
+                return {
+                    totalHourRows,
+                    globalTotals,
+                    grandTotal,
+                    globalPercentages,
+                    globalAverage,
+                    globalMax,
+                    averageTotal,
+                    maxTotal
+                };
+            }
+
             document.getElementById("btnDownloadPdf").addEventListener("click", async function () {
-                const { jsPDF } = window.jspdf;
+                if (!trafficData.length) {
+                    alert("No data to export.");
+                    return;
+                }
+
                 const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
                 const pageWidth = doc.internal.pageSize.getWidth();
                 const pageHeight = doc.internal.pageSize.getHeight();
                 const margin = 40;
 
-                // Load logos
-                const [leftLogo, rightLogo] = await Promise.all([loadImage(leftLogoPath), loadImage(rightLogoPath)]);
-                const logoSize = 90;
-                if (leftLogo) doc.addImage(leftLogo, "JPEG", margin, 25, logoSize, logoSize);
-                if (rightLogo) doc.addImage(rightLogo, "JPEG", pageWidth - margin - logoSize, 25, logoSize, logoSize);
+                const [leftLogo, rightLogo] = await Promise.all([
+                    loadImage(leftLogoPath),
+                    loadImage(rightLogoPath)
+                ]);
 
-                // Title
-                doc.setFont("helvetica", "bold");
-                doc.setFontSize(16);
-                doc.text("Hourly Traffic Report", pageWidth / 2, 60, { align: "center" });
+                if (leftLogo) doc.addImage(leftLogo, "JPEG", margin, 30, 90, 90);
+                if (rightLogo) doc.addImage(rightLogo, "JPEG", pageWidth - margin - 90, 30, 90, 90);
 
-                // Filters section
-                doc.setFont("helvetica", "normal");
-                doc.setFontSize(10);
-                let y = 110;
-                doc.text("Filters Used:", margin, y);
-                y += 14;
-                for (const [key, value] of Object.entries(filters)) {
-                    doc.text(`${key}: ${value}`, margin, y);
-                    y += 12;
-                }
+                drawStandardHeader(doc, "HOURLY TRAFFIC REPORT", pageWidth, margin);
+                const yAfterFilters = drawFilters(doc, filters, margin, 140);
 
-                // Group data by date/hour
-                const grouped = {};
-                trafficData.forEach(item => {
-                    const date = item.StartDate?.split("T")[0];
-                    const hour = new Date(item.StartDate).getHours();
-                    if (!grouped[date]) grouped[date] = {};
-                    if (!grouped[date][hour]) grouped[date][hour] = [];
-                    grouped[date][hour].push(item);
-                });
-
+                const grouped = groupByDateHour(trafficData);
                 const headers = ["Date", "Hour", ...classifications, "Total"];
-                const rows = [];
+                const mainRows = buildMainRowsOnly(grouped, classifications);
 
-                // Build rows
-                for (const [date, hourGroups] of Object.entries(grouped)) {
-                    rows.push([date, "", ...Array(classifications.length).fill(""), ""]);
-
-                    for (const [hour, list] of Object.entries(hourGroups)) {
-                        const hourLabel = `${String(hour).padStart(2, "0")}:00`;
-                        let total = 0;
-                        const row = ["", hourLabel];
-                        classifications.forEach(c => {
-                            const found = list.find(x => x.Classification === c);
-                            const val = found ? found.Count : 0;
-                            total += val;
-                            row.push(val);
-                        });
-                        row.push(total);
-                        rows.push(row);
-                    }
-
-                    const totalsPerClass = classifications.map(c =>
-                        Object.values(hourGroups).flat().filter(r => r.Classification === c)
-                            .reduce((a, b) => a + (b.Count || 0), 0)
-                    );
-                    const dailyTotal = totalsPerClass.reduce((a, b) => a + b, 0);
-                    const percentPerClass = totalsPerClass.map(v =>
-                        dailyTotal > 0 ? `${((v / dailyTotal) * 100).toFixed(2)}%` : "0.00%"
-                    );
-
-                    rows.push(["", "Total for the Day", ...totalsPerClass, dailyTotal]);
-                    rows.push(["", "Percentage", ...percentPerClass, "100%"]);
-                }
-
-                // Global summary
-                const totals = classifications.map(c =>
-                    trafficData.filter(x => x.Classification === c).reduce((a, b) => a + (b.Count || 0), 0)
-                );
-                const grandTotal = totals.reduce((a, b) => a + b, 0);
-                const hoursCount = Object.values(grouped).reduce((acc, g) => acc + Object.keys(g).length, 0);
-                const averages = totals.map(t => hoursCount > 0 ? Math.round(t / hoursCount) : 0);
-                const maxPerClass = classifications.map(c => {
-                    const perDay = {};
-                    trafficData.filter(x => x.Classification === c).forEach(x => {
-                        const d = x.StartDate?.split("T")[0];
-                        perDay[d] = (perDay[d] || 0) + (x.Count || 0);
-                    });
-                    return Math.max(...Object.values(perDay), 0);
-                });
-
-                rows.push(["", "Total (Overall)", ...totals, grandTotal]);
-                rows.push(["", "Average", ...averages, averages.reduce((a, b) => a + b, 0)]);
-                rows.push(["", "Maximum", ...maxPerClass, maxPerClass.reduce((a, b) => a + b, 0)]);
-
-                // Render PDF table
                 doc.autoTable({
                     head: [headers],
-                    body: rows,
-                    startY: y + 10,
-                    theme: 'grid',
+                    body: mainRows,
+                    startY: yAfterFilters + 10,
+                    theme: "grid",
                     headStyles: { fillColor: [41, 128, 185], textColor: 255 },
-                    styles: { fontSize: 9, cellPadding: 4, overflow: 'linebreak' },
-                    didDrawPage: function (data) {
-                        const pageCount = doc.internal.getNumberOfPages();
-                        const currentPage = doc.internal.getCurrentPageInfo().pageNumber;
-                        const footerY = pageHeight - 40;
-                        doc.setFontSize(9);
-                        doc.text("Hourly Traffic Report", margin, footerY);
-                        doc.text(`Generated: ${reportGeneratedAt}`, pageWidth / 2.5, footerY);
-                        doc.text(`User: ${currentUser}`, pageWidth / 1.5, footerY);
-                        doc.text(`Page ${currentPage} of ${pageCount}`, pageWidth - margin, footerY, { align: "right" });
-                        doc.text(`Version: ${reportVersion}`, margin, footerY + 12);
-                    }
+                    styles: { fontSize: 9, cellPadding: 3, overflow: "linebreak" }
                 });
 
-                // Save
-                const filename = `Hourly_Traffic_Report_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`;
-                doc.save(filename);
+                const summary = computeHourlySummary(grouped, classifications);
+
+                doc.addPage();
+
+                if (leftLogo) doc.addImage(leftLogo, "JPEG", margin, 30, 90, 90);
+                if (rightLogo) doc.addImage(rightLogo, "JPEG", pageWidth - margin - 90, 30, 90, 90);
+
+                drawStandardHeader(doc, "HOURLY TRAFFIC REPORT", pageWidth, margin);
+                const ySum = drawFilters(doc, filters, margin, 140);
+
+                const summaryHead = [["", ...classifications, "Total"]];
+                const summaryBody = [];
+
+                if (summary.totalHourRows > 1) {
+                    summaryBody.push(["Total for the Period", ...summary.globalTotals, summary.grandTotal]);
+                    summaryBody.push(["Percentage", ...summary.globalPercentages, summary.grandTotal > 0 ? "100.00%" : "0.00%"]);
+                }
+
+                summaryBody.push(["Average", ...summary.globalAverage, summary.averageTotal]);
+                summaryBody.push(["Maximum", ...summary.globalMax, summary.maxTotal]);
+
+                doc.autoTable({
+                    head: summaryHead,
+                    body: summaryBody,
+                    startY: ySum + 20,
+                    theme: "grid",
+                    styles: { fontSize: 10, cellPadding: 6 },
+                    headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+                    bodyStyles: { fontStyle: "bold" },
+                    columnStyles: { 0: { cellWidth: 180 } }
+                });
+
+                const totalPages = doc.internal.getNumberOfPages();
+
+                for (let p = 1; p <= totalPages; p++) {
+                    doc.setPage(p);
+
+                    const footerY = pageHeight - 40;
+                    doc.setFontSize(9);
+                    doc.text("Hourly Traffic Report", margin, footerY);
+                    doc.text(`Date and Time: ${reportGeneratedAt}`, pageWidth / 2.5, footerY);
+                    doc.text(`User ID: ${currentUser}`, pageWidth / 1.6, footerY);
+                    doc.text(`Page ${p} of ${totalPages}`, pageWidth - margin, footerY, { align: "right" });
+                    doc.text(`Version: ${reportVersion}`, margin, footerY + 12);
+                }
+
+                doc.save(`Hourly_Traffic_Report_${isoStamp(new Date())}.pdf`);
             });
 
             document.getElementById("btnDownloadExcel").addEventListener("click", function () {
                 if (!trafficData.length) {
-                    alert("No data available to export.");
+                    alert("No data to export.");
                     return;
                 }
 
-                // === SHEET 1: Report Info ===
+                const grouped = groupByDateHour(trafficData);
+                const headers = ["Date", "Hour", ...classifications, "Total"];
+
                 const infoSheetData = [
                     ["Hourly Traffic Report"],
                     [],
@@ -349,47 +572,29 @@
                 ];
                 const infoSheet = XLSX.utils.aoa_to_sheet(infoSheetData);
 
-                // === SHEET 2: Report Data ===
-                const groupedByDate = {};
-                trafficData.forEach(item => {
-                    const date = item.StartDate?.split("T")[0];
-                    const hour = new Date(item.StartDate).getHours();
-                    if (!groupedByDate[date]) groupedByDate[date] = {};
-                    if (!groupedByDate[date][hour]) groupedByDate[date][hour] = [];
-                    groupedByDate[date][hour].push(item);
-                });
+                const dataRows = [headers, ...buildRows(grouped, classifications)];
 
-                const headers = ["Date", "Hour", ...classifications, "Total"];
-                const rows = [];
+                const summary = computeHourlySummary(grouped, classifications);
 
-                for (const [date, hours] of Object.entries(groupedByDate)) {
-                    rows.push([`${date}`, "", ...Array(classifications.length).fill(""), ""]);
-
-                    Object.entries(hours).forEach(([hour, list]) => {
-                        const hourLabel = `${String(hour).padStart(2, "0")}:00`;
-                        let total = 0;
-                        const row = ["", hourLabel];
-                        classifications.forEach(c => {
-                            const found = list.find(x => x.Classification === c);
-                            const val = found ? found.Count : 0;
-                            total += val;
-                            row.push(val);
-                        });
-                        row.push(total);
-                        rows.push(row);
-                    });
+                if (summary.totalHourRows > 1) {
+                    dataRows.push(["", "Total for the Period", ...summary.globalTotals, summary.grandTotal]);
+                    dataRows.push(["", "Percentage", ...summary.globalPercentages, summary.grandTotal > 0 ? "100.00%" : "0.00%"]);
                 }
 
-                const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+                dataRows.push(["", "Average", ...summary.globalAverage, summary.averageTotal]);
+                dataRows.push(["", "Maximum", ...summary.globalMax, summary.maxTotal]);
+
+                const ws = XLSX.utils.aoa_to_sheet(dataRows);
+                ws["!cols"] = headers.map((_, i) => ({
+                    wch: i === 0 ? 14 : i === 1 ? 18 : 14
+                }));
 
                 const wb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(wb, infoSheet, "Report Info");
                 XLSX.utils.book_append_sheet(wb, ws, "Hourly Traffic Data");
 
-                XLSX.writeFile(wb, `Hourly_Traffic_Report_${new Date().toISOString().replace(/[:.]/g, '-')}.xlsx`);
+                XLSX.writeFile(wb, `Hourly_Traffic_Report_${isoStamp(new Date())}.xlsx`);
             });
         });
     </script>
 }
-
-

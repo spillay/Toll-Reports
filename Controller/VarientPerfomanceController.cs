@@ -1,13 +1,16 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using MIS.Web.Models;
 using MIS.Web.Models.VarientPerfomance;
 using MIS.Web.Services;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace MIS.Web.Controllers
 {
+    [Authorize]
     public class VarientPerfomanceController : Controller
     {
         private readonly IVarientPerfomanceReportService _reportService;
@@ -17,49 +20,94 @@ namespace MIS.Web.Controllers
             _reportService = reportService;
         }
 
-        public async Task<IActionResult> VarientPerfomances(
-            int page = 1, int pageSize = 10,
-            string? shift = null, string? tollOperatorID = null,
-            DateTime? startDate = null, DateTime? endDate = null)
+        [HttpGet]
+        public async Task<IActionResult> ExportVarientPerfomanceData(
+            DateTime? startDate = null,
+            DateTime? endDate = null,
+            List<string>? operationalShift = null,
+            List<string>? tollOperators = null)
         {
-            
             startDate ??= DateTime.Today.AddDays(-90);
             endDate ??= DateTime.Today;
 
-            
-            var shifts = string.IsNullOrEmpty(shift) ? null : new List<string> { shift };
-            var operators = string.IsNullOrEmpty(tollOperatorID) ? null : new List<string> { tollOperatorID };
+            operationalShift ??= new List<string>();
+            tollOperators ??= new List<string>();
 
-           
-            var data = await _reportService.GetVarientPerfomanceDetailsAsync(
-                page, pageSize, startDate.Value, endDate.Value, shifts, operators);
+            var exportData = await _reportService.GetVarientPerfomanceDetailsAsync(
+                1,
+                int.MaxValue,
+                startDate.Value,
+                endDate.Value,
+                operationalShift.Any() ? operationalShift : null,
+                tollOperators.Any() ? tollOperators : null);
 
-            
-            ViewBag.Shifts = new List<string> { "Shift One", "Shift Two", "Shift Three" };
-            ViewBag.TollOperators = new List<string> { "0001", "0002", "0003", "0004", "0005" };
+            return Json(exportData.items ?? new List<VarientPerfomanceModel>());
+        }
 
-            
-            int totalPages = 0;
-            if (data.totalCount > 0)
-            {
-                totalPages = (int)Math.Ceiling((double)data.totalCount / pageSize);
-            }
+        [HttpGet]
+        public async Task<IActionResult> VarientPerfomances(
+            int page = 1,
+            int pageSize = 10,
+            List<string>? operationalShift = null,
+            List<string>? tollOperators = null,
+            DateTime? startDate = null,
+            DateTime? endDate = null)
+        {
+            startDate ??= DateTime.Today.AddDays(-90);
+            endDate ??= DateTime.Today;
 
-            
+            operationalShift ??= new List<string>();
+            tollOperators ??= new List<string>();
+
+            if (page <= 0)
+                page = 1;
+
+            if (pageSize <= 0)
+                pageSize = 10;
+
+            ViewBag.AllShifts = await _reportService.GetAllShiftsAsync();
+            ViewBag.AllOperators = await _reportService.GetAllTollOperatorsAsync();
+
+            ViewBag.SelectedShifts = operationalShift;
+            ViewBag.SelectedOperators = tollOperators;
+            ViewBag.StartDate = startDate.Value;
+            ViewBag.EndDate = endDate.Value;
+
+            var pagedData = await _reportService.GetVarientPerfomanceDetailsAsync(
+                page,
+                pageSize,
+                startDate.Value,
+                endDate.Value,
+                operationalShift.Any() ? operationalShift : null,
+                tollOperators.Any() ? tollOperators : null);
+
+            var exportData = await _reportService.GetVarientPerfomanceDetailsAsync(
+                1,
+                int.MaxValue,
+                startDate.Value,
+                endDate.Value,
+                operationalShift.Any() ? operationalShift : null,
+                tollOperators.Any() ? tollOperators : null);
+
+            int totalPages = pagedData.totalCount > 0
+                ? (int)Math.Ceiling((double)pagedData.totalCount / pageSize)
+                : 0;
+
             var model = new VarientPerfomanceInputModel
             {
-                items = data.items ?? new List<VarientPerfomanceModel>(),
-                totalCount = data.totalCount,
+                items = pagedData.items ?? new List<VarientPerfomanceModel>(),
+                totalCount = pagedData.totalCount,
                 page = page,
                 pageSize = pageSize,
                 totalPages = totalPages,
                 StartDate = startDate.Value,
                 EndDate = endDate.Value,
-                Shift = shift,
-                TollOperatorID = tollOperatorID
+                OperationalShift = operationalShift,
+                TollOperators = tollOperators,
+                ExportItems = exportData.items ?? new List<VarientPerfomanceModel>()
             };
 
-            return View("Views/VarientPerfomance/Index.cshtml", model);
+            return View("~/Views/VarientPerfomance/Index.cshtml", model);
         }
     }
 }

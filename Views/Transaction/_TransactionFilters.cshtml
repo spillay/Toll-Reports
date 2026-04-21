@@ -1,5 +1,4 @@
 ﻿@model MIS.Web.Models.TransactionInputModel
-@removeTagHelper "Microsoft.AspNetCore.Mvc.TagHelpers.OptionTagHelper, Microsoft.AspNetCore.Mvc.TagHelpers"
 
 <form method="get"
       asp-controller="Transaction"
@@ -7,79 +6,148 @@
       id="filterForm"
       class="mb-4">
 
-    <div class="row g-3 align-items-end">
+    <div class="row g-3">
 
-        <!-- Start Date -->
         <div class="col-md-3">
-            <label for="StartDate" class="form-label">Start Date & Time</label>
+            <label class="form-label fw-semibold">Start Date & Time</label>
             <input type="datetime-local"
-                   id="StartDate"
                    name="StartDate"
                    class="form-control"
                    value="@(Model?.StartDate.ToString("yyyy-MM-ddTHH:mm") ?? "")" />
         </div>
 
-        <!-- End Date -->
         <div class="col-md-3">
-            <label for="EndDate" class="form-label">End Date & Time</label>
+            <label class="form-label fw-semibold">End Date & Time</label>
             <input type="datetime-local"
-                   id="EndDate"
                    name="EndDate"
                    class="form-control"
                    value="@(Model?.EndDate.ToString("yyyy-MM-ddTHH:mm") ?? "")" />
         </div>
 
-        <!-- Shift -->
+        <!-- Shift checklist -->
         <div class="col-md-3">
-            <label for="Shift" class="form-label">Shift</label>
-            <select name="Shift" id="Shift" class="form-select">
-                <option value="">-- All --</option>
-                @foreach (var shift in (ViewBag.Shifts as List<string> ?? new List<string>()))
+            <label class="form-label fw-semibold d-flex justify-content-between align-items-center">
+                <span>Operational Shift</span>
+                <span>
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="toggleAll('SelectedShifts', true)">All</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleAll('SelectedShifts', false)">Clear</button>
+                </span>
+            </label>
+
+            <div class="border rounded p-2" style="max-height:170px; overflow:auto;">
+                @foreach (var shift in Model.Shifts ?? new List<string>())
                 {
-                    <option value="@shift" @(Model?.Shift == shift ? "selected" : "")>@shift</option>
+                    var id = "shift_" + shift.Replace(" ", "_");
+                    var isChecked = Model.SelectedShifts?.Contains(shift) == true;
+
+                    <div class="form-check">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               name="SelectedShifts"
+                               value="@shift"
+                               id="@id"
+                               @(isChecked ? "checked" : "") />
+                        <label class="form-check-label" for="@id">@shift</label>
+                    </div>
                 }
-            </select>
+            </div>
         </div>
 
-        <!-- Toll Operator -->
+        <!-- Operator checklist -->
         <div class="col-md-3">
-            <label for="TollOperatorID" class="form-label">Toll Operator</label>
-            <select name="TollOperatorID" id="TollOperatorID" class="form-select">
-                <option value="">-- All --</option>
-                @foreach (var op in (ViewBag.TollOperators as List<string> ?? new List<string>()))
+            <label class="form-label fw-semibold d-flex justify-content-between align-items-center">
+                <span>Toll Operator ID</span>
+                <span>
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="toggleAll('SelectedTollOperators', true)">All</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleAll('SelectedTollOperators', false)">Clear</button>
+                </span>
+            </label>
+
+            <div class="border rounded p-2" style="max-height:170px; overflow:auto;">
+                @foreach (var op in Model.TollOperators ?? new List<string>())
                 {
-                    <option value="@op" @(Model?.TollOperatorID == op ? "selected" : "")>@op</option>
+                    var id = "op_" + op.Replace(" ", "_");
+                    var isChecked = Model.SelectedTollOperators?.Contains(op) == true;
+
+                    <div class="form-check">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               name="SelectedTollOperators"
+                               value="@op"
+                               id="@id"
+                               @(isChecked ? "checked" : "") />
+                        <label class="form-check-label" for="@id">@op</label>
+                    </div>
                 }
-            </select>
+            </div>
         </div>
 
-        <!-- Lane -->
+        <!-- Lane checklist -->
         <div class="col-md-3">
-            <label for="lane_Nr" class="form-label">Lane</label>
-            <select name="lane_Nr" id="lane_Nr" class="form-select">
-                <option value="">-- All --</option>
-                @foreach (var lane in (ViewBag.Lanes as List<string> ?? new List<string>()))
+            <label class="form-label fw-semibold d-flex justify-content-between align-items-center">
+                <span>Lane</span>
+                <span>
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="toggleAll('SelectedLanes', true)">All</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleAll('SelectedLanes', false)">Clear</button>
+                </span>
+            </label>
+
+            <div class="border rounded p-2" style="max-height:170px; overflow:auto;">
+                @foreach (var lane in Model.Lanes ?? new List<string>())
                 {
-                    <option value="@lane" @(Model?.lane_Nr == lane ? "selected" : "")>@lane</option>
+                    var id = "lane_" + lane.Replace(" ", "_");
+                    var isChecked = Model.SelectedLanes?.Contains(lane) == true;
+
+                    <div class="form-check">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               name="SelectedLanes"
+                               value="@lane"
+                               id="@id"
+                               @(isChecked ? "checked" : "") />
+                        <label class="form-check-label" for="@id">@lane</label>
+                    </div>
                 }
-            </select>
+            </div>
         </div>
 
-        <!-- Payment -->
+        <!-- Payment checklist -->
         <div class="col-md-3">
-            <label for="PaymentMethod" class="form-label">Payment Method</label>
-            <select name="PaymentMethod" id="PaymentMethod" class="form-select">
-                <option value="">-- All --</option>
-                @foreach (var pm in (ViewBag.PaymentMethods as List<string> ?? new List<string>()))
+            <label class="form-label fw-semibold d-flex justify-content-between align-items-center">
+                <span>Method of Payment</span>
+                <span>
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="toggleAll('SelectedPaymentMethods', true)">All</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleAll('SelectedPaymentMethods', false)">Clear</button>
+                </span>
+            </label>
+
+            <div class="border rounded p-2" style="max-height:170px; overflow:auto;">
+                @foreach (var pm in Model.PaymentMethods ?? new List<string>())
                 {
-                    <option value="@pm" @(Model?.PaymentMethod == pm ? "selected" : "")>@pm</option>
+                    var id = "pm_" + pm.Replace(" ", "_");
+                    var isChecked = Model.SelectedPaymentMethods?.Contains(pm) == true;
+
+                    <div class="form-check">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               name="SelectedPaymentMethods"
+                               value="@pm"
+                               id="@id"
+                               @(isChecked ? "checked" : "") />
+                        <label class="form-check-label" for="@id">@pm</label>
+                    </div>
                 }
-            </select>
+            </div>
         </div>
 
-        <!-- Buttons -->
-        <div class="col-md-3 d-flex">
-            <button type="submit" class="btn btn-primary me-2 w-100">Apply Filters</button>
+        <div class="col-md-3 d-flex align-items-end">
+            <button type="submit" class="btn btn-primary w-100">Apply Filters</button>
         </div>
     </div>
 </form>
+
+<script>
+    function toggleAll(name, checked) {
+        document.querySelectorAll(`input[name="${name}"]`).forEach(cb => cb.checked = checked);
+    }
+</script>

@@ -9,8 +9,9 @@ namespace MIS.Web.Models.Traffic.Monthly
         public int? Month { get; set; }
         public bool OperationalMonth { get; set; } = false;
         public List<int> Shifts { get; set; } = new List<int>();
-        public string? Classification { get; set; }
+       // public string? Classification { get; set; }
+        public List<string> Classifications { get; set; } = new();
 
-        
+
     }
 }

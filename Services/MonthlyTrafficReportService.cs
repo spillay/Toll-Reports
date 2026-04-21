@@ -1,10 +1,7 @@
 ﻿using MIS.Web.Models.Traffic.Monthly;
 using Newtonsoft.Json;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net.Http;
-using System.Threading.Tasks;
+using System.Net.Http.Headers;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 
 namespace MIS.Web.Services
@@ -13,19 +10,23 @@ namespace MIS.Web.Services
     {
         private readonly HttpClient _httpClient;
         private readonly IConfiguration _configuration;
+        private readonly IHttpContextAccessor _httpContextAccessor;
 
-        public MonthlyTrafficReportService(HttpClient httpClient, IConfiguration configuration)
+        public MonthlyTrafficReportService(
+            HttpClient httpClient,
+            IConfiguration configuration,
+            IHttpContextAccessor httpContextAccessor)
         {
-            _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-            _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+            _httpClient = httpClient;
+            _configuration = configuration;
+            _httpContextAccessor = httpContextAccessor;
         }
-        private string BuildBaseUrl()
+
+        private static string CombineUrl(string baseUrl, string endpoint)
         {
-            var baseUrl = _configuration["BaseApiUrl:Link"];
-            var endpoint = _configuration["ApiSettings:MonthlyTrafficEndpoint"];
-            if (string.IsNullOrWhiteSpace(baseUrl) || string.IsNullOrWhiteSpace(endpoint))
-                throw new InvalidOperationException("BaseApiUrl or MonthlyTrafficEndpoint is not configured.");
-            return $"{baseUrl}{endpoint}";
+            baseUrl = (baseUrl ?? "").TrimEnd('/');
+            endpoint = (endpoint ?? "").TrimStart('/');
+            return $"{baseUrl}/{endpoint}";
         }
 
         public async Task<PageMonthlyTrafficModel> GetTrafficReportAsync(
@@ -34,57 +35,165 @@ namespace MIS.Web.Services
             bool? operationalMonth = null,
             List<string>? classifications = null,
             List<int>? shifts = null)
-                {
-                    var queryParams = new List<string>();
-                    if (year.HasValue) queryParams.Add($"year={year.Value}");
-                    if (month.HasValue) queryParams.Add($"month={month.Value}");
-                    if (operationalMonth.HasValue) queryParams.Add($"operationalMonth={operationalMonth.Value.ToString().ToLower()}");
-                    if (classifications?.Any() == true) queryParams.Add($"classification={Uri.EscapeDataString(string.Join(",", classifications))}");
-                    if (shifts?.Any() == true) queryParams.Add($"shifts={Uri.EscapeDataString(string.Join(",", shifts))}");
-
-                    // Combine the base URL and query string
-                    var url = BuildBaseUrl();
-                    if (queryParams.Any())
-                        url += "?" + string.Join("&", queryParams);
-
-                    // Make HTTP call
-                    var response = await _httpClient.GetAsync(url);
-                    response.EnsureSuccessStatusCode();
-
-                    var json = await response.Content.ReadAsStringAsync();
-                    var items = JsonConvert.DeserializeObject<List<MonthlyTrafficModel>>(json) ?? new List<MonthlyTrafficModel>();
-
-                    return new PageMonthlyTrafficModel { Items = items };
-                }
-
-
-        // Fetch years for dropdown
-        public async Task<List<int>> GetAvailableYearsAsync()
         {
-            var url = BuildBaseUrl();
+            var queryParams = new List<string>();
 
-            if (string.IsNullOrEmpty(url))
-                throw new InvalidOperationException("MonthlyTrafficApiUrl is not configured in appsettings.json.");
+            if (year.HasValue) queryParams.Add($"year={year.Value}");
+            if (month.HasValue) queryParams.Add($"month={month.Value}");
 
-            var response = await _httpClient.GetAsync($"{url}/years");
-            response.EnsureSuccessStatusCode();
+            var op = operationalMonth ?? false;
+            queryParams.Add($"operationalMonth={op.ToString().ToLower()}");
 
-            var json = await response.Content.ReadAsStringAsync();
-            return JsonConvert.DeserializeObject<List<int>>(json) ?? new List<int>();
+            if (classifications?.Any() == true)
+            {
+                queryParams.Add($"classification={Uri.EscapeDataString(string.Join(",", classifications))}");
+            }
+
+            if (op && shifts?.Any() == true)
+            {
+                queryParams.Add($"shifts={Uri.EscapeDataString(string.Join(",", shifts))}");
+            }
+
+            string baseUrl = _configuration["BaseApiUrl:Link"];
+            string endpoint = _configuration["ApiSettings:MonthlyTrafficEndpoint"];
+            string url = $"{CombineUrl(baseUrl, endpoint)}?{string.Join("&", queryParams)}";
+
+            try
+            {
+                using var request = CreateAuthorizedGetRequest(url);
+                using var response = await _httpClient.SendAsync(request);
+
+                if (!response.IsSuccessStatusCode)
+                    return CreateEmptyModel(year, month, op, classifications, shifts);
+
+                var json = await response.Content.ReadAsStringAsync();
+                var items = JsonConvert.DeserializeObject<List<MonthlyTrafficModel>>(json) ?? new List<MonthlyTrafficModel>();
+
+                return new PageMonthlyTrafficModel
+                {
+                    Items = items,
+                    Filters = new MonthlyTrafficInputModel
+                    {
+                        Year = year,
+                        Month = month,
+                        OperationalMonth = op,
+                        Classifications = classifications ?? new List<string>(),
+                        Shifts = shifts ?? new List<int>()
+                    }
+                };
+            }
+            catch
+            {
+                return CreateEmptyModel(year, month, op, classifications, shifts);
+            }
         }
 
-        // Fetch months for dropdown for a given year
+        public async Task<List<int>> GetAvailableYearsAsync()
+        {
+            string baseUrl = _configuration["BaseApiUrl:Link"];
+            string endpoint = _configuration["ApiSettings:MonthlyTrafficEndpoint"];
+            string url = CombineUrl(baseUrl, $"{endpoint}/years");
+
+            try
+            {
+                using var request = CreateAuthorizedGetRequest(url);
+                using var response = await _httpClient.SendAsync(request);
+
+                if (!response.IsSuccessStatusCode)
+                    return new List<int>();
+
+                var json = await response.Content.ReadAsStringAsync();
+                return JsonConvert.DeserializeObject<List<int>>(json) ?? new List<int>();
+            }
+            catch
+            {
+                return new List<int>();
+            }
+        }
+
         public async Task<List<int>> GetAvailableMonthsAsync(int year)
         {
-            var url = BuildBaseUrl();
-            if (string.IsNullOrEmpty(url))
-                throw new InvalidOperationException("MonthlyTrafficApiUrl is not configured in appsettings.json.");
+            string baseUrl = _configuration["BaseApiUrl:Link"];
+            string endpoint = _configuration["ApiSettings:MonthlyTrafficEndpoint"];
+            string url = CombineUrl(baseUrl, $"{endpoint}/months/{year}");
 
-            var response = await _httpClient.GetAsync($"{url}/months/{year}");
-            response.EnsureSuccessStatusCode();
+            try
+            {
+                using var request = CreateAuthorizedGetRequest(url);
+                using var response = await _httpClient.SendAsync(request);
 
-            var json = await response.Content.ReadAsStringAsync();
-            return JsonConvert.DeserializeObject<List<int>>(json) ?? new List<int>();
+                if (!response.IsSuccessStatusCode)
+                    return new List<int>();
+
+                var json = await response.Content.ReadAsStringAsync();
+                return JsonConvert.DeserializeObject<List<int>>(json) ?? new List<int>();
+            }
+            catch
+            {
+                return new List<int>();
+            }
+        }
+
+        public async Task<List<string>> GetAvailableClassificationsAsync()
+        {
+            string baseUrl = _configuration["BaseApiUrl:Link"];
+            string endpoint = _configuration["ApiSettings:MonthlyTrafficEndpoint"];
+            string url = CombineUrl(baseUrl, $"{endpoint}/classifications");
+
+            try
+            {
+                using var request = CreateAuthorizedGetRequest(url);
+                using var response = await _httpClient.SendAsync(request);
+
+                if (!response.IsSuccessStatusCode)
+                    return new List<string>();
+
+                var json = await response.Content.ReadAsStringAsync();
+                return JsonConvert.DeserializeObject<List<string>>(json) ?? new List<string>();
+            }
+            catch
+            {
+                return new List<string>();
+            }
+        }
+
+        private HttpRequestMessage CreateAuthorizedGetRequest(string url)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            AddBearerToken(request);
+            return request;
+        }
+
+        private void AddBearerToken(HttpRequestMessage request)
+        {
+            var token = _httpContextAccessor.HttpContext?.User?.FindFirst("access_token")?.Value;
+
+            if (string.IsNullOrWhiteSpace(token))
+                throw new UnauthorizedAccessException("No JWT token found for current user.");
+
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+
+        private PageMonthlyTrafficModel CreateEmptyModel(
+            int? year,
+            int? month,
+            bool operationalMonth,
+            List<string>? classifications,
+            List<int>? shifts)
+        {
+            return new PageMonthlyTrafficModel
+            {
+                Items = new List<MonthlyTrafficModel>(),
+                Filters = new MonthlyTrafficInputModel
+                {
+                    Year = year,
+                    Month = month,
+                    OperationalMonth = operationalMonth,
+                    Classifications = classifications ?? new List<string>(),
+                    Shifts = shifts ?? new List<int>()
+                },
+                AvailableClassifications = new List<string>()
+            };
         }
     }
 }

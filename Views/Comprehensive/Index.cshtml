@@ -1,250 +1,377 @@
-﻿@removeTagHelper "Microsoft.AspNetCore.Mvc.TagHelpers.OptionTagHelper, Microsoft.AspNetCore.Mvc.TagHelpers"
-@model MIS.Web.Models.Comprehensive.PageComprehensiveModel
-@using System.Text.Json
+﻿    @model MIS.Web.Models.Comprehensive.PageComprehensiveModel
+    @using System.Text.Json
 
-@{
-    var reportGeneratedAt = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
-    var currentUserId = User.Identity?.Name ?? "Unknown User";
-    var reportVersion = "1.0.0";
-}
+    @{
+        var reportGeneratedAt = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
+        var currentUserId = User.FindFirst("firstName")?.Value ?? (User.Identity?.Name ?? "Lucky");
 
-<div class="card shadow-lg mb-4">
-    <div class="card-body">
-        <!-- Header -->
-        <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
-            <h2 class="mb-0 fw-bold text-primary">Comprehensive Report</h2>
-        </div>
+        var reportVersion = "3.0.0.0";
 
-        <!-- Filters -->
-        <form method="get" asp-controller="Comprehensive" asp-action="Index" class="row g-3 mb-3">
+        var items = Model.Items ?? new List<MIS.Web.Models.Comprehensive.ComprehensiveModel>();
+        var grandTotalCount = items.Count;
+        var grandTotalRevenue = items.Sum(x => x.AmountInclusive ?? 0);
 
-            <!-- Start Date -->
-            <div class="col-md-2">
-                <label class="form-label fw-semibold">Start Date & Time</label>
-                <input type="datetime-local" class="form-control" name="StartDate"
-                       value="@Model.Input.StartDate.ToString("yyyy-MM-ddTHH:mm")" />
+        var safeGrandCount = grandTotalCount == 0 ? 1 : grandTotalCount;
+        var safeGrandRevenue = Math.Abs(grandTotalRevenue) < 0.0000001 ? 1 : grandTotalRevenue;
+
+        var groupByLabel = Model.Input?.GroupBy switch
+        {
+            "Shift" => "OPERATIONAL SHIFT",
+            "Lane" => "LANE",
+            "DiscountType" => "DISCOUNT TYPE",
+            "Classification" => "CLASSIFICATION",
+            "TransactionType" => "METHOD OF PAYMENT",
+            "MethodOfPayment" => "METHOD OF PAYMENT",
+            _ => "METHOD OF PAYMENT"
+        };
+    }
+
+    <div class="card shadow-lg mb-4">
+        <div class="card-body">
+
+            <div class="text-center mb-3 border-bottom pb-2">
+                <h2 class="fw-bold text-primary mb-0">COMPREHENSIVE REPORT</h2>
             </div>
 
-            <!-- End Date -->
-            <div class="col-md-2">
-                <label class="form-label fw-semibold">End Date & Time</label>
-                <input type="datetime-local" class="form-control" name="EndDate"
-                       value="@Model.Input.EndDate.ToString("yyyy-MM-ddTHH:mm")" />
-            </div>
+            <form method="get" asp-controller="Comprehensive" asp-action="Index" class="row g-3 mb-3">
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">Start Date and Time</label>
+                    <input type="datetime-local" class="form-control" name="StartDate"
+                           value="@Model.Input.StartDate.ToString("yyyy-MM-ddTHH:mm")" />
+                </div>
 
-            <!-- Shift -->
-            <div class="col-md-2">
-                <label class="form-label fw-semibold">Shift</label>
-                <select class="form-select" name="Shift">
-                    <option value="" selected="@(string.IsNullOrEmpty(Model.Input.Shift) ? "selected" : null)">All</option>
-                    @foreach (var s in Model.Shifts)
-                    {
-                        <option value="@s" @(Model.Input.Shift == s ? "selected" : null)>@s</option>
-                    }
-                </select>
-            </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">End Date and Time</label>
+                    <input type="datetime-local" class="form-control" name="EndDate"
+                           value="@Model.Input.EndDate.ToString("yyyy-MM-ddTHH:mm")" />
+                </div>
 
-            <!-- Lane -->
-            <div class="col-md-3">
-                <label class="form-label fw-semibold">Lane</label>
-                <select class="form-select" name="LaneName">
-                    <option value="" selected="@(string.IsNullOrEmpty(Model.Input.LaneName) ? "selected" : null)">All</option>
-                    @foreach (var l in Model.Lanes)
-                    {
-                        <option value="@l" @(Model.Input.LaneName == l ? "selected" : null)>@l</option>
-                    }
-                </select>
-            </div>
-
-            <!-- Payment Method -->
-            <div class="col-md-3">
-                <label class="form-label fw-semibold">Method of Payment</label>
-                <select class="form-select" name="MethodOfPayment">
-                    <option value="" selected="@(string.IsNullOrEmpty(Model.Input.MethodOfPayment) ? "selected" : null)">All</option>
-                    @foreach (var p in Model.PaymentMethods)
-                    {
-                        <option value="@p" @(Model.Input.MethodOfPayment == p ? "selected" : null)>@p</option>
-                    }
-                </select>
-            </div>
-
-            <!-- Discount Type -->
-            <div class="col-md-3">
-                <label class="form-label fw-semibold">Discount Type</label>
-                <select class="form-select" name="DiscountType">
-                    <option value="" selected="@(string.IsNullOrEmpty(Model.Input.DiscountType) ? "selected" : null)">All</option>
-                    @foreach (var d in Model.DiscountTypes)
-                    {
-                        <option value="@d" @(Model.Input.DiscountType == d ? "selected" : null)>@d</option>
-                    }
-                </select>
-            </div>
-
-            <!-- Classification -->
-            <div class="col-md-3">
-                <label class="form-label fw-semibold">Classification</label>
-                <select class="form-select" name="Classification">
-                    <option value="" selected="@(string.IsNullOrEmpty(Model.Input.Classification) ? "selected" : null)">All</option>
-                    @foreach (var c in Model.Classifications)
-                    {
-                        var displayLabel = c == "Motor Cycle" ? "Class M" : c;
-                        var value = c == "Motor Cycle" ? "Class M" : c;
-                        <option value="@value" @(Model.Input.Classification == c || Model.Input.Classification == "Class M" ? "selected" : null)>
-                            @displayLabel
-                        </option>
-                    }
-                </select>
-            </div>
-
-            <!-- Buttons -->
-            <div class="col-md-2 d-flex align-items-end">
-                <a asp-controller="Comprehensive" asp-action="ExportExcel"
-                   asp-route-StartDate="@Model.Input.StartDate.ToString("o")"
-                   asp-route-EndDate="@Model.Input.EndDate.ToString("o")"
-                   class="btn btn-success w-100 shadow-sm">
-                    <i class="bi bi-file-earmark-excel"></i> Export Excel
-                </a>
-            </div>
-
-            <div class="col-md-2 d-flex align-items-end">
-                <button id="btnDownloadPdf" type="button" class="btn btn-danger w-100 shadow-sm">
-                    <i class="bi bi-file-earmark-pdf"></i> Export PDF
-                </button>
-            </div>
-
-            <div class="col-md-3 d-flex align-items-end">
-                <button type="submit" class="btn btn-primary w-100 shadow-sm">
-                    <i class="bi bi-funnel"></i> Filter
-                </button>
-            </div>
-        </form>
-
-        <!-- Table -->
-        <div class="table-responsive">
-            <table class="table table-bordered table-striped text-center align-middle">
-                <thead class="table-primary">
-                    <tr>
-                        <th>@(Model.Input.GroupBy == "TransactionType" ? "TRANSACTION TYPE" : "METHOD OF PAYMENT")</th>
-                        <th></th>
-                        @foreach (var cls in Model.TollClasses)
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">Operational Shift</label>
+                    <div class="border rounded p-2" style="max-height:150px; overflow-y:auto;">
+                        @foreach (var s in Model.Shifts)
                         {
-                            <th>@(cls == "Motor Cycle" ? "Class M" : cls)</th>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox"
+                                       name="ShiftIds" value="@s.Id"
+                                       @(Model.Input.ShiftIds.Contains(s.Id) ? "checked" : "") />
+                                <label class="form-check-label">@s.Name</label>
+                            </div>
                         }
-                        <th>TOTAL</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (Model.GroupedDataTyped.Any())
-                    {
-                        foreach (var row in Model.GroupedDataTyped)
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">Toll Operator</label>
+                    <div class="border rounded p-2" style="max-height:150px; overflow-y:auto;">
+                        @foreach (var op in Model.TollOperators)
                         {
-                            <tr>
-                                <td class="fw-bold">@row.Method</td>
-                                <td>
-                                    Count: <br />
-                                    Count %: <br />
-                                    Revenue: <br />
-                                    Revenue %:
-                                </td>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox"
+                                       name="OperatorIds" value="@op.Id"
+                                       @(Model.Input.OperatorIds.Contains(op.Id) ? "checked" : "") />
+                                <label class="form-check-label">@op.Name</label>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">Lane</label>
+                    <div class="border rounded p-2" style="max-height:150px; overflow-y:auto;">
+                        @foreach (var ln in Model.Lanes)
+                        {
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox"
+                                       name="LaneIds" value="@ln.Id"
+                                       @(Model.Input.LaneIds.Contains(ln.Id) ? "checked" : "") />
+                                <label class="form-check-label">@ln.Name</label>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">Payment Method</label>
+                    <div class="border rounded p-2" style="max-height:150px; overflow-y:auto;">
+                        @foreach (var pm in Model.PaymentMethods)
+                        {
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox"
+                                       name="PaymentMethodIds" value="@pm.Id"
+                                       @(Model.Input.PaymentMethodIds.Contains(pm.Id) ? "checked" : "") />
+                                <label class="form-check-label">@pm.Name</label>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">Lane Discount Type</label>
+                    <div class="border rounded p-2" style="max-height:150px; overflow-y:auto;">
+                        @foreach (var dt in Model.DiscountTypes)
+                        {
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox"
+                                       name="DiscountTypeIds" value="@dt.Id"
+                                       @(Model.Input.DiscountTypeIds.Contains(dt.Id) ? "checked" : "") />
+                                <label class="form-check-label">@dt.Name</label>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">Classification</label>
+                    <div class="border rounded p-2" style="max-height:150px; overflow-y:auto;">
+                        @foreach (var tc in Model.Classifications)
+                        {
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox"
+                                       name="TollClassIds" value="@tc.Id"
+                                       @(Model.Input.TollClassIds.Contains(tc.Id) ? "checked" : "") />
+                                <label class="form-check-label">@tc.Name</label>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="col-md-2 d-flex align-items-end">
+                    <button id="btnDownloadPdf" type="button" class="btn btn-danger w-100 shadow-sm">Export PDF</button>
+                </div>
+
+                <div class="col-md-2 d-flex align-items-end">
+                    <button id="btnDownloadExcel" type="button" class="btn btn-success w-100 shadow-sm">Export Excel</button>
+                </div>
+
+                <div class="col-md-3 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100 shadow-sm">Apply Filters</button>
+                </div>
+            </form>
+
+            <div class="table-responsive">
+                <table class="table table-bordered table-striped text-center align-middle">
+                    <thead class="table-primary">
+                        <tr>
+                            <th>@groupByLabel</th>
+                            <th></th>
+                            @foreach (var cls in Model.TollClasses)
+                            {
+                                <th>@(cls == "Motor Cycle" ? "Class M" : cls)</th>
+                            }
+                            <th>TOTAL</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @if (Model.GroupedDataTyped != null && Model.GroupedDataTyped.Any())
+                        {
+                            foreach (var row in Model.GroupedDataTyped)
+                            {
+                                <tr>
+                                    <td class="fw-bold">@row.Method</td>
+                                    <td>Count:<br />Count %:<br />Revenue:<br />Revenue %:</td>
+
+                                    @foreach (var cls in Model.TollClasses)
+                                    {
+                                        var dataCell = row.Classes.TryGetValue(cls, out var m)
+                                        ? m
+                                        : new MIS.Web.Models.Comprehensive.PageComprehensiveModel.ClassMetrics();
+
+                                        <td>
+                                            @dataCell.Count<br />
+                                            @dataCell.CountPercent.ToString("0.##")%<br />
+                                            @dataCell.Revenue.ToString("N2")<br />
+                                            @dataCell.RevenuePercent.ToString("0.##")%
+                                        </td>
+                                    }
+
+                                    <td class="fw-semibold">
+                                        @row.TotalCount<br />
+                                        @row.TotalCountPercent.ToString("0.##")%<br />
+                                        @row.TotalRevenue.ToString("N2")<br />
+                                        @row.TotalRevenuePercent.ToString("0.##")%
+                                    </td>
+                                </tr>
+                            }
+
+                            <tr class="fw-bold bg-light">
+                                <td>Grand Total</td>
+                                <td>Count:<br />Count %:<br />Revenue:<br />Revenue %:</td>
 
                                 @foreach (var cls in Model.TollClasses)
                                 {
-                                    var data = row.Classes.ContainsKey(cls)
-                                        ? row.Classes[cls]
-                                        : new MIS.Web.Models.Comprehensive.PageComprehensiveModel.ClassMetrics();
+                                    var totalCount = items.Count(x => string.Equals(x.ManualTollClassName, cls, StringComparison.OrdinalIgnoreCase));
+                                    var totalRevenue = items.Where(x => string.Equals(x.ManualTollClassName, cls, StringComparison.OrdinalIgnoreCase))
+                                    .Sum(x => x.AmountInclusive ?? 0);
+
+                                    var countPct = (decimal)totalCount / safeGrandCount * 100m;
+                                    var revPct = (decimal)totalRevenue / (decimal)safeGrandRevenue * 100m;
 
                                     <td>
-                                        @data.Count<br />
-                                        @data.CountPercent.ToString("0.##")<br />
-                                        @data.Revenue.ToString("N2")<br />
-                                        @data.RevenuePercent.ToString("0.##")
+                                        @totalCount<br />
+                                        @countPct.ToString("0.##")%<br />
+                                        @totalRevenue.ToString("N2")<br />
+                                        @revPct.ToString("0.##")%
                                     </td>
                                 }
 
                                 <td>
-                                    @row.TotalCount<br />
-                                    100<br />
-                                    @row.TotalRevenue.ToString("N2")<br />
-                                    100
+                                    @grandTotalCount<br />@((decimal)grandTotalCount / safeGrandCount * 100m)%<br />
+                                    @grandTotalRevenue.ToString("N2")<br />@((decimal)grandTotalRevenue / (decimal)safeGrandRevenue * 100m)%
                                 </td>
                             </tr>
                         }
+                        else
+                        {
+                            <tr>
+                                <td colspan="@(Model.TollClasses.Count + 3)" class="text-center text-muted">No data found</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
 
-                        <!-- Grand Total -->
-                        <tr class="fw-bold bg-light">
-                            <td>Grand Total</td>
-                            <td>
-                                Count: <br />
-                                Count %: <br />
-                                Revenue: <br />
-                                Revenue %:
-                            </td>
-                            @foreach (var cls in Model.TollClasses)
-                            {
-                                var totalCount = Model.Items.Count(x => x.ManualTollClass == cls);
-                                var totalRevenue = Model.Items.Where(x => x.ManualTollClass == cls).Sum(x => x.AmountInclusive);
-                                <td>
-                                    @totalCount<br />
-                                    100<br />
-                                    @totalRevenue.ToString("N2") <br />
-                                    100
-                                </td>
-                            }
-                            <td>
-                                @Model.Items.Count()<br />
-                                100<br />
-                                @Model.Items.Sum(x => x.AmountInclusive).ToString("N2") <br />
-                                100
-                            </td>
-                        </tr>
-                    }
-                    else
-                    {
-                        <tr><td colspan="@(Model.TollClasses.Count + 2)" class="text-center text-muted">No data found</td></tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Footer -->
-        <div class="mt-4 p-3 border-top bg-light">
-            <div class="row">
-                <div class="col-md-4">
-                    Report Name: Comprehensive Report<br />
-                    Date: @reportGeneratedAt
-                </div>
-                <div class="col-md-4">User ID: @currentUserId</div>
-                <div class="col-md-4 text-end">Version: @reportVersion</div>
+            <div class="mt-4 p-3 border-top">
+                <table class="table table-borderless w-100 mb-0 align-middle">
+                    <tr>
+                        <td class="fw-bold text-dark">Report Name: Comprehensive Report</td>
+                        <td><strong>Date and Time:</strong> @reportGeneratedAt</td>
+                    <td><strong>User ID:</strong> @currentUserId</td>
+                        <td class="text-end">Page <strong>1</strong> of <strong>1</strong></td>
+                    </tr>
+                    <tr>
+                        <td colspan="4">
+                            <small class="text-muted">Reports Module Version: <strong>@reportVersion</strong></small>
+                        </td>
+                    </tr>
+                </table>
             </div>
         </div>
     </div>
-</div>
 
-
-<!-- PDF libraries (CDN) -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 
 <script>
-    // Same client-side PDF generation as you had, but using the MVC model
-    const groupedData = @Html.Raw(JsonSerializer.Serialize(Model.GroupedDataTyped));
-    const tollClasses = @Html.Raw(JsonSerializer.Serialize(Model.TollClasses));
-    const groupByLabel = '@(Model.Input.GroupBy == "TransactionType" ? "TRANSACTION TYPE" : "METHOD OF PAYMENT")';
+    document.addEventListener("DOMContentLoaded", () => {
 
-    const appliedFilters = {
-        StartDate: '@Model.Input.StartDate.ToString("dd/MM/yyyy HH:mm")',
-        EndDate: '@Model.Input.EndDate.ToString("dd/MM/yyyy HH:mm")',
-        Shift: '@(string.IsNullOrEmpty(Model.Input.Shift) ? "All" : Model.Input.Shift)',
-        Lane: '@(string.IsNullOrEmpty(Model.Input.LaneName) ? "All" : Model.Input.LaneName)',
-        PaymentMethod: '@(string.IsNullOrEmpty(Model.Input.MethodOfPayment) ? "All" : Model.Input.MethodOfPayment)',
-        Classification: '@(string.IsNullOrEmpty(Model.Input.Classification) ? "All" : Model.Input.Classification)'
-    };
+      const groupedData = @Html.Raw(JsonSerializer.Serialize(
+                    Model.GroupedDataTyped ?? new List<MIS.Web.Models.Comprehensive.PageComprehensiveModel.GroupedRow>()
+            ));
+      const tollClasses = @Html.Raw(JsonSerializer.Serialize(Model.TollClasses ?? new List<string>()));
+      const items = @Html.Raw(JsonSerializer.Serialize(
+                    Model.Items ?? new List<MIS.Web.Models.Comprehensive.ComprehensiveModel>()
+            ));
 
-    const reportGeneratedAt = '@DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")';
-    const currentUserId = '@(User.Identity?.Name ?? "Unknown User")';
-    const reportVersion = "1.0.0";
+      const groupByLabel = @Html.Raw(JsonSerializer.Serialize(groupByLabel));
+      const reportGeneratedAt = '@DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")';
+      const currentUserId = '@currentUserId';
+      const reportVersion = '@reportVersion';
 
-    document.getElementById("btnDownloadPdf").addEventListener("click", function () {
+      //  Consistent header color you requested
+      const HEADER_BLUE = [41, 128, 185];
+
+      //  Filters text 
+      const filterText = {
+        "Start Date and Time": '@Model.Input.StartDate.ToString("dd/MM/yyyy HH:mm")',
+        "End Date and Time": '@Model.Input.EndDate.ToString("dd/MM/yyyy HH:mm")',
+        "Operational Shift": '@(Model.FilterTextOperationalShift ?? "All")',
+        "Toll Operator": '@(Model.FilterTextOperators ?? "All")',
+        "Lane": '@(Model.FilterTextLanes ?? "All")',
+        "Payment Method": '@(Model.FilterTextPaymentMethods ?? "All")',
+        "Lane Discount Type": '@(Model.FilterTextDiscountTypes ?? "All")',
+        "Classification": '@(Model.FilterTextClassifications ?? "All")'
+      };
+
+      const n = (v) => (Number(v) || 0);
+      const fmtMoney = (v) => n(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const fmtPct = (v) => `${n(v).toFixed(2)}%`;
+
+      const grandTotalCount = items.length;
+      const grandTotalRevenue = items.reduce((sum, x) => sum + n(x.AmountInclusive), 0);
+
+      const safeCount = grandTotalCount === 0 ? 1 : grandTotalCount;
+      const safeRevenue = Math.abs(grandTotalRevenue) < 0.0000001 ? 1 : grandTotalRevenue;
+
+      const percentOfCount = (value) => (n(value) / safeCount) * 100;
+      const percentOfRevenue = (value) => (n(value) / safeRevenue) * 100;
+
+      // Build export table rows (PDF + Excel share this)
+      function buildExportMatrix() {
+        const headers = [groupByLabel, ""].concat(
+          tollClasses.map(cls => (cls === "Motor Cycle" ? "Class M" : cls))
+        ).concat(["TOTAL"]);
+
+        const rows = [];
+
+        // Body rows
+        (groupedData || []).forEach(row => {
+          const labelCol = "Count:\nCount %:\nRevenue:\nRevenue %:";
+
+          const classCells = tollClasses.map(cls => {
+            const cell = (row.Classes && row.Classes[cls]) ? row.Classes[cls] : { Count: 0, Revenue: 0 };
+            const c = n(cell.Count);
+            const r = n(cell.Revenue);
+
+            return [
+              `${c}`,
+              `${fmtPct(percentOfCount(c))}`,
+              `${fmtMoney(r)}`,
+              `${fmtPct(percentOfRevenue(r))}`
+            ].join("\n");
+          });
+
+          const rowCount = n(row.TotalCount);
+          const rowRev = n(row.TotalRevenue);
+
+          const totalCell = [
+            `${rowCount}`,
+            `${fmtPct(percentOfCount(rowCount))}`,
+            `${fmtMoney(rowRev)}`,
+            `${fmtPct(percentOfRevenue(rowRev))}`
+          ].join("\n");
+
+          rows.push([
+            row.Method ?? "",
+            labelCol,
+            ...classCells,
+            totalCell
+          ]);
+        });
+
+        // Grand Total row (computed from items, not hardcoded)
+        const grandLabelCol = "Count:\nCount %:\nRevenue:\nRevenue %:";
+        const grandClassCells = tollClasses.map(cls => {
+          const classCount = items.filter(x => (x.ManualTollClassName || "").toLowerCase() === (cls || "").toLowerCase()).length;
+          const classRevenue = items
+            .filter(x => (x.ManualTollClassName || "").toLowerCase() === (cls || "").toLowerCase())
+            .reduce((s, x) => s + n(x.AmountInclusive), 0);
+
+          return [
+            `${classCount}`,
+            `${fmtPct(percentOfCount(classCount))}`,
+            `${fmtMoney(classRevenue)}`,
+            `${fmtPct(percentOfRevenue(classRevenue))}`
+          ].join("\n");
+        });
+
+        const grandTotalCell = [
+          `${grandTotalCount}`,
+          `${fmtPct(percentOfCount(grandTotalCount))}`,
+          `${fmtMoney(grandTotalRevenue)}`,
+          `${fmtPct(percentOfRevenue(grandTotalRevenue))}`
+        ].join("\n");
+
+        rows.push(["Grand Total", grandLabelCol, ...grandClassCells, grandTotalCell]);
+
+        return { headers, rows };
+      }
+
+     
+      // ✅ PDF EXPORT
+      async function exportPdf() {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
 
@@ -252,98 +379,122 @@
         const pageHeight = doc.internal.pageSize.getHeight();
         const margin = 40;
 
-        Promise.all([
-            new Promise(resolve => {
-                const img = new Image();
-                img.src = '/images/lCC Logo.jpg';
-                img.onload = () => resolve(img);
-                img.onerror = () => resolve(null);
-            }),
-            new Promise(resolve => {
-                const img = new Image();
-                img.src = '/images/ICT-Works Logo.jpg';
-                img.onload = () => resolve(img);
-                img.onerror = () => resolve(null);
-            })
-        ]).then(([logoLeft, logoRight]) => {
-            if (logoLeft) doc.addImage(logoLeft, 'JPEG', margin, 30, 80, 80);
-            if (logoRight) doc.addImage(logoRight, 'JPEG', pageWidth - margin - 80, 30, 80, 80);
+        const loadImage = (src) => new Promise(res => {
+          const img = new Image();
+          img.crossOrigin = "Anonymous";
+          img.onload = () => res(img);
+          img.onerror = () => res(null);
+          img.src = src;
+        });
 
-            doc.setFontSize(12);
-            doc.setFont("helvetica", "bold");
-            doc.text("COMPREHENSIVE REPORT", pageWidth / 2, 100, { align: "center" });
+        const [leftLogo, rightLogo] = await Promise.all([
+          loadImage("/images/lCC Logo.jpg"),
+          loadImage("/images/ICT-Works Logo.jpg")
+        ]);
 
-            doc.setFontSize(16);
-            doc.setFont("helvetica", "bold");
-            doc.text(
-                ["LEKKI CONCESSION COMPANY LIMITED", "CONSERVATION TOLL PLAZA"],
-                pageWidth / 2,
-                50,
-                { align: "center" }
-            );
+        // Header
+        if (leftLogo) doc.addImage(leftLogo, "JPEG", margin, 25, 70, 70);
+        if (rightLogo) doc.addImage(rightLogo, "JPEG", pageWidth - margin - 70, 25, 70, 70);
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(16);
+        doc.text("LEKKI CONCESSION COMPANY LIMITED", pageWidth / 2, 45, { align: "center" });
+        doc.text("CONSERVATION TOLL PLAZA", pageWidth / 2, 65, { align: "center" });
+        doc.text("COMPREHENSIVE REPORT", pageWidth / 2, 90, { align: "center" });
+
+        // Filters block
+        let y = 120;
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        doc.text("Filters Used:", margin, y);
+        y += 14;
+
+        Object.entries(filterText).forEach(([k, v]) => {
+          doc.text(`${k}: ${v}`, margin, y);
+          y += 12;
+        });
+
+        const { headers, rows } = buildExportMatrix();
+
+        doc.autoTable({
+          head: [headers],
+          body: rows,
+          startY: y + 10,
+          theme: "grid",
+          headStyles: { fillColor: HEADER_BLUE, textColor: 255 },
+          styles: { fontSize: 8.5, halign: "center", valign: "middle" },
+          bodyStyles: { cellPadding: 4 },
+
+          // Make the last row (Grand Total) stand out
+          didParseCell: function (data) {
+            const isGrandTotalRow = data.row.index === rows.length - 1;
+            if (isGrandTotalRow) {
+              data.cell.styles.fontStyle = "bold";
+              data.cell.styles.fillColor = [245, 245, 245];
+            }
+            // Make first column bold for readability
+            if (data.section === "body" && data.column.index === 0) {
+              data.cell.styles.fontStyle = "bold";
+            }
+          },
+
+          // Footer (page X of Y)
+          didDrawPage: function (data) {
+            const pageCount = doc.internal.getNumberOfPages();
+            const currentPage = data.pageNumber;
+            const footerY = pageHeight - 25;
 
             doc.setFontSize(10);
             doc.setFont("helvetica", "normal");
-            const filtersX = margin;
-            let filtersY = 150;
-            Object.entries(appliedFilters).forEach(([k, v]) => {
-                doc.text(`${k}: ${v}`, filtersX, filtersY);
-                filtersY += 14;
-            });
 
-            const headers = [groupByLabel, ""].concat(tollClasses).concat(["TOTAL"]);
+            doc.text("Report Name: Comprehensive Report", margin, footerY);
+            doc.text(`Date and Time: ${reportGeneratedAt}`, pageWidth / 2.3, footerY);
+            doc.text(`User ID: ${currentUserId}`, pageWidth / 1.55, footerY);
+            doc.text(`Page ${currentPage} of ${pageCount}`, pageWidth - margin, footerY, { align: "right" });
 
-            const rows = groupedData.map(g => {
-                const secondCol = "Count\nCount %\nRevenue\nRevenue %";
-                const classCells = tollClasses.map(cls => {
-                    const cm = (g.Classes && g.Classes[cls]) ? g.Classes[cls] :
-                        { Count: 0, CountPercent: 0, Revenue: 0, RevenuePercent: 0 };
-                    return `${cm.Count}\n${Number(cm.CountPercent).toFixed(2)}\n${Number(cm.Revenue).toFixed(2)}\n${Number(cm.RevenuePercent).toFixed(2)}`;
-                });
-                const totalCell = `${g.TotalCount}\n100\n${Number(g.TotalRevenue).toFixed(2)}\n100`;
-                return [g.Method || "", secondCol, ...classCells, totalCell];
-            });
-
-            doc.autoTable({
-                head: [headers],
-                body: rows,
-                startY: filtersY + 10,
-                theme: 'grid',
-                headStyles: { fillColor: [52, 152, 219], textColor: 255 },
-                styles: { fontSize: 9, cellPadding: 4, overflow: 'linebreak', halign: 'center', valign: 'middle' },
-                columnStyles: {
-                    0: { cellWidth: 120, halign: 'left' },
-                    1: { cellWidth: 80, halign: 'left' }
-                },
-                didDrawPage: function (data) {
-                    const pageNumber = doc.internal.getNumberOfPages();
-                    doc.setFontSize(9);
-                    doc.text(`Page ${pageNumber}`, pageWidth - margin, pageHeight - 10, { align: 'right' });
-                }
-            });
-
-            const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 20 : (filtersY + 200);
-            doc.setFont("helvetica", "bold");
-            doc.text("Summary", margin, finalY);
-            doc.setFont("helvetica", "normal");
-
-            const totalGroups = groupedData.length;
-            const grandTotals = {
-                totalCount: groupedData.reduce((s, g) => s + (g.TotalCount || 0), 0),
-                totalRevenue: groupedData.reduce((s, g) => s + (Number(g.TotalRevenue) || 0), 0)
-            };
-
-            doc.text(`Groups: ${totalGroups}`, margin, finalY + 15);
-            doc.text(`Total Revenue: ${grandTotals.totalRevenue.toFixed(2)}`, margin + 200, finalY + 15);
-
-            doc.setFont("helvetica", "bold");
-            doc.text(`Report Name: Comprehensive Report`, margin, finalY + 40);
-            doc.setFont("helvetica", "normal");
-            doc.text(`Date & Time: ${reportGeneratedAt}`, margin, finalY + 55);
-            doc.text(`User ID: ${currentUserId}`, margin + 250, finalY + 55);
-            doc.text(`Version: ${reportVersion}`, pageWidth - margin - 100, finalY + 55);
-
-            doc.save(`ComprehensiveReport_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
+            doc.setFontSize(9);
+            doc.text(`Reports Module Version Number: ${reportVersion}`, margin, footerY + 14);
+          }
         });
+
+        doc.save(`Comprehensive_Report_${new Date().toISOString().replace(/[:.]/g, "-")}.pdf`);
+      }
+
+      // ✅ EXCEL EXPORT (SheetJS) 
+      function exportExcel() {
+        const { headers, rows } = buildExportMatrix();
+
+        const aoa = [];
+
+        aoa.push(["COMPREHENSIVE REPORT"]);
+        aoa.push([]);
+        aoa.push(["Filters Used:"]);
+        Object.entries(filterText).forEach(([k, v]) => aoa.push([`${k}: ${v}`]));
+        aoa.push([]);
+        aoa.push(headers);
+
+        // Add body rows
+        rows.forEach(r => aoa.push(r));
+
+        aoa.push([]);
+        aoa.push([`Report Name: Comprehensive Report`, `Date and Time: ${reportGeneratedAt}`, `User ID: ${currentUserId}`, `Page 1 of 1`]);
+        aoa.push([`Reports Module Version Number: ${reportVersion}`]);
+
+        const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+        // Column widths
+        ws["!cols"] = headers.map(() => ({ wch: 22 }));
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Comprehensive Report");
+
+        XLSX.writeFile(wb, `Comprehensive_Report_${new Date().toISOString().replace(/[:.]/g, "-")}.xlsx`);
+      }
+
+      const btnPdf = document.getElementById("btnDownloadPdf");
+      const btnExcel = document.getElementById("btnDownloadExcel");
+
+      if (btnPdf) btnPdf.addEventListener("click", exportPdf);
+      if (btnExcel) btnExcel.addEventListener("click", exportExcel);
     });
 </script>

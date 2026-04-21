@@ -1,12 +1,15 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using MIS.Web.Models.DailyCashup;
 using MIS.Web.Services;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace MIS.Web.Controllers
 {
+    [Authorize]
     public class DailyCashupController : Controller
     {
         private readonly IDailyCashupReportService _service;
@@ -20,38 +23,51 @@ namespace MIS.Web.Controllers
         public async Task<IActionResult> Index(
             DateTime? startDate,
             DateTime? endDate,
-            string? OperationalShift,
-            string? TollOperators,
+            [FromQuery] List<int>? shiftIds,
+            [FromQuery] List<long>? systemUserIds,
             int page = 1,
             int pageSize = 20)
         {
-            var start = startDate ?? DateTime.Now.AddDays(-7);
-            var end = endDate ?? DateTime.Now;
+            var start = (startDate ?? DateTime.Today.AddDays(-7)).Date;
+            var end = (endDate ?? DateTime.Today).Date;
 
-            var operationalShifts = string.IsNullOrEmpty(OperationalShift)
-                ? new List<string>()
-                : new List<string> { OperationalShift };
+            shiftIds ??= new List<int>();
+            systemUserIds ??= new List<long>();
 
-            var tollOperators = string.IsNullOrEmpty(TollOperators)
-                ? new List<string>()
-                : new List<string> { TollOperators };
+            // 1) Load filter options
+            var (shiftOptions, operatorOptions) = await _service.GetFiltersAsync();
 
-            // 1️⃣ Fetch report data
-            var data = await _service.GetDailyCashupAsync(start, end, operationalShifts, tollOperators, page, pageSize);
+            // 2) Load report data
+            var model = await _service.GetDailyCashupAsync(
+                start,
+                end,
+                shiftIds,
+                systemUserIds,
+                page,
+                pageSize);
 
-            // 2️⃣ Fetch dropdown data directly from API
-            var shifts = await _service.GetShiftsAsync();
-            var operators = await _service.GetTollOperatorsAsync();
+            // 3) Attach filter options
+            model.ShiftOptions = shiftOptions ?? new List<CheckItemModel<int>>();
+            model.TollOperatorOptions = operatorOptions ?? new List<CheckItemModel<long>>();
 
-            // 3️⃣ Set ViewBags for Razor rendering
-            ViewBag.Shifts = shifts ?? new List<string>();
-            ViewBag.TollOperators = operators ?? new List<string>();
+            // 4) Persist selected filters
+            model.SelectedShiftIds = shiftIds;
+            model.SelectedSystemUserIds = systemUserIds;
+            model.StartDate = start;
+            model.EndDate = end;
 
-            // 4️⃣ Persist selected filters
-            data.StartDate = start;
-            data.EndDate = end;
+            // 5) Mark selected options
+            foreach (var opt in model.ShiftOptions)
+            {
+                opt.Selected = shiftIds.Contains(opt.Id);
+            }
 
-            return View(data);
+            foreach (var opt in model.TollOperatorOptions)
+            {
+                opt.Selected = systemUserIds.Contains(opt.Id);
+            }
+
+            return View(model);
         }
     }
 }

@@ -14,24 +14,20 @@ namespace MIS.Web.Models.VarientPerfomance
         [JsonProperty("tollOperator")]
         public string? TollOperator { get; set; }
 
-        // Expected amount from API field "nominalTariff"
+        // Expected amount from API
         [JsonProperty("nominalTariff")]
         public double? NominalTariff { get; set; }
 
-        // Actual amount from API field "actualAmount"
+        // Actual declared amount from API
         [JsonProperty("actualAmount")]
         public double? NettAmount { get; set; }
 
-        [JsonIgnore]
-        public double? Difference
-        {
-            get
-            {
-                if (NominalTariff == null || NettAmount == null)
-                    return null;
-                return NominalTariff - NettAmount;
-            }
-        }
+        // Staff performance difference from API
+        [JsonProperty("difference")]
+        public double? Difference { get; set; }
+
+        [JsonProperty("discrepancyDifference")]
+        public double? DiscrepancyDifference { get; set; }
 
         [JsonProperty("startDate")]
         public DateTime? StartDate { get; set; }

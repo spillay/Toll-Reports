@@ -1,14 +1,13 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using MIS.Web.Models;
-using MIS.Web.Models.TopUp;
 using MIS.Web.Services;
 using System;
-using System.Linq;
 using System.Threading.Tasks;
-using System.Collections.Generic;
 
 namespace MIS.Web.Controllers
 {
+    [Authorize]
     public class TopUpController : Controller
     {
         private readonly ITopUpReportService _service;
@@ -21,6 +20,48 @@ namespace MIS.Web.Controllers
         [HttpGet]
         public async Task<IActionResult> Index(TopUpInputModel model)
         {
+            // 1) Default dates
+            var start = model.StartDate ?? DateTime.Now.AddDays(-1);
+            var end = model.EndDate ?? DateTime.Now;
+
+            // 2) Operational day range logic
+            if (model.OperationalDate == true)
+            {
+                start = start.Date.AddHours(5.5);                         // 05:30
+                end = end.Date.AddDays(1).AddHours(5.5).AddSeconds(-1);   // Next day 05:29:59
+            }
+
+            // 3) Load GLOBAL filter options (master tables)
+            var options = await _service.GetTopUpFilterOptionsAsync();
+
+            model.ShiftOptions = options.ShiftOptions ?? model.ShiftOptions;
+            model.OperatorOptions = options.OperatorOptions ?? model.OperatorOptions;
+            model.LaneOptions = options.LaneOptions ?? model.LaneOptions;
+            model.PaymentMethodOptions = options.PaymentMethodOptions ?? model.PaymentMethodOptions;
+
+            // 4) Fetch paged data using checkbox lists
+            var result = await _service.GetTopUpAsync(
+                start,
+                end,
+                model.Shifts,
+                model.OperatorIds,
+                model.Lanes,
+                model.PaymentMethods,
+                model.AccountNumber,
+                model.page,
+                model.pageSize
+            );
+
+            model.PageData = result;
+            model.StartDate = start;
+            model.EndDate = end;
+
+            return View(model);
+        }
+
+        [HttpGet("TopUp/export")]
+        public async Task<IActionResult> Export(TopUpInputModel model)
+        {
             var start = model.StartDate ?? DateTime.Now.AddDays(-1);
             var end = model.EndDate ?? DateTime.Now;
 
@@ -30,24 +71,17 @@ namespace MIS.Web.Controllers
                 end = end.Date.AddDays(1).AddHours(5.5).AddSeconds(-1);
             }
 
-            var result = await _service.GetTopUpAsync(
+            var allData = await _service.GetTopUpFullAsync(
                 start,
                 end,
-                model.Operator,
-                model.Lane,
-                model.Shift,
-                model.AccountNumber,
-                model.OperationalDate,
-                model.page,
-                model.pageSize
+                model.Shifts,
+                model.OperatorIds,
+                model.Lanes,
+                model.PaymentMethods,
+                model.AccountNumber
             );
 
-            ViewBag.Shifts = result.items?.Select(i => i.Shift).Where(s => !string.IsNullOrEmpty(s)).Distinct().ToList() ?? new List<string>();
-            ViewBag.Lanes = result.items?.Select(i => i.LaneWorkstation).Where(l => !string.IsNullOrEmpty(l)).Distinct().ToList() ?? new List<string>();
-            ViewBag.AccountNumbers = result.items?.Select(i => i.AccountNumber).Where(a => !string.IsNullOrEmpty(a)).Distinct().ToList() ?? new List<string>();
-
-            model.PageData = result;
-            return View(model);
+            return Json(allData.Items ?? new System.Collections.Generic.List<MIS.Web.Models.TopUp.TopUpModel>());
         }
     }
 }

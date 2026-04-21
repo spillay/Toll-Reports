@@ -89,7 +89,8 @@ namespace MIS.Web.Services
                 { "operationalShift", model.SelectedShifts },
                 { "tollOperators",    model.SelectedTollOperators },
                 { "laneNames",        model.SelectedLanes },
-                { "paymentMethods",   model.SelectedPaymentMethods }
+                { "paymentMethods",   model.SelectedPaymentMethods },
+                { "tollCollectorClasses", model.SelectedTollCollectorClasses }
             };
         }
 
@@ -223,6 +224,7 @@ namespace MIS.Web.Services
                 filters.TollOperators ??= new List<string>();
                 filters.Lanes ??= new List<string>();
                 filters.PaymentMethods ??= new List<string>();
+                filters.TollCollectorClasses ??= new List<string>();
 
                 return filters;
             }

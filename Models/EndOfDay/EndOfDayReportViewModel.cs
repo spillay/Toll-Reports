@@ -14,12 +14,25 @@ namespace MIS.Web.Models.EndOfDay
         public string ShiftName { get; set; } = "-All-";
 
         public List<TheoreticalIncomeRowViewModel> TheoreticalIncome { get; set; } = new();
+        public List<EndOfDayReportRowViewModel> Rows { get; set; } = new();
 
         public ExemptsViewModel Exempts { get; set; } = new();
         public DiscountsViewModel Discounts { get; set; } = new();
         public OtherIncomeViewModel OtherIncome { get; set; } = new();
         public ReconciliationViewModel Reconciliation { get; set; } = new();
         public EndOfDayTotalsViewModel Totals { get; set; } = new();
+    }
+
+    public class EndOfDayReportRowViewModel
+    {
+        public string Col1 { get; set; } = string.Empty;
+        public string Col2 { get; set; } = string.Empty;
+        public string Col3 { get; set; } = string.Empty;
+        public string Col4 { get; set; } = string.Empty;
+        public string Col5 { get; set; } = string.Empty;
+        public string Col6 { get; set; } = string.Empty;
+        public string Col7 { get; set; } = string.Empty;
+        public string Col8 { get; set; } = string.Empty;
     }
 
     public class TheoreticalIncomeRowViewModel

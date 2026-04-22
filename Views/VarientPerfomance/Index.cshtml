@@ -92,17 +92,14 @@
         .GroupBy(x => new
         {
             ShiftDate = x.ShiftDate?.Date,
-            Shift = (x.ShiftDescription ?? "").Trim(),
-            TollOperator = (x.TollOperator ?? "").Trim()
+            Shift = (x.ShiftDescription ?? "").Trim()
         })
         .OrderBy(g => g.Key.ShiftDate)
         .ThenBy(g => g.Key.Shift)
-        .ThenBy(g => g.Key.TollOperator)
         .Select(g => new
         {
             ShiftDate = g.Key.ShiftDate,
             Shift = g.Key.Shift,
-            TollOperator = g.Key.TollOperator,
             CashExpected = g.Sum(x => Convert.ToDecimal(x.NominalTariff)),
             CashDeclared = g.Sum(x => Convert.ToDecimal(x.NettAmount)),
             CashDeclaredDifference = g.Sum(x => Convert.ToDecimal(x.Difference)),
@@ -299,7 +296,6 @@
                             <tr>
                                 <th>Operational Shift Date</th>
                                 <th>Operational Shift</th>
-                                <th>Toll Operator ID</th>
                                 <th>Cash Expected</th>
                                 <th>Cash Declared</th>
                                 <th>Cash Declared Difference</th>
@@ -312,7 +308,6 @@
                                 <tr>
                                     <td>@item.ShiftDate?.ToString("dd/MM/yyyy")</td>
                                     <td>@item.Shift</td>
-                                    <td>@item.TollOperator</td>
                                     <td>@item.CashExpected.ToString("N2")</td>
                                     <td>@item.CashDeclared.ToString("N2")</td>
                                     <td>@item.CashDeclaredDifference.ToString("N2")</td>
@@ -708,16 +703,14 @@
     detailRows.forEach(row => {
     const date = getShiftDateValue(row);
     const shift = getShiftDescription(row);
-    const tollOperator = getTollOperator(row);
     const dateKey = date ? getLocalDateKey(date) : "";
-    const mapKey = `${dateKey}__${shift.toLowerCase()}__${tollOperator.toLowerCase()}`;
+    const mapKey = `${dateKey}__${shift.toLowerCase()}`;
 
     if (!grouped.has(mapKey)) {
     grouped.set(mapKey, {
     sortDate: date,
     shiftDate: date ? getSafeDate(date) : "",
     shift,
-    tollOperator,
     expected: 0,
     declared: 0,
     difference: 0,
@@ -738,10 +731,7 @@
 
     if (aTime !== bTime) return aTime - bTime;
 
-    const shiftCompare = a.shift.localeCompare(b.shift);
-    if (shiftCompare !== 0) return shiftCompare;
-
-    return a.tollOperator.localeCompare(b.tollOperator);
+    return a.shift.localeCompare(b.shift);
     });
     }
 
@@ -796,7 +786,6 @@
     worksheetData.push([
     "Operational Shift Date",
     "Operational Shift",
-    "Toll Operator ID",
     "Cash Expected",
     "Cash Declared",
     "Cash Declared Difference",
@@ -812,7 +801,6 @@
     worksheetData.push([
     "Operational Shift Date",
     "Operational Shift",
-    "Toll Operator ID",
     "Cash Expected",
     "Cash Declared",
     "Cash Declared Difference",
@@ -823,7 +811,6 @@
     worksheetData.push([
     item.shiftDate,
     item.shift,
-    item.tollOperator,
     toMoney(item.expected),
     toMoney(item.declared),
     toMoney(item.difference),
@@ -951,7 +938,7 @@
     totalRows.push([
     item.shiftDate,
     item.shift,
-    item.tollOperator,
+    "",
     toMoney(item.expected),
     toMoney(item.declared),
     toMoney(item.difference),

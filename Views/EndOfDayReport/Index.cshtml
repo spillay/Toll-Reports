@@ -1,86 +1,174 @@
-﻿@model MIS.Web.Models.EndOfDay.PageEndOfDayModel
+@model MIS.Web.Models.EndOfDay.PageEndOfDayModel
+@using System.Text.Json
 @using MIS.Web.Models.EndOfDay
 
 @{
     ViewData["Title"] = "End Of Day Report";
 
     var generatedAt = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
-    var userId = User.FindFirst("firstName")?.Value ?? "Unknown User";
+    var userId = User.FindFirst("firstName")?.Value ?? (User.Identity?.Name ?? "Unknown User");
     var version = "3.0.0.0";
     var reportName = "END OF DAY REPORT";
 
-    var currentPage = 1;
-    var totalPages = 1;
-
     var report = Model?.Report ?? new EndOfDayReportViewModel();
-    var theoretical = report.TheoreticalIncome ?? new List<TheoreticalIncomeRowViewModel>();
-    var discounts = report.Discounts ?? new DiscountsViewModel();
-    var exempts = report.Exempts ?? new ExemptsViewModel();
-    var other = report.OtherIncome ?? new OtherIncomeViewModel();
-    var recon = report.Reconciliation ?? new ReconciliationViewModel();
-    var totals = report.Totals ?? new EndOfDayTotalsViewModel();
+    var selectedReportDate = Model?.ReportDate ?? DateTime.Today;
+    var selectedShiftId = Model?.ShiftId;
+    var reportRows = (report.Rows ?? new List<EndOfDayReportRowViewModel>())
+        .Select(row => new EndOfDayReportRowViewModel
+        {
+            Col1 = row.Col1 ?? string.Empty,
+            Col2 = row.Col2 ?? string.Empty,
+            Col3 = row.Col3 ?? string.Empty,
+            Col4 = row.Col4 ?? string.Empty,
+            Col5 = row.Col5 ?? string.Empty,
+            Col6 = row.Col6 ?? string.Empty,
+            Col7 = row.Col7 ?? string.Empty,
+            Col8 = row.Col8 ?? string.Empty
+        })
+        .ToList();
 
-    var monthLabel = !string.IsNullOrWhiteSpace(report.MonthLabel)
-        ? report.MonthLabel
-        : Model.StartDate.ToString("MMMM yyyy");
+    foreach (var row in reportRows)
+    {
+        if (
+            string.Equals(row.Col2?.Trim(), "Date and Time:", StringComparison.OrdinalIgnoreCase))
+        {
+            row.Col3 = generatedAt;
+        }
 
-    var operationalDayLabel = !string.IsNullOrWhiteSpace(report.OperationalDayLabel)
-        ? report.OperationalDayLabel
-        : Model.StartDate.ToString("dd MMMM yyyy");
+        if (string.Equals(row.Col2?.Trim(), "User ID:", StringComparison.OrdinalIgnoreCase))
+        {
+            row.Col3 = userId;
+        }
 
-    var shiftName = !string.IsNullOrWhiteSpace(report.ShiftName)
-        ? report.ShiftName
-        : "-All-";
+        if ((row.Col2 ?? string.Empty).Contains("Reports Module Version Number", StringComparison.OrdinalIgnoreCase))
+        {
+            row.Col2 = $"Reports Module Version Number: {version}";
+        }
+    }
 
-    var map = theoretical
-        .Where(x => !string.IsNullOrWhiteSpace(x.Metric))
-        .GroupBy(x => x.Metric.Trim().ToLower())
-        .ToDictionary(g => g.Key, g => g.First());
+    string CssForRow(EndOfDayReportRowViewModel row)
+    {
+        var col1 = (row.Col1 ?? string.Empty).Trim();
+        var col2 = (row.Col2 ?? string.Empty).Trim();
 
-    TheoreticalIncomeRowViewModel? GetRow(string key)
-        => map.TryGetValue(key.Trim().ToLower(), out var row) ? row : null;
+        if (string.Equals(col1, "LEKKI CONCESSION COMPANY LIMITED", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(col1, "LEKKI-IKOYI LINK BRIDGE", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(col1, reportName, StringComparison.OrdinalIgnoreCase))
+        {
+            return "report-title-row";
+        }
 
-    var traffic = GetRow("traffic");
-    var nominal = GetRow("nominal tariff");
-    var trafficNominal = GetRow("traffic x nominal tariff");
-    var penalty = GetRow("cash penalty");
-    var totalTheoreticalRow = GetRow("total theoretical income");
+        if (string.Equals(col1, "THEORETICAL INCOME", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(col1, "LESS: EXEMPTS", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(col1, "LESS: DISCOUNT", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(col1, "OTHER INCOME", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(col1, "Accounted for as follows:", StringComparison.OrdinalIgnoreCase))
+        {
+            return "report-section-row";
+        }
 
-    decimal totalTheo = totals.TotalTheoreticalIncome > 0
-        ? totals.TotalTheoreticalIncome
-        : (totalTheoreticalRow?.Total ?? ((trafficNominal?.Total ?? 0) + (penalty?.Total ?? 0)));
+        if (string.Equals(col2, "Class M", StringComparison.OrdinalIgnoreCase))
+        {
+            return "report-header-row";
+        }
 
-    decimal exemptsTotal = totals.TotalExemptAmount > 0
-        ? totals.TotalExemptAmount
-        : exempts.TotalExemptAmount;
+        if (col1.StartsWith("TOTAL", StringComparison.OrdinalIgnoreCase) ||
+            col1.StartsWith("(A)", StringComparison.OrdinalIgnoreCase) ||
+            col1.StartsWith("(B)", StringComparison.OrdinalIgnoreCase) ||
+            col1.StartsWith("UN-RECONCILED", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(col1, "Discount provided", StringComparison.OrdinalIgnoreCase))
+        {
+            return "report-total-row";
+        }
 
-    decimal anonTotal = discounts.Anonymous5.Total;
-    decimal indivTotal = discounts.Individual10.Total;
-    decimal corpTotal = discounts.Corporate10.Total;
-    decimal staffTotal = discounts.Staff100.Total;
+        return string.Empty;
+    }
 
-    decimal providedTotal = totals.TotalDiscountAmount > 0
-        ? totals.TotalDiscountAmount
-        : discounts.TotalDiscountAmount;
+    string CellText(string? value) => value ?? string.Empty;
 
-    decimal totalDiscountedIncome = totals.TotalDiscountedIncome > 0
-        ? totals.TotalDiscountedIncome
-        : (totalTheo - providedTotal);
+    bool IsStoredProcedureTitleRow(EndOfDayReportRowViewModel row)
+    {
+        var col1 = (row.Col1 ?? string.Empty).Trim();
 
-    decimal totalIncomeA = totals.TotalIncomeA > 0
-        ? totals.TotalIncomeA
-        : (totalDiscountedIncome + other.TotalOtherIncome);
+        return string.Equals(col1, "LEKKI CONCESSION COMPANY LIMITED", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(col1, "LEKKI-IKOYI LINK BRIDGE", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(col1, reportName, StringComparison.OrdinalIgnoreCase);
+    }
 
-    decimal totalAccountedB = totals.TotalAccountedB > 0
-        ? totals.TotalAccountedB
-        : recon.TotalAccounted;
+    bool IsStoredProcedureFooterRow(EndOfDayReportRowViewModel row)
+    {
+        var col1 = (row.Col1 ?? string.Empty).Trim();
+        var col2 = (row.Col2 ?? string.Empty).Trim();
 
-    decimal unreconciled = totals.UnreconciledDiscrepancy != 0
-        ? totals.UnreconciledDiscrepancy
-        : (totalIncomeA - totalAccountedB);
+        return string.Equals(col1, "End of Day Report", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(col2, "User ID:", StringComparison.OrdinalIgnoreCase) ||
+               col2.Contains("Reports Module Version", StringComparison.OrdinalIgnoreCase);
+    }
 
-    string F(decimal value) => value.ToString("N2");
+    bool IsEmptyReportRow(EndOfDayReportRowViewModel row) =>
+        string.IsNullOrWhiteSpace(row.Col1) &&
+        string.IsNullOrWhiteSpace(row.Col2) &&
+        string.IsNullOrWhiteSpace(row.Col3) &&
+        string.IsNullOrWhiteSpace(row.Col4) &&
+        string.IsNullOrWhiteSpace(row.Col5) &&
+        string.IsNullOrWhiteSpace(row.Col6) &&
+        string.IsNullOrWhiteSpace(row.Col7) &&
+        string.IsNullOrWhiteSpace(row.Col8);
+
+    var previewRows = reportRows
+        .Where(row => !IsStoredProcedureTitleRow(row))
+        .Where(row => !IsStoredProcedureFooterRow(row))
+        .ToList();
+
+    while (previewRows.Any() && IsEmptyReportRow(previewRows[0]))
+    {
+        previewRows.RemoveAt(0);
+    }
+
+    while (previewRows.Any() && IsEmptyReportRow(previewRows[^1]))
+    {
+        previewRows.RemoveAt(previewRows.Count - 1);
+    }
 }
+
+<style>
+    .eod-report-table {
+        table-layout: fixed;
+        width: 100%;
+        font-size: 0.92rem;
+    }
+
+    .eod-report-table td {
+        border: 1px solid #dee2e6;
+        padding: 0.45rem 0.55rem;
+        vertical-align: middle;
+        word-break: break-word;
+    }
+
+    .eod-report-table .report-title-row td {
+        border-color: transparent;
+        font-weight: 700;
+        text-align: center;
+    }
+
+    .eod-report-table .report-section-row td {
+        background-color: #2980b9;
+        color: #fff;
+        font-weight: 700;
+    }
+
+    .eod-report-table .report-header-row td {
+        background-color: #2980b9;
+        color: #fff;
+        font-weight: 700;
+        text-align: center;
+    }
+
+    .eod-report-table .report-total-row td {
+        background-color: #e9ecef;
+        font-weight: 700;
+    }
+</style>
 
 <div class="card shadow-lg p-4 mb-4">
     <div class="border-bottom pb-2 mb-3 text-center">
@@ -107,7 +195,7 @@
             <input type="date"
                    name="reportDate"
                    class="form-control"
-                   value="@Model.ReportDate.ToString("yyyy-MM-dd")"
+                   value="@selectedReportDate.ToString("yyyy-MM-dd")"
                    required />
         </div>
 
@@ -116,7 +204,7 @@
             <input type="number"
                    name="shiftId"
                    class="form-control"
-                   value="@(Model.ShiftId?.ToString() ?? "")"
+                   value="@(selectedShiftId?.ToString() ?? "")"
                    placeholder="Optional" />
         </div>
 
@@ -125,293 +213,45 @@
         </div>
     </form>
 
-    <div class="mb-4 small">
-        <div><strong>Month:</strong> @monthLabel</div>
-        <div><strong>Start Date and Time:</strong> @Model.StartDate.ToString("dd/MM/yyyy HH:mm")</div>
-        <div><strong>End Date and Time:</strong> @Model.EndDate.ToString("dd/MM/yyyy HH:mm")</div>
-        <div><strong>Operational Day:</strong> @(report.IsOperationalDay ? "Yes" : "No") @operationalDayLabel</div>
-        <div><strong>Operational Shift:</strong> @shiftName</div>
-    </div>
+    @if (previewRows.Any())
+    {
+        <div class="table-responsive">
+            <table id="eodReportTable" class="table table-bordered eod-report-table align-middle">
+                <tbody>
+                    @foreach (var row in previewRows)
+                    {
+                        <tr class="@CssForRow(row)">
+                            <td>@CellText(row.Col1)</td>
+                            <td>@CellText(row.Col2)</td>
+                            <td>@CellText(row.Col3)</td>
+                            <td>@CellText(row.Col4)</td>
+                            <td>@CellText(row.Col5)</td>
+                            <td>@CellText(row.Col6)</td>
+                            <td>@CellText(row.Col7)</td>
+                            <td>@CellText(row.Col8)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    else
+    {
+        <div class="alert alert-warning mb-0">
+            No End Of Day data found for the selected date and shift.
+        </div>
+    }
 
-    <h5 class="fw-bold text-secondary mt-4 mb-2">THEORETICAL INCOME</h5>
-    <div class="table-responsive">
-        <table class="table table-bordered align-middle text-end">
-            <thead class="table-light text-center">
-                <tr>
-                    <th class="text-start">Metric</th>
-                    <th>Class M</th>
-                    <th>Class 1</th>
-                    <th>Class 2</th>
-                    <th>Class 3</th>
-                    <th>Class 4</th>
-                    <th>Class D</th>
-                    <th>Total</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td class="fw-semibold text-start">Traffic</td>
-                    <td>@F(traffic?.ClassM ?? 0)</td>
-                    <td>@F(traffic?.Class1 ?? 0)</td>
-                    <td>@F(traffic?.Class2 ?? 0)</td>
-                    <td>@F(traffic?.Class3 ?? 0)</td>
-                    <td>@F(traffic?.Class4 ?? 0)</td>
-                    <td>@F(traffic?.ClassD ?? 0)</td>
-                    <td>@F(traffic?.Total ?? 0)</td>
-                </tr>
-
-                <tr>
-                    <td class="fw-semibold text-start">Nominal Tariff</td>
-                    <td>@F(nominal?.ClassM ?? 0)</td>
-                    <td>@F(nominal?.Class1 ?? 0)</td>
-                    <td>@F(nominal?.Class2 ?? 0)</td>
-                    <td>@F(nominal?.Class3 ?? 0)</td>
-                    <td>@F(nominal?.Class4 ?? 0)</td>
-                    <td>@F(nominal?.ClassD ?? 0)</td>
-                    <td></td>
-                </tr>
-
-                <tr class="fw-bold">
-                    <td class="text-start"><em>Traffic x Nominal Tariff</em></td>
-                    <td>@F(trafficNominal?.ClassM ?? 0)</td>
-                    <td>@F(trafficNominal?.Class1 ?? 0)</td>
-                    <td>@F(trafficNominal?.Class2 ?? 0)</td>
-                    <td>@F(trafficNominal?.Class3 ?? 0)</td>
-                    <td>@F(trafficNominal?.Class4 ?? 0)</td>
-                    <td>@F(trafficNominal?.ClassD ?? 0)</td>
-                    <td>@F(trafficNominal?.Total ?? 0)</td>
-                </tr>
-
-                <tr>
-                    <td class="fw-semibold text-start">Cash Penalty</td>
-                    <td>@F(penalty?.ClassM ?? 0)</td>
-                    <td>@F(penalty?.Class1 ?? 0)</td>
-                    <td>@F(penalty?.Class2 ?? 0)</td>
-                    <td>@F(penalty?.Class3 ?? 0)</td>
-                    <td>@F(penalty?.Class4 ?? 0)</td>
-                    <td>@F(penalty?.ClassD ?? 0)</td>
-                    <td>@F(penalty?.Total ?? 0)</td>
-                </tr>
-
-                <tr class="fw-bold table-light">
-                    <td class="text-start">TOTAL THEORETICAL INCOME</td>
-                    <td colspan="6"></td>
-                    <td>@F(totalTheo)</td>
-                </tr>
-
-                <tr>
-                    <td class="fw-semibold text-start">LESS: EXEMPTS</td>
-                    <td>@F(exempts.ClassM)</td>
-                    <td>@F(exempts.Class1)</td>
-                    <td>@F(exempts.Class2)</td>
-                    <td>@F(exempts.Class3)</td>
-                    <td>@F(exempts.Class4)</td>
-                    <td>@F(exempts.ClassD)</td>
-                    <td>@F(exemptsTotal)</td>
-                </tr>
-
-                <tr class="table-light fw-bold">
-                    <td colspan="8" class="text-start">LESS: DISCOUNT</td>
-                </tr>
-
-                <tr>
-                    <td class="text-start">Anonymous 5%</td>
-                    <td>@F(discounts.Anonymous5.ClassM)</td>
-                    <td>@F(discounts.Anonymous5.Class1)</td>
-                    <td>@F(discounts.Anonymous5.Class2)</td>
-                    <td>@F(discounts.Anonymous5.Class3)</td>
-                    <td>@F(discounts.Anonymous5.Class4)</td>
-                    <td>@F(discounts.Anonymous5.ClassD)</td>
-                    <td>@F(-anonTotal)</td>
-                </tr>
-
-                <tr>
-                    <td class="text-start">Individual 10%</td>
-                    <td>@F(discounts.Individual10.ClassM)</td>
-                    <td>@F(discounts.Individual10.Class1)</td>
-                    <td>@F(discounts.Individual10.Class2)</td>
-                    <td>@F(discounts.Individual10.Class3)</td>
-                    <td>@F(discounts.Individual10.Class4)</td>
-                    <td>@F(discounts.Individual10.ClassD)</td>
-                    <td>@F(-indivTotal)</td>
-                </tr>
-
-                <tr>
-                    <td class="text-start">Corporate 10%</td>
-                    <td>@F(discounts.Corporate10.ClassM)</td>
-                    <td>@F(discounts.Corporate10.Class1)</td>
-                    <td>@F(discounts.Corporate10.Class2)</td>
-                    <td>@F(discounts.Corporate10.Class3)</td>
-                    <td>@F(discounts.Corporate10.Class4)</td>
-                    <td>@F(discounts.Corporate10.ClassD)</td>
-                    <td>@F(-corpTotal)</td>
-                </tr>
-
-                <tr>
-                    <td class="text-start">Staff 100%</td>
-                    <td>@F(discounts.Staff100.ClassM)</td>
-                    <td>@F(discounts.Staff100.Class1)</td>
-                    <td>@F(discounts.Staff100.Class2)</td>
-                    <td>@F(discounts.Staff100.Class3)</td>
-                    <td>@F(discounts.Staff100.Class4)</td>
-                    <td>@F(discounts.Staff100.ClassD)</td>
-                    <td>@F(-staffTotal)</td>
-                </tr>
-
-                <tr class="fw-bold">
-                    <td class="text-start">Discount Provided</td>
-                    <td colspan="6"></td>
-                    <td>@F(-providedTotal)</td>
-                </tr>
-
-                <tr class="fw-bold table-light">
-                    <td class="text-start">TOTAL DISCOUNTED INCOME</td>
-                    <td colspan="6"></td>
-                    <td>@F(totalDiscountedIncome)</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-
-    <h5 class="fw-bold text-secondary mt-4 mb-2">OTHER INCOME</h5>
-    <div class="table-responsive">
-        <table class="table table-bordered align-middle text-end">
-            <tbody>
-                <tr class="fw-bold table-light">
-                    <td class="text-start">OTHER INCOME</td>
-                    <td>@F(other.TotalOtherIncome)</td>
-                </tr>
-
-                <tr>
-                    <td class="text-start">Account Payments (Top-up)</td>
-                    <td>@F(other.AccountPaymentsTopUp > 0 ? other.AccountPaymentsTopUp : other.TotalTopupAmount)</td>
-                </tr>
-
-                <tr><td class="text-start ps-4">Cash</td><td>@F(other.CashTopupAmount)</td></tr>
-                <tr><td class="text-start ps-4">Switch</td><td>@F(other.SwitchTopupAmount)</td></tr>
-                <tr><td class="text-start ps-4">Digital (EFT)</td><td>@F(other.DigitalTopupAmount)</td></tr>
-                <tr><td class="text-start">Cash Declared Surplus</td><td>@F(other.CashDeclaredSurplus != 0 ? other.CashDeclaredSurplus : other.CashSurplusShortage)</td></tr>
-
-                <tr class="fw-bold table-light">
-                    <td class="text-start">(A) TOTAL INCOME</td>
-                    <td>@F(totalIncomeA)</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-
-    <h5 class="fw-bold text-secondary mt-4 mb-2">Accounted for as follows:</h5>
-    <div class="table-responsive">
-        <table class="table table-bordered align-middle text-end">
-            <tbody>
-                <tr><td class="text-start">Cash Declared</td><td>@F(recon.CashDeclared)</td></tr>
-                <tr><td class="text-start">Cash Banked</td><td>@F(recon.CashBanked)</td></tr>
-                <tr><td class="text-start">Cash Banked (Surplus) Shortage</td><td>@F(recon.CashBankedSurplusShortage)</td></tr>
-                <tr><td class="text-start">Switch</td><td>@F(recon.SwitchAmount)</td></tr>
-                <tr><td class="text-start">Digital</td><td>@F(recon.DigitalAmount)</td></tr>
-
-                <tr class="fw-bold table-light">
-                    <td class="text-start">Pre-Paid Account Transactions</td>
-                    <td>@F(recon.PrePaidTotal)</td>
-                </tr>
-
-                <tr><td class="text-start ps-4">Smart Card</td><td>@F(recon.SmartCardAmount)</td></tr>
-                <tr><td class="text-start ps-4">ETC TAG</td><td>@F(recon.ETCTagAmount)</td></tr>
-
-                <tr class="fw-bold table-light">
-                    <td class="text-start">Other Lane Transactions</td>
-                    <td>@F(recon.OtherLaneTotal)</td>
-                </tr>
-
-                <tr><td class="text-start ps-4">Violation</td><td>@F(recon.ViolationAmount)</td></tr>
-                <tr><td class="text-start ps-4">Exemptions</td><td>@F(recon.ExemptionsAmount)</td></tr>
-
-                <tr><td class="text-start">Collector Debt</td><td>@F(recon.CollectorDebt)</td></tr>
-                <tr><td class="text-start">Cash Declared Shortages</td><td>@F(recon.CashShortages)</td></tr>
-
-                <tr class="fw-bold table-light">
-                    <td class="text-start">(B) TOTAL ACCOUNTED FOR</td>
-                    <td>@F(totalAccountedB)</td>
-                </tr>
-
-                <tr class="fw-bold">
-                    <td class="text-start">UN-RECONCILED DISCREPANCY</td>
-                    <td>@F(unreconciled)</td>
-                </tr>
-            </tbody>
-        </table>
-
-        <table id="eodExportTableTheo" class="d-none">
-            <thead>
-                <tr>
-                    <th>Metric</th>
-                    <th>Class M</th>
-                    <th>Class 1</th>
-                    <th>Class 2</th>
-                    <th>Class 3</th>
-                    <th>Class 4</th>
-                    <th>Class D</th>
-                    <th>Total</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr><td>Traffic</td><td>@F(traffic?.ClassM ?? 0)</td><td>@F(traffic?.Class1 ?? 0)</td><td>@F(traffic?.Class2 ?? 0)</td><td>@F(traffic?.Class3 ?? 0)</td><td>@F(traffic?.Class4 ?? 0)</td><td>@F(traffic?.ClassD ?? 0)</td><td>@F(traffic?.Total ?? 0)</td></tr>
-                <tr><td>Nominal Tariff</td><td>@F(nominal?.ClassM ?? 0)</td><td>@F(nominal?.Class1 ?? 0)</td><td>@F(nominal?.Class2 ?? 0)</td><td>@F(nominal?.Class3 ?? 0)</td><td>@F(nominal?.Class4 ?? 0)</td><td>@F(nominal?.ClassD ?? 0)</td><td></td></tr>
-                <tr><td>Traffic x Nominal Tariff</td><td>@F(trafficNominal?.ClassM ?? 0)</td><td>@F(trafficNominal?.Class1 ?? 0)</td><td>@F(trafficNominal?.Class2 ?? 0)</td><td>@F(trafficNominal?.Class3 ?? 0)</td><td>@F(trafficNominal?.Class4 ?? 0)</td><td>@F(trafficNominal?.ClassD ?? 0)</td><td>@F(trafficNominal?.Total ?? 0)</td></tr>
-                <tr><td>Cash Penalty</td><td>@F(penalty?.ClassM ?? 0)</td><td>@F(penalty?.Class1 ?? 0)</td><td>@F(penalty?.Class2 ?? 0)</td><td>@F(penalty?.Class3 ?? 0)</td><td>@F(penalty?.Class4 ?? 0)</td><td>@F(penalty?.ClassD ?? 0)</td><td>@F(penalty?.Total ?? 0)</td></tr>
-                <tr><td><b>Total Theoretical Income</b></td><td colspan="6"></td><td>@F(totalTheo)</td></tr>
-                <tr><td>Exempts</td><td>@F(exempts.ClassM)</td><td>@F(exempts.Class1)</td><td>@F(exempts.Class2)</td><td>@F(exempts.Class3)</td><td>@F(exempts.Class4)</td><td>@F(exempts.ClassD)</td><td>@F(exemptsTotal)</td></tr>
-                <tr><td>Anonymous 5%</td><td>@F(discounts.Anonymous5.ClassM)</td><td>@F(discounts.Anonymous5.Class1)</td><td>@F(discounts.Anonymous5.Class2)</td><td>@F(discounts.Anonymous5.Class3)</td><td>@F(discounts.Anonymous5.Class4)</td><td>@F(discounts.Anonymous5.ClassD)</td><td>@F(-anonTotal)</td></tr>
-                <tr><td>Individual 10%</td><td>@F(discounts.Individual10.ClassM)</td><td>@F(discounts.Individual10.Class1)</td><td>@F(discounts.Individual10.Class2)</td><td>@F(discounts.Individual10.Class3)</td><td>@F(discounts.Individual10.Class4)</td><td>@F(discounts.Individual10.ClassD)</td><td>@F(-indivTotal)</td></tr>
-                <tr><td>Corporate 10%</td><td>@F(discounts.Corporate10.ClassM)</td><td>@F(discounts.Corporate10.Class1)</td><td>@F(discounts.Corporate10.Class2)</td><td>@F(discounts.Corporate10.Class3)</td><td>@F(discounts.Corporate10.Class4)</td><td>@F(discounts.Corporate10.ClassD)</td><td>@F(-corpTotal)</td></tr>
-                <tr><td>Staff 100%</td><td>@F(discounts.Staff100.ClassM)</td><td>@F(discounts.Staff100.Class1)</td><td>@F(discounts.Staff100.Class2)</td><td>@F(discounts.Staff100.Class3)</td><td>@F(discounts.Staff100.Class4)</td><td>@F(discounts.Staff100.ClassD)</td><td>@F(-staffTotal)</td></tr>
-                <tr><td><b>Total Discounted Income</b></td><td colspan="6"></td><td>@F(totalDiscountedIncome)</td></tr>
-            </tbody>
-        </table>
-
-        <table id="eodExportTableOther" class="d-none">
-            <thead>
-                <tr><th>Metric</th><th>Total</th></tr>
-            </thead>
-            <tbody>
-                <tr><td>Account Payments (Top-up)</td><td>@F(other.AccountPaymentsTopUp > 0 ? other.AccountPaymentsTopUp : other.TotalTopupAmount)</td></tr>
-                <tr><td>Cash</td><td>@F(other.CashTopupAmount)</td></tr>
-                <tr><td>Switch</td><td>@F(other.SwitchTopupAmount)</td></tr>
-                <tr><td>Digital (EFT)</td><td>@F(other.DigitalTopupAmount)</td></tr>
-                <tr><td>Cash Declared Surplus</td><td>@F(other.CashDeclaredSurplus != 0 ? other.CashDeclaredSurplus : other.CashSurplusShortage)</td></tr>
-                <tr><td><b>Total Income (A)</b></td><td>@F(totalIncomeA)</td></tr>
-            </tbody>
-        </table>
-
-        <table id="eodExportTableAccounted" class="d-none">
-            <thead>
-                <tr><th>Metric</th><th>Total</th></tr>
-            </thead>
-            <tbody>
-                <tr><td>Cash Declared</td><td>@F(recon.CashDeclared)</td></tr>
-                <tr><td>Cash Banked</td><td>@F(recon.CashBanked)</td></tr>
-                <tr><td>Cash Banked (Surplus) Shortage</td><td>@F(recon.CashBankedSurplusShortage)</td></tr>
-                <tr><td>Switch</td><td>@F(recon.SwitchAmount)</td></tr>
-                <tr><td>Digital</td><td>@F(recon.DigitalAmount)</td></tr>
-                <tr><td>Prepaid: Smart Card</td><td>@F(recon.SmartCardAmount)</td></tr>
-                <tr><td>Prepaid: ETC Tag</td><td>@F(recon.ETCTagAmount)</td></tr>
-                <tr><td>Violations</td><td>@F(recon.ViolationAmount)</td></tr>
-                <tr><td>Exemptions</td><td>@F(recon.ExemptionsAmount)</td></tr>
-                <tr><td>Collector Debt</td><td>@F(recon.CollectorDebt)</td></tr>
-                <tr><td>Cash Declared Shortages</td><td>@F(recon.CashShortages)</td></tr>
-                <tr><td><b>Total Accounted (B)</b></td><td>@F(totalAccountedB)</td></tr>
-                <tr><td><b>Un-Reconciled Discrepancy</b></td><td>@F(unreconciled)</td></tr>
-            </tbody>
-        </table>
-    </div>
-
-    <div class="mt-4 border-top pt-3">
-        <table class="table table-borderless mb-0">
+    <hr />
+    <div class="mt-4 p-3 border-top">
+        <table class="table table-borderless w-100 mb-0 align-middle">
             <tr>
-                <td><strong>@reportName</strong></td>
-                <td><strong>Date And Time:</strong> @generatedAt</td>
-                <td><strong>User ID:</strong> @userId</td>
-                <td class="text-end"><strong>Page @currentPage of @totalPages</strong></td>
+                <td class="fw-bold text-dark">End of Day Report</td>
+                <td><strong>Date and Time:</strong> @generatedAt</td>
+                <td><strong>User:</strong> @userId</td>
+                <td class="text-end">
+                    Page <strong>1</strong> of <strong>1</strong>
+                </td>
             </tr>
             <tr>
                 <td colspan="4">
@@ -430,237 +270,272 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 
     <script>
-        document.addEventListener("DOMContentLoaded", async () => {
-        const { jsPDF } = window.jspdf;
+        document.addEventListener("DOMContentLoaded", () => {
+            const reportRows = @Html.Raw(JsonSerializer.Serialize(reportRows));
+            const reportName = @Html.Raw(JsonSerializer.Serialize(reportName));
+            const generatedAt = @Html.Raw(JsonSerializer.Serialize(generatedAt));
+            const userId = @Html.Raw(JsonSerializer.Serialize(userId));
+            const version = @Html.Raw(JsonSerializer.Serialize(version));
+            const leftLogoUrl = "/images/LCC Logo.jpg";
+            const rightLogoUrl = "/images/ICT-Works Logo.jpg";
 
-        const REPORT_TITLE = "END OF DAY REPORT";
-        const COMPANY_LINE_1 = "LEKKI CONCESSION COMPANY LIMITED";
-        const COMPANY_LINE_2 = "LEKKI-IKOYI LINK BRIDGE";
+            function getExportRows() {
+                return reportRows.map(row => [
+                    row.Col1 || "",
+                    row.Col2 || "",
+                    row.Col3 || "",
+                    row.Col4 || "",
+                    row.Col5 || "",
+                    row.Col6 || "",
+                    row.Col7 || "",
+                    row.Col8 || ""
+                ]);
+            }
 
-        const GENERATED_AT = "@generatedAt";
-        const USER_ID = "@userId";
-        const REPORT_VERSION = "@version";
+            function isTitleRow(row) {
+                const col1 = String(row[0] || "").trim().toUpperCase();
+                return col1 === "LEKKI CONCESSION COMPANY LIMITED" ||
+                    col1 === "LEKKI-IKOYI LINK BRIDGE" ||
+                    col1 === "END OF DAY REPORT";
+            }
 
-        const MONTH_TEXT = "@monthLabel";
-        const START_TEXT = "@Model.StartDate.ToString("dd/MM/yyyy HH:mm")";
-        const END_TEXT = "@Model.EndDate.ToString("dd/MM/yyyy HH:mm")";
-        const OPERATIONAL_DAY_TEXT = "@((report.IsOperationalDay ? "Yes" : "No") + " " + operationalDayLabel)";
-        const OPERATIONAL_SHIFT_TEXT = "@shiftName";
+            function isStoredProcedureFooterRow(row) {
+                const col1 = String(row[0] || "").trim().toUpperCase();
+                const col2 = String(row[1] || "").trim().toUpperCase();
 
-        const LEFT_LOGO_URL = "/images/LCC Logo.jpg";
-        const RIGHT_LOGO_URL = "/images/ICT-Works Logo.jpg";
+                return col1 === "END OF DAY REPORT" ||
+                    col2 === "USER ID:" ||
+                    col2.includes("REPORTS MODULE VERSION");
+            }
 
-        function getPageWidth(doc) {
-        return doc.internal.pageSize.getWidth();
-        }
+            function isEmptyRow(row) {
+                return row.every(value => String(value || "").trim() === "");
+            }
 
-        function getPageHeight(doc) {
-        return doc.internal.pageSize.getHeight();
-        }
+            function getPdfRows() {
+                const rows = getExportRows()
+                    .filter(row => !isTitleRow(row))
+                    .filter(row => !isStoredProcedureFooterRow(row));
 
-        function loadImage(src) {
-        return new Promise(resolve => {
-        const img = new Image();
-        img.crossOrigin = "Anonymous";
-        img.onload = () => resolve(img);
-        img.onerror = () => resolve(null);
-        img.src = src;
-        });
-        }
+                while (rows.length > 0 && isEmptyRow(rows[0])) {
+                    rows.shift();
+                }
 
-        function drawPdfHeader(doc, margin, leftLogo, rightLogo) {
-        const pageWidth = getPageWidth(doc);
+                while (rows.length > 0 && isEmptyRow(rows[rows.length - 1])) {
+                    rows.pop();
+                }
 
-        if (leftLogo) doc.addImage(leftLogo, "JPEG", margin, 20, 70, 70);
-        if (rightLogo) doc.addImage(rightLogo, "JPEG", pageWidth - margin - 70, 20, 70, 70);
+                return rows;
+            }
 
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(14);
-        doc.text(COMPANY_LINE_1, pageWidth / 2, 40, { align: "center" });
+            function isSectionRow(row) {
+                const col1 = String(row[0] || "").trim().toUpperCase();
+                return col1 === "THEORETICAL INCOME" ||
+                    col1 === "LESS: EXEMPTS" ||
+                    col1 === "LESS: DISCOUNT" ||
+                    col1 === "OTHER INCOME" ||
+                    col1 === "ACCOUNTED FOR AS FOLLOWS:";
+            }
 
-        doc.setFontSize(12);
-        doc.text(COMPANY_LINE_2, pageWidth / 2, 60, { align: "center" });
+            function isHeaderRow(row) {
+                return String(row[1] || "").trim().toUpperCase() === "CLASS M";
+            }
 
-        doc.setFontSize(13);
-        doc.text(REPORT_TITLE, pageWidth / 2, 80, { align: "center" });
+            function isTotalRow(row) {
+                const col1 = String(row[0] || "").trim().toUpperCase();
+                return col1.startsWith("TOTAL") ||
+                    col1.startsWith("(A)") ||
+                    col1.startsWith("(B)") ||
+                    col1.startsWith("UN-RECONCILED") ||
+                    col1 === "DISCOUNT PROVIDED";
+            }
 
-        return 110;
-        }
+            function loadImage(src) {
+                return new Promise(resolve => {
+                    const img = new Image();
+                    img.crossOrigin = "Anonymous";
+                    img.onload = () => resolve(img);
+                    img.onerror = () => resolve(null);
+                    img.src = src;
+                });
+            }
 
-        function drawPdfMetadata(doc, margin, startY) {
-        let y = startY;
+            function drawPdfHeader(doc, pageWidth, margin, leftLogo, rightLogo) {
+                const topY = 25;
 
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(10);
+                if (leftLogo) {
+                    doc.addImage(leftLogo, "JPEG", margin, topY, 80, 80);
+                }
 
-        const lines = [
-        `Month: ${MONTH_TEXT}`,
-        `Start Date and Time: ${START_TEXT}`,
-        `End Date and Time: ${END_TEXT}`,
-        `Operational Day: ${OPERATIONAL_DAY_TEXT}`,
-        `Operational Shift: ${OPERATIONAL_SHIFT_TEXT}`
-        ];
+                if (rightLogo) {
+                    doc.addImage(rightLogo, "JPEG", pageWidth - margin - 80, topY, 80, 80);
+                }
 
-        lines.forEach(line => {
-        doc.text(line, margin, y);
-        y += 15;
-        });
+                let y = 60;
 
-        return y + 5;
-        }
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(14);
+                doc.text("LEKKI CONCESSION COMPANY LIMITED", pageWidth / 2, y, { align: "center" });
 
-        function drawSectionTitle(doc, title, margin, y) {
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(11);
-        doc.text(title, margin, y);
-        return y + 10;
-        }
+                y += 18;
+                doc.setFontSize(12);
+                doc.text("LEKKI-IKOYI LINK BRIDGE", pageWidth / 2, y, { align: "center" });
 
-        function addPdfFooter(doc, margin) {
-        const pageWidth = getPageWidth(doc);
-        const pageHeight = getPageHeight(doc);
-        const totalPages = doc.internal.getNumberOfPages();
+                y += 26;
+                doc.setFontSize(16);
+                doc.text(reportName, pageWidth / 2, y, { align: "center" });
 
-        for (let i = 1; i <= totalPages; i++) {
-        doc.setPage(i);
+                return y + 35;
+            }
 
-        const footerTopY = pageHeight - 32;
-        const footerBottomY = pageHeight - 18;
+            function addPdfFooter(doc, pageWidth, pageHeight, margin) {
+                const totalPages = doc.getNumberOfPages();
 
-        doc.setDrawColor(180);
-        doc.line(margin, pageHeight - 42, pageWidth - margin, pageHeight - 42);
+                for (let i = 1; i <= totalPages; i++) {
+                    doc.setPage(i);
 
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(9);
+                    const footerY = pageHeight - 30;
 
-        doc.text(REPORT_TITLE, margin, footerTopY);
-        doc.text(`Date And Time: ${GENERATED_AT}`, pageWidth / 2, footerTopY, { align: "center" });
-        doc.text(`Page ${i} of ${totalPages}`, pageWidth - margin, footerTopY, { align: "right" });
+                    doc.setDrawColor(180);
+                    doc.line(margin, footerY - 14, pageWidth - margin, footerY - 14);
 
-        doc.text(`User ID: ${USER_ID}`, margin, footerBottomY);
-        doc.text(`Reports Module Version Number: ${REPORT_VERSION}`, pageWidth - margin, footerBottomY, { align: "right" });
-        }
-        }
+                    doc.setFont("helvetica", "normal");
+                    doc.setFontSize(10);
 
-        async function exportPdf() {
-        const doc = new jsPDF("p", "pt", "a4");
-        const margin = 40;
+                    doc.text("End of Day Report", margin, footerY);
+                    doc.text(`Date and Time: ${generatedAt}`, pageWidth / 2.25, footerY);
+                    doc.text(`User: ${userId}`, pageWidth / 1.5, footerY);
+                    doc.text(`Page ${i} of ${totalPages}`, pageWidth - margin, footerY, { align: "right" });
 
-        const [logoLeft, logoRight] = await Promise.all([
-        loadImage(LEFT_LOGO_URL),
-        loadImage(RIGHT_LOGO_URL)
-        ]);
+                    doc.setFontSize(9);
+                    doc.text(`Reports Module Version Number: ${version}`, margin, footerY + 14);
+                }
+            }
 
-        let y = drawPdfHeader(doc, margin, logoLeft, logoRight);
-        y = drawPdfMetadata(doc, margin, y);
+            function exportExcel() {
+                if (!reportRows.length) {
+                    alert("No data to export.");
+                    return;
+                }
 
-        y = drawSectionTitle(doc, "THEORETICAL INCOME", margin, y);
-        doc.autoTable({
-        startY: y,
-        html: "#eodExportTableTheo",
-        theme: "grid",
-        styles: { fontSize: 9, halign: "right", cellPadding: 4 },
-        headStyles: { fillColor: [41, 128, 185], textColor: 255, halign: "center" },
-        margin: { left: margin, right: margin, bottom: 55 }
-        });
+                const workbook = XLSX.utils.book_new();
+                const worksheet = XLSX.utils.aoa_to_sheet(getExportRows());
 
-        y = doc.lastAutoTable.finalY + 25;
-        y = drawSectionTitle(doc, "OTHER INCOME", margin, y);
-        doc.autoTable({
-        startY: y,
-        html: "#eodExportTableOther",
-        theme: "grid",
-        styles: { fontSize: 9, halign: "right", cellPadding: 4 },
-        headStyles: { fillColor: [41, 128, 185], textColor: 255, halign: "center" },
-        margin: { left: margin, right: margin, bottom: 55 }
-        });
+                worksheet["!cols"] = [
+                    { wch: 42 },
+                    { wch: 18 },
+                    { wch: 18 },
+                    { wch: 14 },
+                    { wch: 14 },
+                    { wch: 14 },
+                    { wch: 14 },
+                    { wch: 16 }
+                ];
 
-        y = doc.lastAutoTable.finalY + 25;
-        y = drawSectionTitle(doc, "ACCOUNTED FOR AS FOLLOWS", margin, y);
-        doc.autoTable({
-        startY: y,
-        html: "#eodExportTableAccounted",
-        theme: "grid",
-        styles: { fontSize: 9, halign: "right", cellPadding: 4 },
-        headStyles: { fillColor: [41, 128, 185], textColor: 255, halign: "center" },
-        margin: { left: margin, right: margin, bottom: 55 }
-        });
+                XLSX.utils.book_append_sheet(workbook, worksheet, "EndOfDay");
+                XLSX.writeFile(workbook, "EndOfDayReport.xlsx");
+            }
 
-        addPdfFooter(doc, margin);
-        doc.save("EndOfDayReport.pdf");
-        }
+            async function exportPdf() {
+                const pdfRows = getPdfRows();
 
-        function getTableRows(selector) {
-        return Array.from(document.querySelectorAll(`${selector} tbody tr`))
-        .map(row => Array.from(row.children).map(cell => cell.innerText.trim()));
-        }
+                if (!pdfRows.length) {
+                    alert("No data to export.");
+                    return;
+                }
 
-        function exportExcel() {
-        const wb = XLSX.utils.book_new();
-        const wsData = [];
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF({
+                    orientation: "landscape",
+                    unit: "pt",
+                    format: "a4"
+                });
 
-        wsData.push([COMPANY_LINE_1]);
-        wsData.push([COMPANY_LINE_2]);
-        wsData.push([REPORT_TITLE]);
-        wsData.push([]);
-        wsData.push([`Month: ${MONTH_TEXT}`]);
-        wsData.push([`Start Date and Time: ${START_TEXT}`]);
-        wsData.push([`End Date and Time: ${END_TEXT}`]);
-        wsData.push([`Operational Day: ${OPERATIONAL_DAY_TEXT}`]);
-        wsData.push([`Operational Shift: ${OPERATIONAL_SHIFT_TEXT}`]);
-        wsData.push([]);
-        wsData.push([]);
+                const pageWidth = doc.internal.pageSize.getWidth();
+                const pageHeight = doc.internal.pageSize.getHeight();
+                const margin = 40;
 
-        wsData.push(["THEORETICAL INCOME"]);
-        wsData.push(["Metric", "Class M", "Class 1", "Class 2", "Class 3", "Class 4", "Class D", "Total"]);
-        getTableRows("#eodExportTableTheo").forEach(row => wsData.push(row));
+                const [leftLogo, rightLogo] = await Promise.all([
+                    loadImage(leftLogoUrl),
+                    loadImage(rightLogoUrl)
+                ]);
 
-        wsData.push([]);
-        wsData.push([]);
+                const tableStartY = drawPdfHeader(doc, pageWidth, margin, leftLogo, rightLogo);
 
-        wsData.push(["OTHER INCOME"]);
-        wsData.push(["Metric", "Total"]);
-        getTableRows("#eodExportTableOther").forEach(row => wsData.push(row));
+                doc.autoTable({
+                    body: pdfRows,
+                    startY: tableStartY,
+                    theme: "grid",
+                    styles: {
+                        fontSize: 8,
+                        cellPadding: 4,
+                        textColor: [0, 0, 0],
+                        lineColor: [190, 190, 190],
+                        lineWidth: 0.4
+                    },
+                    columnStyles: {
+                        0: { cellWidth: 205 },
+                        1: { cellWidth: 90 },
+                        2: { cellWidth: 90 },
+                        3: { cellWidth: 75 },
+                        4: { cellWidth: 75 },
+                        5: { cellWidth: 75 },
+                        6: { cellWidth: 75 },
+                        7: { cellWidth: 85 }
+                    },
+                    margin: {
+                        left: margin,
+                        right: margin,
+                        bottom: 60
+                    },
+                    didParseCell: function (data) {
+                        const row = data.row.raw || [];
 
-        wsData.push([]);
-        wsData.push([]);
+                        if (isTitleRow(row)) {
+                            data.cell.styles.fontStyle = "bold";
+                            data.cell.styles.halign = "center";
+                            data.cell.styles.lineColor = [255, 255, 255];
+                        }
 
-        wsData.push(["ACCOUNTED FOR AS FOLLOWS"]);
-        wsData.push(["Metric", "Total"]);
-        getTableRows("#eodExportTableAccounted").forEach(row => wsData.push(row));
+                        if (isSectionRow(row) || isHeaderRow(row)) {
+                            data.cell.styles.fontStyle = "bold";
+                            data.cell.styles.fillColor = [41, 128, 185];
+                            data.cell.styles.textColor = [255, 255, 255];
+                        }
 
-        wsData.push([]);
-        wsData.push(["Date and Time:", GENERATED_AT]);
-        wsData.push(["User ID:", USER_ID]);
-        wsData.push(["Reports Module Version Number:", REPORT_VERSION]);
+                        if (isHeaderRow(row)) {
+                            data.cell.styles.halign = "center";
+                        }
 
-        const sheet = XLSX.utils.aoa_to_sheet(wsData);
-        sheet["!cols"] = [
-        { wch: 35 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
-        { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 16 }
-        ];
+                        if (isTotalRow(row)) {
+                            data.cell.styles.fontStyle = "bold";
+                            data.cell.styles.fillColor = [230, 230, 230];
+                            data.cell.styles.textColor = [0, 0, 0];
+                        }
+                    }
+                });
 
-        XLSX.utils.book_append_sheet(wb, sheet, "EndOfDay");
-        XLSX.writeFile(wb, "EndOfDayReport.xlsx");
-        }
+                addPdfFooter(doc, pageWidth, pageHeight, margin);
+                doc.save("EndOfDayReport.pdf");
+            }
 
-        document.getElementById("btnDownloadPdf")?.addEventListener("click", async () => {
-        try {
-        await exportPdf();
-        } catch (error) {
-        console.error("PDF export failed:", error);
-        alert("Failed to export PDF.");
-        }
-        });
+            document.getElementById("btnDownloadExcel")?.addEventListener("click", () => {
+                try {
+                    exportExcel();
+                } catch (error) {
+                    console.error("Excel export failed:", error);
+                    alert("Failed to export Excel.");
+                }
+            });
 
-        document.getElementById("btnDownloadExcel")?.addEventListener("click", () => {
-        try {
-        exportExcel();
-        } catch (error) {
-        console.error("Excel export failed:", error);
-        alert("Failed to export Excel.");
-        }
-        });
+            document.getElementById("btnDownloadPdf")?.addEventListener("click", async () => {
+                try {
+                    await exportPdf();
+                } catch (error) {
+                    console.error("PDF export failed:", error);
+                    alert("Failed to export PDF.");
+                }
+            });
         });
     </script>
 }

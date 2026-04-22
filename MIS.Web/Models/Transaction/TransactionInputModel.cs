@@ -13,11 +13,13 @@ namespace MIS.Web.Models
         public List<string> SelectedTollOperators { get; set; } = new();
         public List<string> SelectedLanes { get; set; } = new();
         public List<string> SelectedPaymentMethods { get; set; } = new();
+        public List<string> SelectedTollCollectorClasses { get; set; } = new();
 
         public List<string> PaymentMethods { get; set; } = new();
         public List<string> Shifts { get; set; } = new();
         public List<string> TollOperators { get; set; } = new();
         public List<string> Lanes { get; set; } = new();
+        public List<string> TollCollectorClasses { get; set; } = new();
 
         // Totals & export
         public double TotalTariff { get; set; }

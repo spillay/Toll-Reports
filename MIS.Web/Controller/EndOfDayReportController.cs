@@ -20,8 +20,8 @@ namespace MIS.Web.Controllers
         {
             var selectedDate = reportDate?.Date ?? DateTime.Today;
 
-            var startDate = selectedDate.AddHours(5).AddMinutes(30);
-            var endDate = selectedDate.AddDays(1).AddHours(5).AddMinutes(29);
+            var startDate = selectedDate;
+            var endDate = selectedDate;
 
             var model = new PageEndOfDayModel
             {

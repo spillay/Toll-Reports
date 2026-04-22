@@ -1,10 +1,7 @@
 ﻿using MIS.Web.Models.Traffic.Monthly;
 using Newtonsoft.Json;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net.Http;
-using System.Threading.Tasks;
+using System.Net.Http.Headers;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 
 namespace MIS.Web.Services
@@ -13,11 +10,16 @@ namespace MIS.Web.Services
     {
         private readonly HttpClient _httpClient;
         private readonly IConfiguration _configuration;
+        private readonly IHttpContextAccessor _httpContextAccessor;
 
-        public MonthlyTrafficReportService(HttpClient httpClient, IConfiguration configuration)
+        public MonthlyTrafficReportService(
+            HttpClient httpClient,
+            IConfiguration configuration,
+            IHttpContextAccessor httpContextAccessor)
         {
             _httpClient = httpClient;
             _configuration = configuration;
+            _httpContextAccessor = httpContextAccessor;
         }
 
         private static string CombineUrl(string baseUrl, string endpoint)
@@ -39,8 +41,7 @@ namespace MIS.Web.Services
             if (year.HasValue) queryParams.Add($"year={year.Value}");
             if (month.HasValue) queryParams.Add($"month={month.Value}");
 
-            // Always send it (keeps API behavior consistent)
-            var op = (operationalMonth ?? false);
+            var op = operationalMonth ?? false;
             queryParams.Add($"operationalMonth={op.ToString().ToLower()}");
 
             if (classifications?.Any() == true)
@@ -48,19 +49,20 @@ namespace MIS.Web.Services
                 queryParams.Add($"classification={Uri.EscapeDataString(string.Join(",", classifications))}");
             }
 
-            //  Only include shifts when operational month is on
             if (op && shifts?.Any() == true)
             {
                 queryParams.Add($"shifts={Uri.EscapeDataString(string.Join(",", shifts))}");
             }
 
             string baseUrl = _configuration["BaseApiUrl:Link"];
-            string endpoint = _configuration["ApiSettings:MonthlyTrafficEndpoint"]; // "api/MonthlyTraffic"
+            string endpoint = _configuration["ApiSettings:MonthlyTrafficEndpoint"];
             string url = $"{CombineUrl(baseUrl, endpoint)}?{string.Join("&", queryParams)}";
 
             try
             {
-                var response = await _httpClient.GetAsync(url);
+                using var request = CreateAuthorizedGetRequest(url);
+                using var response = await _httpClient.SendAsync(request);
+
                 if (!response.IsSuccessStatusCode)
                     return CreateEmptyModel(year, month, op, classifications, shifts);
 
@@ -89,13 +91,16 @@ namespace MIS.Web.Services
         public async Task<List<int>> GetAvailableYearsAsync()
         {
             string baseUrl = _configuration["BaseApiUrl:Link"];
-            string endpoint = _configuration["ApiSettings:MonthlyTrafficEndpoint"]; // "api/MonthlyTraffic"
+            string endpoint = _configuration["ApiSettings:MonthlyTrafficEndpoint"];
             string url = CombineUrl(baseUrl, $"{endpoint}/years");
 
             try
             {
-                var response = await _httpClient.GetAsync(url);
-                if (!response.IsSuccessStatusCode) return new List<int>();
+                using var request = CreateAuthorizedGetRequest(url);
+                using var response = await _httpClient.SendAsync(request);
+
+                if (!response.IsSuccessStatusCode)
+                    return new List<int>();
 
                 var json = await response.Content.ReadAsStringAsync();
                 return JsonConvert.DeserializeObject<List<int>>(json) ?? new List<int>();
@@ -114,8 +119,11 @@ namespace MIS.Web.Services
 
             try
             {
-                var response = await _httpClient.GetAsync(url);
-                if (!response.IsSuccessStatusCode) return new List<int>();
+                using var request = CreateAuthorizedGetRequest(url);
+                using var response = await _httpClient.SendAsync(request);
+
+                if (!response.IsSuccessStatusCode)
+                    return new List<int>();
 
                 var json = await response.Content.ReadAsStringAsync();
                 return JsonConvert.DeserializeObject<List<int>>(json) ?? new List<int>();
@@ -134,8 +142,11 @@ namespace MIS.Web.Services
 
             try
             {
-                var response = await _httpClient.GetAsync(url);
-                if (!response.IsSuccessStatusCode) return new List<string>();
+                using var request = CreateAuthorizedGetRequest(url);
+                using var response = await _httpClient.SendAsync(request);
+
+                if (!response.IsSuccessStatusCode)
+                    return new List<string>();
 
                 var json = await response.Content.ReadAsStringAsync();
                 return JsonConvert.DeserializeObject<List<string>>(json) ?? new List<string>();
@@ -144,6 +155,23 @@ namespace MIS.Web.Services
             {
                 return new List<string>();
             }
+        }
+
+        private HttpRequestMessage CreateAuthorizedGetRequest(string url)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            AddBearerToken(request);
+            return request;
+        }
+
+        private void AddBearerToken(HttpRequestMessage request)
+        {
+            var token = _httpContextAccessor.HttpContext?.User?.FindFirst("access_token")?.Value;
+
+            if (string.IsNullOrWhiteSpace(token))
+                throw new UnauthorizedAccessException("No JWT token found for current user.");
+
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         }
 
         private PageMonthlyTrafficModel CreateEmptyModel(
@@ -164,7 +192,7 @@ namespace MIS.Web.Services
                     Classifications = classifications ?? new List<string>(),
                     Shifts = shifts ?? new List<int>()
                 },
-                AvailableClassifications = new List<string>() // controller/view can still populate
+                AvailableClassifications = new List<string>()
             };
         }
     }

@@ -2,7 +2,9 @@
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using MIS.Web.Models.LoginResponse;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System.Security.Claims;
 using System.Text;
 
@@ -12,16 +14,18 @@ namespace MIS.Web.Controllers
     {
         private readonly HttpClient _httpClient;
         private readonly IConfiguration _config;
+        private readonly ILogger<LoginController> _logger;
 
-        public LoginController(HttpClient httpClient, IConfiguration config)
+        public LoginController(
+            HttpClient httpClient,
+            IConfiguration config,
+            ILogger<LoginController> logger)
         {
             _httpClient = httpClient;
             _config = config;
+            _logger = logger;
         }
 
-        // -----------------------------
-        // GET: /Login/Login
-        // -----------------------------
         [HttpGet]
         public IActionResult Login(string? returnUrl = null)
         {
@@ -29,111 +33,43 @@ namespace MIS.Web.Controllers
             return View("~/Views/Login/Login.cshtml");
         }
 
-        // -----------------------------
-        // POST: /Login/Login
-        // -----------------------------
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Login(string username, string password, string? returnUrl = null)
         {
-            // ✅ basic validation
             username = (username ?? string.Empty).Trim();
-            password = password ?? string.Empty;
+            password ??= string.Empty;
 
             if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
                 return LoginError("Username and password are required.", returnUrl);
 
-            // ✅ build URL safely
-            var baseUrl = _config["BaseApiUrl:Link"]?.TrimEnd('/');
-            var endpoint = _config["ApiSettings:AuthLoginEndpoint"]?.Trim();
-
-            if (string.IsNullOrWhiteSpace(baseUrl) || string.IsNullOrWhiteSpace(endpoint))
+            var loginUrl = BuildLoginUrl();
+            if (string.IsNullOrWhiteSpace(loginUrl))
                 return LoginError("Login service is not configured correctly (missing BaseApiUrl/Auth endpoint).", returnUrl);
 
-            // Ensure endpoint starts with /
-            if (!endpoint.StartsWith("/")) endpoint = "/" + endpoint;
+            var result = await CallLoginApiAsync(loginUrl, username, password);
 
-            var url = $"{baseUrl}{endpoint}";
+            if (!result.Success)
+                return LoginError(result.ErrorMessage, returnUrl);
 
-            // ✅ IMPORTANT: send lowercase JSON keys (most APIs bind these reliably)
-            var payloadObj = new { username, password };
-            var payload = JsonConvert.SerializeObject(payloadObj);
-            var content = new StringContent(payload, Encoding.UTF8, "application/json");
-
-            HttpResponseMessage response;
-            string rawBody = "";
-
-            try
-            {
-                response = await _httpClient.PostAsync(url, content);
-                rawBody = await response.Content.ReadAsStringAsync();
-            }
-            catch (Exception ex)
-            {
-                // Network / DNS / refused connection etc.
-                return LoginError($"Login service is not reachable. {ex.Message}", returnUrl);
-            }
-
-            // ✅ If API returns non-200, show helpful message
-            if (!response.IsSuccessStatusCode)
-            {
-                // Try extract a message from the API response (if it returns JSON like {message:"..."})
-                var apiMessage = TryReadMessage(rawBody);
-
-                // If none, show generic but include status code for debugging
-                var msg = string.IsNullOrWhiteSpace(apiMessage)
-                    ? $"Invalid username or password. ({(int)response.StatusCode} {response.StatusCode})"
-                    : $"{apiMessage} ({(int)response.StatusCode} {response.StatusCode})";
-
-                return LoginError(msg, returnUrl);
-            }
-
-            // ✅ Parse success response
-            dynamic? data = null;
-            try
-            {
-                data = JsonConvert.DeserializeObject(rawBody);
-            }
-            catch
-            {
-                return LoginError("Login succeeded but returned invalid JSON.", returnUrl);
-            }
-
-            // ✅ Read fields safely (support camelCase & PascalCase)
-            string apiUsername = (string?)data?.username ?? (string?)data?.Username ?? username;
-            string firstName = (string?)data?.firstName ?? (string?)data?.FirstName ?? "";
-            string lastName = (string?)data?.lastName ?? (string?)data?.LastName ?? "";
-
-            // ✅ Create cookie claims
-            var claims = new List<Claim>
-            {
-                new Claim(ClaimTypes.Name, apiUsername ?? ""),
-                new Claim("firstName", firstName ?? ""),
-                new Claim("lastName", lastName ?? "")
-            };
-
-            var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-            var principal = new ClaimsPrincipal(identity);
+            var claims = BuildClaims(result.Data!, username);
+            var principal = CreatePrincipal(claims);
 
             await HttpContext.SignInAsync(
                 CookieAuthenticationDefaults.AuthenticationScheme,
                 principal,
                 new AuthenticationProperties
                 {
-                    IsPersistent = false,  // session cookie
+                    IsPersistent = false,
                     AllowRefresh = true
                 });
 
-            // ✅ redirect back to the report user originally wanted
             if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
                 return Redirect(returnUrl);
 
             return RedirectToAction("Transaction", "Transaction");
         }
 
-        // -----------------------------
-        // POST: /Login/Logout
-        // -----------------------------
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Logout()
@@ -142,17 +78,108 @@ namespace MIS.Web.Controllers
             return RedirectToAction("Login", "Login");
         }
 
-        // -----------------------------
-        // GET: /Login/KeepAlive
-        // Used by JS to keep the session fresh while active
-        // -----------------------------
         [Authorize]
         [HttpGet]
         public IActionResult KeepAlive() => Ok();
 
-        // =============================
-        // Helpers
-        // =============================
+        private string? BuildLoginUrl()
+        {
+            var baseUrl = _config["BaseApiUrl:Link"]?.TrimEnd('/');
+            var endpoint = _config["ApiSettings:AuthLoginEndpoint"]?.Trim();
+
+            if (string.IsNullOrWhiteSpace(baseUrl) || string.IsNullOrWhiteSpace(endpoint))
+                return null;
+
+            if (!endpoint.StartsWith("/"))
+                endpoint = "/" + endpoint;
+
+            return $"{baseUrl}{endpoint}";
+        }
+
+        private async Task<(bool Success, LoginApiResponse? Data, string ErrorMessage)> CallLoginApiAsync(
+    string url,
+    string username,
+    string password)
+        {
+            var payload = JsonConvert.SerializeObject(new { username, password });
+            using var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+            HttpResponseMessage response;
+            string rawBody;
+
+            try
+            {
+                response = await _httpClient.PostAsync(url, content);
+                rawBody = await response.Content.ReadAsStringAsync();
+
+                _logger.LogInformation("Login API response for {Username}: {RawBody}", username, rawBody);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Login API could not be reached.");
+                return (false, null, $"Login service is not reachable. {ex.Message}");
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var apiMessage = TryReadMessage(rawBody);
+                var errorMessage = string.IsNullOrWhiteSpace(apiMessage)
+                    ? $"Invalid username or password. ({(int)response.StatusCode} {response.StatusCode})"
+                    : $"{apiMessage} ({(int)response.StatusCode} {response.StatusCode})";
+
+                return (false, null, errorMessage);
+            }
+
+            try
+            {
+                var obj = JObject.Parse(rawBody);
+
+                var data = new LoginApiResponse
+                {
+                    Success = ReadBool(obj, "Success", "success"),
+                    Message = ReadString(obj, "Message", "message") ?? string.Empty,
+                    Username = ReadString(obj, "Username", "username"),
+                    FirstName = ReadString(obj, "FirstName", "firstName"),
+                    LastName = ReadString(obj, "LastName", "lastName"),
+                    Token = ReadString(obj, "Token", "token", "accessToken", "jwt") ?? string.Empty,
+                    ExpiresInMinutes = ReadInt(obj, "ExpiresInMinutes", "expiresInMinutes"),
+                    RequiresPasswordReset = ReadBool(obj, "RequiresPasswordReset", "requiresPasswordReset"),
+                    PasswordExpired = ReadBool(obj, "PasswordExpired", "passwordExpired"),
+                    SystemUserId = ReadLongNullable(obj, "SystemUserId", "systemUserId")
+                };
+
+                if (string.IsNullOrWhiteSpace(data.Token))
+                {
+                    return (false, null, $"Login succeeded but no token was returned. Raw API response: {rawBody}");
+                }
+
+                return (true, data, string.Empty);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Login API returned invalid JSON. Raw body: {RawBody}", rawBody);
+                return (false, null, $"Login succeeded but returned invalid JSON. Raw API response: {rawBody}");
+            }
+        }
+
+        private static List<Claim> BuildClaims(LoginApiResponse data, string fallbackUsername)
+        {
+            return new List<Claim>
+            {
+                new Claim(ClaimTypes.Name, data.Username ?? fallbackUsername),
+                new Claim("firstName", data.FirstName ?? string.Empty),
+                new Claim("lastName", data.LastName ?? string.Empty),
+                new Claim("access_token", data.Token ?? string.Empty),
+                new Claim("systemUserId", data.SystemUserId?.ToString() ?? string.Empty)
+            };
+        }
+
+        private static ClaimsPrincipal CreatePrincipal(IEnumerable<Claim> claims)
+        {
+            var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+            return new ClaimsPrincipal(identity);
+        }
+
         private IActionResult LoginError(string message, string? returnUrl)
         {
             ViewBag.Error = message;
@@ -163,20 +190,46 @@ namespace MIS.Web.Controllers
         private static string TryReadMessage(string rawBody)
         {
             if (string.IsNullOrWhiteSpace(rawBody))
-                return "";
+                return string.Empty;
 
-            // Try to parse { message: "..." } or { Message: "..." }
             try
             {
-                dynamic obj = JsonConvert.DeserializeObject(rawBody);
-                string msg = (string?)obj?.message ?? (string?)obj?.Message ?? "";
-                return msg ?? "";
+                var obj = JObject.Parse(rawBody);
+                return ReadString(obj, "Message", "message") ?? string.Empty;
             }
             catch
             {
-                // If it's not JSON, just return empty (don't display raw HTML errors to user)
-                return "";
+                return string.Empty;
             }
+        }
+
+        private static string? ReadString(JObject obj, params string[] names)
+        {
+            foreach (var name in names)
+            {
+                if (obj.TryGetValue(name, out var value))
+                    return value?.ToString();
+            }
+
+            return null;
+        }
+
+        private static bool ReadBool(JObject obj, params string[] names)
+        {
+            var text = ReadString(obj, names);
+            return bool.TryParse(text, out var value) && value;
+        }
+
+        private static int ReadInt(JObject obj, params string[] names)
+        {
+            var text = ReadString(obj, names);
+            return int.TryParse(text, out var value) ? value : 0;
+        }
+
+        private static long? ReadLongNullable(JObject obj, params string[] names)
+        {
+            var text = ReadString(obj, names);
+            return long.TryParse(text, out var value) ? value : null;
         }
     }
 }

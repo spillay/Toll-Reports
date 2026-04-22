@@ -335,12 +335,12 @@
         placeholder: "Search account number / name...",
         allowClear: true,
         width: "100%",
-        minimumInputLength: 2,
+        minimumInputLength: 3,
         dropdownParent: $accountSearch.closest(".account-search-wrap"),
         ajax: {
         url: '@Url.Action("SearchAccounts", "AccountHistory")',
         dataType: "json",
-        delay: 300,
+        delay: 500,
         data: function (params) {
         return {
         q: params.term || "",

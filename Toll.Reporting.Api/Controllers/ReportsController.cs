@@ -6,6 +6,7 @@ using System.Text;
 
 namespace Toll.Reporting.Api.Controllers
 {
+    [Authorize]
     [Route("api/[controller]")]
     [ApiController]
     public class ReportsController : ControllerBase

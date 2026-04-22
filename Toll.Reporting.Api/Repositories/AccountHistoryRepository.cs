@@ -1,9 +1,11 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Toll.Reporting.Api.DTOs;
 using TollReportingSystem.Data;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Toll.Reporting.Api.Repositories.Implementations;
 
+[Authorize]
 public class AccountHistoryRepository : IAccountHistoryRepository
 {
     private readonly ApplicationDbContext _context;

@@ -1,13 +1,10 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using MIS.Web.Models.AvcAccuracy;
 using MIS.Web.Services.Interfaces;
 using Newtonsoft.Json;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net.Http;
-using System.Threading.Tasks;
+using System.Net.Http.Headers;
 
 namespace MIS.Web.Services
 {
@@ -16,15 +13,18 @@ namespace MIS.Web.Services
         private readonly HttpClient _httpClient;
         private readonly IConfiguration _config;
         private readonly ILogger<AvcAccuracyReportService> _logger;
+        private readonly IHttpContextAccessor _httpContextAccessor;
 
         public AvcAccuracyReportService(
             HttpClient httpClient,
             IConfiguration config,
-            ILogger<AvcAccuracyReportService> logger)
+            ILogger<AvcAccuracyReportService> logger,
+            IHttpContextAccessor httpContextAccessor)
         {
             _httpClient = httpClient;
             _config = config;
             _logger = logger;
+            _httpContextAccessor = httpContextAccessor;
         }
 
         public async Task<PageAvcAccuracyReportModel> GetReportAsync(
@@ -51,7 +51,7 @@ namespace MIS.Web.Services
 
                 if (string.IsNullOrWhiteSpace(baseUrl))
                 {
-                    _logger.LogError("API base URL 'ApiSettings:BaseUrl' is missing from configuration.");
+                    _logger.LogError("API base URL 'BaseApiUrl:Link' is missing from configuration.");
                     return model;
                 }
 
@@ -70,29 +70,50 @@ namespace MIS.Web.Services
                 var filterOptionsUrl = BuildUrl(baseUrl, filterOptionsEndpoint, null);
                 _logger.LogInformation("Calling AVC Accuracy filter options API: {Url}", filterOptionsUrl);
 
-                var filterJson = await _httpClient.GetStringAsync(filterOptionsUrl);
+                using (var filterRequest = CreateAuthorizedGetRequest(filterOptionsUrl))
+                using (var filterResponse = await _httpClient.SendAsync(filterRequest))
+                {
+                    if (!filterResponse.IsSuccessStatusCode)
+                    {
+                        _logger.LogWarning("AVC Accuracy filter options API returned status code {StatusCode}", filterResponse.StatusCode);
+                    }
+                    else
+                    {
+                        var filterJson = await filterResponse.Content.ReadAsStringAsync();
 
-                var filterOptions =
-                    JsonConvert.DeserializeObject<AvcAccuracyFilterOptionsResponseModel>(filterJson)
-                    ?? new AvcAccuracyFilterOptionsResponseModel();
+                        var filterOptions =
+                            JsonConvert.DeserializeObject<AvcAccuracyFilterOptionsResponseModel>(filterJson)
+                            ?? new AvcAccuracyFilterOptionsResponseModel();
 
-                model.ShiftOptions = filterOptions.Shifts ?? new List<AvcAccuracyFilterOptionModel>();
-                model.LaneOptions = filterOptions.Lanes ?? new List<AvcAccuracyFilterOptionModel>();
-                model.ClassOptions = filterOptions.Classes ?? new List<AvcAccuracyFilterOptionModel>();
+                        model.ShiftOptions = filterOptions.Shifts ?? new List<AvcAccuracyFilterOptionModel>();
+                        model.LaneOptions = filterOptions.Lanes ?? new List<AvcAccuracyFilterOptionModel>();
+                        model.ClassOptions = filterOptions.Classes ?? new List<AvcAccuracyFilterOptionModel>();
+                    }
+                }
 
                 var queryParams = BuildQueryParams(startDate, endDate, shiftIds, laneIds, classIds);
                 var detailsUrl = BuildUrl(baseUrl, detailsEndpoint, queryParams);
 
                 _logger.LogInformation("Calling AVC Accuracy details API: {Url}", detailsUrl);
 
-                var detailsJson = await _httpClient.GetStringAsync(detailsUrl);
+                using (var detailsRequest = CreateAuthorizedGetRequest(detailsUrl))
+                using (var detailsResponse = await _httpClient.SendAsync(detailsRequest))
+                {
+                    if (!detailsResponse.IsSuccessStatusCode)
+                    {
+                        _logger.LogWarning("AVC Accuracy details API returned status code {StatusCode}", detailsResponse.StatusCode);
+                        return model;
+                    }
 
-                var apiItems =
-                    JsonConvert.DeserializeObject<List<AvcAccuracyApiItem>>(detailsJson)
-                    ?? new List<AvcAccuracyApiItem>();
+                    var detailsJson = await detailsResponse.Content.ReadAsStringAsync();
 
-                model.Lanes = BuildLaneRows(apiItems);
-                model.GrandTotal = BuildGrandTotal(apiItems);
+                    var apiItems =
+                        JsonConvert.DeserializeObject<List<AvcAccuracyApiItem>>(detailsJson)
+                        ?? new List<AvcAccuracyApiItem>();
+
+                    model.Lanes = BuildLaneRows(apiItems);
+                    model.GrandTotal = BuildGrandTotal(apiItems);
+                }
 
                 return model;
             }
@@ -110,6 +131,23 @@ namespace MIS.Web.Services
             }
 
             return model;
+        }
+
+        private HttpRequestMessage CreateAuthorizedGetRequest(string url)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            AddBearerToken(request);
+            return request;
+        }
+
+        private void AddBearerToken(HttpRequestMessage request)
+        {
+            var token = _httpContextAccessor.HttpContext?.User?.FindFirst("access_token")?.Value;
+
+            if (string.IsNullOrWhiteSpace(token))
+                throw new UnauthorizedAccessException("No JWT token found for current user.");
+
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         }
 
         private static List<string> BuildQueryParams(

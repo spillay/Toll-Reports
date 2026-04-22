@@ -7,6 +7,7 @@ namespace Toll.Reporting.Api.Repositories
     public class AuthRepository : IAuthRepository
     {
         private readonly ApplicationDbContext _context;
+        private const int ReporterRoleId = 6;
 
         public AuthRepository(ApplicationDbContext context)
         {
@@ -23,18 +24,43 @@ namespace Toll.Reporting.Api.Repositories
                 .FirstOrDefaultAsync(u => u.Username == username);
 
             if (user == null)
-                return new LoginResponseDto { Success = false, Message = "Invalid username or password." };
+            {
+                return new LoginResponseDto
+                {
+                    Success = false,
+                    Message = "Invalid username or password."
+                };
+            }
 
             if (!user.IsActive)
-                return new LoginResponseDto { Success = false, Message = "Account is inactive." };
+            {
+                return new LoginResponseDto
+                {
+                    Success = false,
+                    Message = "Account is inactive."
+                };
+            }
 
             if (user.IsLocked)
-                return new LoginResponseDto { Success = false, Message = "Account is locked." };
+            {
+                return new LoginResponseDto
+                {
+                    Success = false,
+                    Message = "Account is locked."
+                };
+            }
 
             if (user.ActivationDate > DateTime.Now)
-                return new LoginResponseDto { Success = false, Message = "Account not yet activated." };
+            {
+                return new LoginResponseDto
+                {
+                    Success = false,
+                    Message = "Account not yet activated."
+                };
+            }
 
-            if (user.PasswordExpires && (!user.PasswordExpiryDate.HasValue || user.PasswordExpiryDate.Value <= DateTime.Now))
+            if (user.PasswordExpires &&
+                (!user.PasswordExpiryDate.HasValue || user.PasswordExpiryDate.Value <= DateTime.Now))
             {
                 return new LoginResponseDto
                 {
@@ -45,7 +71,27 @@ namespace Toll.Reporting.Api.Repositories
             }
 
             if ((user.Password ?? "") != password)
-                return new LoginResponseDto { Success = false, Message = "Invalid username or password." };
+            {
+                return new LoginResponseDto
+                {
+                    Success = false,
+                    Message = "Invalid username or password."
+                };
+            }
+
+            // Check whether this user has the Reporter role
+            var hasReporterRole = await _context.SystemUserRoles
+                .AsNoTracking()
+                .AnyAsync(x => x.SystemUserId == user.SystemUserId && x.RoleId == ReporterRoleId);
+
+            if (!hasReporterRole)
+            {
+                return new LoginResponseDto
+                {
+                    Success = false,
+                    Message = "You are not authorized to access this system."
+                };
+            }
 
             return new LoginResponseDto
             {

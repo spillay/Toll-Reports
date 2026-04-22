@@ -1,11 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using System;
-using System.Collections.Generic;
 using System.Data;
-using System.Linq;
-using System.Threading.Tasks;
 using Toll.Reporting.Api.DTOs;
-using Toll.Reporting.Api.Repositories.Interfaces;
 using TollReportingSystem.Data;
 
 namespace Toll.Reporting.Api.Repositories

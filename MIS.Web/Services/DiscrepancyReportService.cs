@@ -1,12 +1,9 @@
 ﻿using MIS.Web.Models.Discrepancy;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net.Http;
-using System.Threading.Tasks;
+using System.Net.Http.Headers;
 
 namespace MIS.Web.Services
 {
@@ -15,37 +12,34 @@ namespace MIS.Web.Services
         private readonly HttpClient _httpClient;
         private readonly IConfiguration _configuration;
         private readonly ILogger<DiscrepancyReportService> _logger;
+        private readonly IHttpContextAccessor _httpContextAccessor;
 
         public DiscrepancyReportService(
             HttpClient httpClient,
             IConfiguration configuration,
-            ILogger<DiscrepancyReportService> logger)
+            ILogger<DiscrepancyReportService> logger,
+            IHttpContextAccessor httpContextAccessor)
         {
             _httpClient = httpClient;
             _configuration = configuration;
             _logger = logger;
+            _httpContextAccessor = httpContextAccessor;
         }
 
-        // ==========================================================
-        // 1) Transaction-style: paginated call using model (NEW)
-        // ==========================================================
         public async Task<PageDiscrepancyModel> GetDiscrepancyReportAsync(DiscrepancyInputModel model)
         {
             try
             {
-                string baseUrl = _configuration["BaseApiUrl:Link"];
-                string endpoint = _configuration["ApiSettings:DiscrepancyReportEndpoint"];
+                var url = BuildReportUrl(model, exportAll: false);
 
-                string query = BuildQuery(model, exportAll: false);
-                string url = $"{baseUrl}{endpoint}?{query}";
+                _logger.LogInformation("Discrepancy GET: {Url}", url);
 
-                _logger.LogInformation("📡 Discrepancy GET: {Url}", url);
-
-                var response = await _httpClient.GetAsync(url);
+                using var request = CreateAuthorizedGetRequest(url);
+                var response = await _httpClient.SendAsync(request);
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    _logger.LogWarning("❌ Discrepancy API failed. Status: {Status}", response.StatusCode);
+                    _logger.LogWarning("Discrepancy API failed. Status: {Status}", response.StatusCode);
                     return EmptyResult(model);
                 }
 
@@ -61,25 +55,23 @@ namespace MIS.Web.Services
 
                 if (data == null)
                 {
-                    _logger.LogWarning("⚠️ Discrepancy API returned NULL/invalid JSON.");
+                    _logger.LogWarning("Discrepancy API returned null/invalid JSON.");
                     return EmptyResult(model);
                 }
 
-                // Keep filters for UI re-render (checked boxes)
+                data.Items ??= new List<DiscrepancyModel>();
+                data.ExportItems ??= new List<DiscrepancyModel>();
                 data.Filters = model;
 
                 return data;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "💥 ERROR: GetDiscrepancyReportAsync(model) crashed.");
+                _logger.LogError(ex, "ERROR: GetDiscrepancyReportAsync(model) crashed.");
                 return EmptyResult(model);
             }
         }
 
-        // ==========================================================
-        // 2) Backward compatible signature (OLD) - wrapper
-        // ==========================================================
         public Task<PageDiscrepancyModel> GetDiscrepancyReportAsync(
             DateTime startDate,
             DateTime endDate,
@@ -91,14 +83,12 @@ namespace MIS.Web.Services
             int page = 1,
             int pageSize = 50)
         {
-            // Wrapper => maps old params into new checklist model
             var model = new DiscrepancyInputModel
             {
                 StartDate = startDate,
                 EndDate = endDate,
                 Page = page,
                 PageSize = pageSize,
-
                 SelectedShifts = operationalShift ?? new List<string>(),
                 SelectedTollOperators = tollOperators ?? new List<string>(),
                 SelectedLanes = laneNames ?? new List<string>(),
@@ -109,39 +99,25 @@ namespace MIS.Web.Services
             return GetDiscrepancyReportAsync(model);
         }
 
-        // ==========================================================
-        // 3) Filter options (ALL values from DB)
-        //    Calls: /api/discrepancy/filter-options
-        // ==========================================================
         public async Task<DiscrepancyInputModel> GetDiscrepancyFilterOptionsAsync(DiscrepancyInputModel model)
         {
             try
             {
-                string baseUrl = _configuration["BaseApiUrl:Link"];
-                string endpoint = _configuration["ApiSettings:DiscrepancyFilterOptionsEndpoint"];
+                var url = BuildFilterOptionsUrl(model);
 
-                var q = new List<string>
-                {
-                    $"startDate={Uri.EscapeDataString(model.StartDate.ToString("yyyy-MM-ddTHH:mm:ss"))}",
-                    $"endDate={Uri.EscapeDataString(model.EndDate.ToString("yyyy-MM-ddTHH:mm:ss"))}"
-                };
+                _logger.LogInformation("Discrepancy FilterOptions GET: {Url}", url);
 
-                string url = $"{baseUrl}{endpoint}?{string.Join("&", q)}";
-
-                _logger.LogInformation("📡 Discrepancy FilterOptions GET: {Url}", url);
-
-                var response = await _httpClient.GetAsync(url);
+                using var request = CreateAuthorizedGetRequest(url);
+                var response = await _httpClient.SendAsync(request);
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    _logger.LogWarning("❌ FilterOptions API failed. Status: {Status}", response.StatusCode);
-                    return model; // keep existing model
+                    _logger.LogWarning("FilterOptions API failed. Status: {Status}", response.StatusCode);
+                    return model;
                 }
 
                 var json = await response.Content.ReadAsStringAsync();
 
-                // API returns DiscrepancyDto with lists; we deserialize into input model if names match,
-                // OR keep it simple and deserialize into dynamic then map.
                 var options = JsonConvert.DeserializeObject<DiscrepancyInputModel>(
                     json,
                     new JsonSerializerSettings
@@ -150,9 +126,9 @@ namespace MIS.Web.Services
                         NullValueHandling = NullValueHandling.Ignore
                     });
 
-                if (options == null) return model;
+                if (options == null)
+                    return model;
 
-                // Update option lists ONLY (keep user selections)
                 model.Shifts = options.Shifts ?? new List<string>();
                 model.TollOperators = options.TollOperators ?? new List<string>();
                 model.Lanes = options.Lanes ?? new List<string>();
@@ -163,32 +139,31 @@ namespace MIS.Web.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "💥 ERROR: GetDiscrepancyFilterOptionsAsync crashed.");
+                _logger.LogError(ex, "ERROR: GetDiscrepancyFilterOptionsAsync crashed.");
                 return model;
             }
         }
 
-        // ==========================================================
-        // 4) Full export (exportAll=true) - same filters
-        // ==========================================================
         public async Task<PageDiscrepancyModel> GetFullExportAsync(DiscrepancyInputModel model)
         {
             try
             {
-                string baseUrl = _configuration["BaseApiUrl:Link"];
-                string endpoint = _configuration["ApiSettings:DiscrepancyReportEndpoint"];
+                var url = BuildReportUrl(model, exportAll: true);
 
-                string query = BuildQuery(model, exportAll: true);
-                string url = $"{baseUrl}{endpoint}?{query}";
+                _logger.LogInformation("Discrepancy EXPORT GET: {Url}", url);
 
-                _logger.LogInformation("📡 Discrepancy EXPORT GET: {Url}", url);
-
-                var response = await _httpClient.GetAsync(url);
+                using var request = CreateAuthorizedGetRequest(url);
+                var response = await _httpClient.SendAsync(request);
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    _logger.LogWarning("❌ Export API failed. Status: {Status}", response.StatusCode);
-                    return new PageDiscrepancyModel { ExportItems = new List<DiscrepancyModel>(), Filters = model };
+                    _logger.LogWarning("Export API failed. Status: {Status}", response.StatusCode);
+                    return new PageDiscrepancyModel
+                    {
+                        Items = new List<DiscrepancyModel>(),
+                        ExportItems = new List<DiscrepancyModel>(),
+                        Filters = model
+                    };
                 }
 
                 var json = await response.Content.ReadAsStringAsync();
@@ -203,8 +178,6 @@ namespace MIS.Web.Services
 
                 full ??= new PageDiscrepancyModel();
                 full.Items ??= new List<DiscrepancyModel>();
-
-                // ExportItems should be full dataset
                 full.ExportItems = full.Items;
                 full.Filters = model;
 
@@ -212,14 +185,73 @@ namespace MIS.Web.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "💥 ERROR: GetFullExportAsync crashed.");
-                return new PageDiscrepancyModel { ExportItems = new List<DiscrepancyModel>(), Filters = model };
+                _logger.LogError(ex, "ERROR: GetFullExportAsync crashed.");
+                return new PageDiscrepancyModel
+                {
+                    Items = new List<DiscrepancyModel>(),
+                    ExportItems = new List<DiscrepancyModel>(),
+                    Filters = model
+                };
             }
         }
 
-        // ==========================================================
-        // Helpers
-        // ==========================================================
+        private HttpRequestMessage CreateAuthorizedGetRequest(string url)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            AddBearerToken(request);
+            return request;
+        }
+
+        private void AddBearerToken(HttpRequestMessage request)
+        {
+            var token = _httpContextAccessor.HttpContext?.User?.FindFirst("access_token")?.Value;
+
+            if (string.IsNullOrWhiteSpace(token))
+                throw new UnauthorizedAccessException("No JWT token found for current user.");
+
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+
+        private string BuildReportUrl(DiscrepancyInputModel model, bool exportAll)
+        {
+            var baseUrl = _configuration["BaseApiUrl:Link"]?.TrimEnd('/');
+            var endpoint = _configuration["ApiSettings:DiscrepancyReportEndpoint"]?.Trim();
+
+            if (string.IsNullOrWhiteSpace(baseUrl))
+                throw new InvalidOperationException("BaseApiUrl:Link missing in config.");
+
+            if (string.IsNullOrWhiteSpace(endpoint))
+                throw new InvalidOperationException("ApiSettings:DiscrepancyReportEndpoint missing in config.");
+
+            if (!endpoint.StartsWith("/"))
+                endpoint = "/" + endpoint;
+
+            var query = BuildQuery(model, exportAll);
+            return $"{baseUrl}{endpoint}?{query}";
+        }
+
+        private string BuildFilterOptionsUrl(DiscrepancyInputModel model)
+        {
+            var baseUrl = _configuration["BaseApiUrl:Link"]?.TrimEnd('/');
+            var endpoint = _configuration["ApiSettings:DiscrepancyFilterOptionsEndpoint"]?.Trim();
+
+            if (string.IsNullOrWhiteSpace(baseUrl))
+                throw new InvalidOperationException("BaseApiUrl:Link missing in config.");
+
+            if (string.IsNullOrWhiteSpace(endpoint))
+                throw new InvalidOperationException("ApiSettings:DiscrepancyFilterOptionsEndpoint missing in config.");
+
+            if (!endpoint.StartsWith("/"))
+                endpoint = "/" + endpoint;
+
+            var q = new List<string>
+            {
+                $"startDate={Uri.EscapeDataString(model.StartDate.ToString("yyyy-MM-ddTHH:mm:ss"))}",
+                $"endDate={Uri.EscapeDataString(model.EndDate.ToString("yyyy-MM-ddTHH:mm:ss"))}"
+            };
+
+            return $"{baseUrl}{endpoint}?{string.Join("&", q)}";
+        }
 
         private string BuildQuery(DiscrepancyInputModel model, bool exportAll)
         {
@@ -252,7 +284,8 @@ namespace MIS.Web.Services
 
         private static void AddList(List<string> q, string key, List<string> values)
         {
-            if (values == null || values.Count == 0) return;
+            if (values == null || values.Count == 0)
+                return;
 
             foreach (var v in values
                          .Where(x => !string.IsNullOrWhiteSpace(x))

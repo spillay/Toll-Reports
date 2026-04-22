@@ -6,8 +6,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 
 namespace MIS.Web.Services
 {
@@ -15,11 +17,16 @@ namespace MIS.Web.Services
     {
         private readonly HttpClient _httpClient;
         private readonly IConfiguration _config;
+        private readonly IHttpContextAccessor _httpContextAccessor;
 
-        public TransactionService(HttpClient httpClient, IConfiguration config)
+        public TransactionService(
+            HttpClient httpClient,
+            IConfiguration config,
+            IHttpContextAccessor httpContextAccessor)
         {
             _httpClient = httpClient;
             _config = config;
+            _httpContextAccessor = httpContextAccessor;
         }
 
         private string BuildQuery(
@@ -60,7 +67,7 @@ namespace MIS.Web.Services
 
         private (string baseUrl, string endpoint) GetApiInfo(string endpointKey)
         {
-            var baseUrl = _config["BaseApiUrl:Link"];
+            var baseUrl = _config["BaseApiUrl:Link"]?.TrimEnd('/');
             var endpoint = _config[endpointKey];
 
             if (string.IsNullOrWhiteSpace(baseUrl))
@@ -68,6 +75,9 @@ namespace MIS.Web.Services
 
             if (string.IsNullOrWhiteSpace(endpoint))
                 throw new InvalidOperationException($"{endpointKey} missing in config.");
+
+            if (!endpoint.StartsWith("/"))
+                endpoint = "/" + endpoint;
 
             return (baseUrl, endpoint);
         }
@@ -79,8 +89,19 @@ namespace MIS.Web.Services
                 { "operationalShift", model.SelectedShifts },
                 { "tollOperators",    model.SelectedTollOperators },
                 { "laneNames",        model.SelectedLanes },
-                { "paymentMethods",   model.SelectedPaymentMethods }
+                { "paymentMethods",   model.SelectedPaymentMethods },
+                { "tollCollectorClasses", model.SelectedTollCollectorClasses }
             };
+        }
+
+        private void AddBearerToken(HttpRequestMessage request)
+        {
+            var token = _httpContextAccessor.HttpContext?.User?.FindFirst("access_token")?.Value;
+
+            if (string.IsNullOrWhiteSpace(token))
+                throw new UnauthorizedAccessException("No JWT token found for current user.");
+
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         }
 
         public async Task<PageTransactionModel> GetTransactionDetailsAsync(TransactionInputModel model)
@@ -103,7 +124,10 @@ namespace MIS.Web.Services
                 var url = $"{baseUrl}{endpoint}?{query}";
                 Console.WriteLine($"[TransactionService] GET: {url}");
 
-                var response = await _httpClient.GetAsync(url);
+                using var request = new HttpRequestMessage(HttpMethod.Get, url);
+                AddBearerToken(request);
+
+                var response = await _httpClient.SendAsync(request);
                 if (!response.IsSuccessStatusCode)
                 {
                     Console.WriteLine($"[WARN] Transaction API returned {response.StatusCode}");
@@ -143,10 +167,19 @@ namespace MIS.Web.Services
                 var url = $"{baseUrl}{endpoint}?{query}";
                 Console.WriteLine($"[TransactionService] EXPORT GET: {url}");
 
-                var response = await _httpClient.GetAsync(url);
-                var json = await response.Content.ReadAsStringAsync();
+                using var request = new HttpRequestMessage(HttpMethod.Get, url);
+                AddBearerToken(request);
 
+                var response = await _httpClient.SendAsync(request);
+                if (!response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"[WARN] Transaction export API returned {response.StatusCode}");
+                    return new PageTransactionModel { items = new List<TransactionModel>() };
+                }
+
+                var json = await response.Content.ReadAsStringAsync();
                 var data = JsonConvert.DeserializeObject<PageTransactionModel>(json);
+
                 data ??= new PageTransactionModel();
                 data.items ??= new List<TransactionModel>();
                 return data;
@@ -173,7 +206,10 @@ namespace MIS.Web.Services
                 var url = $"{baseUrl}{endpoint}?{query}";
                 Console.WriteLine($"[TransactionService] Filter Options GET: {url}");
 
-                var response = await _httpClient.GetAsync(url);
+                using var request = new HttpRequestMessage(HttpMethod.Get, url);
+                AddBearerToken(request);
+
+                var response = await _httpClient.SendAsync(request);
 
                 if (!response.IsSuccessStatusCode)
                 {
@@ -188,6 +224,7 @@ namespace MIS.Web.Services
                 filters.TollOperators ??= new List<string>();
                 filters.Lanes ??= new List<string>();
                 filters.PaymentMethods ??= new List<string>();
+                filters.TollCollectorClasses ??= new List<string>();
 
                 return filters;
             }

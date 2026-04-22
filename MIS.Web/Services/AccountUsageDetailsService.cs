@@ -1,12 +1,9 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using MIS.Web.Models.AccountUsageDetails;
 using Newtonsoft.Json;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net.Http;
-using System.Threading.Tasks;
+using System.Net.Http.Headers;
 
 namespace MIS.Web.Services
 {
@@ -15,15 +12,18 @@ namespace MIS.Web.Services
         private readonly HttpClient _httpClient;
         private readonly IConfiguration _config;
         private readonly ILogger<AccountUsageDetailsService> _logger;
+        private readonly IHttpContextAccessor _httpContextAccessor;
 
         public AccountUsageDetailsService(
             HttpClient httpClient,
             IConfiguration config,
-            ILogger<AccountUsageDetailsService> logger)
+            ILogger<AccountUsageDetailsService> logger,
+            IHttpContextAccessor httpContextAccessor)
         {
             _httpClient = httpClient;
             _config = config;
             _logger = logger;
+            _httpContextAccessor = httpContextAccessor;
         }
 
         private string GetBaseUrl()
@@ -31,10 +31,6 @@ namespace MIS.Web.Services
             return _config["BaseApiUrl:Link"]?.TrimEnd('/') ?? string.Empty;
         }
 
-        // =========================================================
-        // Search accounts
-        // GET: /api/AccountUsageDetails/SearchAccounts?q=charity&take=20
-        // =========================================================
         public async Task<List<AccountSearchResultModel>> SearchAccountsAsync(string q, int take = 20)
         {
             var baseUrl = GetBaseUrl();
@@ -45,7 +41,7 @@ namespace MIS.Web.Services
             }
 
             q = (q ?? string.Empty).Trim();
-            if (q.Length < 2)
+            if (q.Length < 3)
             {
                 return new List<AccountSearchResultModel>();
             }
@@ -59,7 +55,10 @@ namespace MIS.Web.Services
             {
                 _logger.LogInformation("Calling AccountUsageDetails SearchAccounts API: {Url}", url);
 
-                var response = await _httpClient.GetAsync(url);
+                using var request = CreateAuthorizedGetRequest(url);
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                using var response = await _httpClient.SendAsync(request, cts.Token);
+
                 if (!response.IsSuccessStatusCode)
                 {
                     _logger.LogWarning(
@@ -70,7 +69,7 @@ namespace MIS.Web.Services
                     return new List<AccountSearchResultModel>();
                 }
 
-                var json = await response.Content.ReadAsStringAsync();
+                var json = await response.Content.ReadAsStringAsync(cts.Token);
 
                 var results = JsonConvert.DeserializeObject<List<AccountSearchResultModel>>(json)
                               ?? new List<AccountSearchResultModel>();
@@ -84,6 +83,11 @@ namespace MIS.Web.Services
                     })
                     .ToList();
             }
+            catch (TaskCanceledException ex)
+            {
+                _logger.LogWarning(ex, "AccountUsageDetails search timed out for query {Query}", q);
+                return new List<AccountSearchResultModel>();
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error calling SearchAccounts API for query {Query}", q);
@@ -91,10 +95,6 @@ namespace MIS.Web.Services
             }
         }
 
-        // =========================================================
-        // Get details
-        // GET: /api/AccountUsageDetails/GetDetails?accountNumber=...&startDate=...&endDate=...
-        // =========================================================
         public async Task<PageAccountUsageDetailsModel> GetAccountUsageDetailsAsync(
             string accountNumber,
             DateTime startDate,
@@ -131,7 +131,9 @@ namespace MIS.Web.Services
             {
                 _logger.LogInformation("Calling AccountUsageDetails GetDetails API: {Url}", url);
 
-                var response = await _httpClient.GetAsync(url);
+                using var request = CreateAuthorizedGetRequest(url);
+                using var response = await _httpClient.SendAsync(request);
+
                 if (!response.IsSuccessStatusCode)
                 {
                     _logger.LogWarning(
@@ -163,6 +165,23 @@ namespace MIS.Web.Services
 
                 return model;
             }
+        }
+
+        private HttpRequestMessage CreateAuthorizedGetRequest(string url)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            AddBearerToken(request);
+            return request;
+        }
+
+        private void AddBearerToken(HttpRequestMessage request)
+        {
+            var token = _httpContextAccessor.HttpContext?.User?.FindFirst("access_token")?.Value;
+
+            if (string.IsNullOrWhiteSpace(token))
+                throw new UnauthorizedAccessException("No JWT token found for current user.");
+
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         }
     }
 }

@@ -1,4 +1,6 @@
-﻿using System.Text.Json;
+﻿using System.Net.Http.Headers;
+using System.Text.Json;
+using Microsoft.AspNetCore.Http;
 using MIS.Web.Models.EndOfDay;
 using MIS.Web.Services.Interfaces;
 
@@ -9,15 +11,18 @@ namespace MIS.Web.Services
         private readonly HttpClient _http;
         private readonly IConfiguration _config;
         private readonly ILogger<EndOfDayReportService> _logger;
+        private readonly IHttpContextAccessor _httpContextAccessor;
 
         public EndOfDayReportService(
             HttpClient http,
             IConfiguration config,
-            ILogger<EndOfDayReportService> logger)
+            ILogger<EndOfDayReportService> logger,
+            IHttpContextAccessor httpContextAccessor)
         {
             _http = http;
             _config = config;
             _logger = logger;
+            _httpContextAccessor = httpContextAccessor;
         }
 
         public async Task<EndOfDayReportViewModel?> GetEndOfDayAsync(
@@ -54,7 +59,8 @@ namespace MIS.Web.Services
                     endDate,
                     shiftId);
 
-                using var response = await _http.GetAsync(url);
+                using var request = CreateAuthorizedGetRequest(url);
+                using var response = await _http.SendAsync(request);
                 var responseBody = await response.Content.ReadAsStringAsync();
 
                 _logger.LogInformation("End Of Day raw response body: {ResponseBody}", responseBody);
@@ -104,6 +110,23 @@ namespace MIS.Web.Services
 
                 return null;
             }
+        }
+
+        private HttpRequestMessage CreateAuthorizedGetRequest(string url)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            AddBearerToken(request);
+            return request;
+        }
+
+        private void AddBearerToken(HttpRequestMessage request)
+        {
+            var token = _httpContextAccessor.HttpContext?.User?.FindFirst("access_token")?.Value;
+
+            if (string.IsNullOrWhiteSpace(token))
+                throw new UnauthorizedAccessException("No JWT token found for current user.");
+
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         }
     }
 }

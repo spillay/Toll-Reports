@@ -1,9 +1,11 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Toll.Reporting.Api.DTOs;
 using Toll.Reporting.Api.Repositories;
 
 namespace Toll.Reporting.Api.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("api/[controller]")]
     public class HourlyTrafficController : ControllerBase

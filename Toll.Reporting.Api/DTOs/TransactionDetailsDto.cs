@@ -29,5 +29,6 @@
         public List<string>? TollOperators { get; set; }
         public List<string>? Lanes { get; set; }
         public List<string>? PaymentMethods { get; set; }
+        public List<string>? TollCollectorClasses { get; set; }
     }
 }

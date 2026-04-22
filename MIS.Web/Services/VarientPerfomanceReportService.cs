@@ -4,8 +4,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
+using Microsoft.AspNetCore.Http;
 
 namespace MIS.Web.Services
 {
@@ -13,11 +15,16 @@ namespace MIS.Web.Services
     {
         private readonly HttpClient _httpClient;
         private readonly IConfiguration _configuration;
+        private readonly IHttpContextAccessor _httpContextAccessor;
 
-        public VarientPerfomanceReportService(HttpClient httpClient, IConfiguration configuration)
+        public VarientPerfomanceReportService(
+            HttpClient httpClient,
+            IConfiguration configuration,
+            IHttpContextAccessor httpContextAccessor)
         {
             _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
             _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+            _httpContextAccessor = httpContextAccessor ?? throw new ArgumentNullException(nameof(httpContextAccessor));
         }
 
         public async Task<PageVarientPerfomanceModel> GetVarientPerfomanceDetailsAsync(
@@ -28,99 +35,125 @@ namespace MIS.Web.Services
             List<string>? operationalShift = null,
             List<string>? tollOperators = null)
         {
-            var queryParts = new List<string>
+            try
             {
-                $"startDate={Uri.EscapeDataString(startDate.ToString("s"))}",
-                $"endDate={Uri.EscapeDataString(endDate.ToString("s"))}",
-                $"page={pageNumber}",
-                $"pageSize={pageSize}"
-            };
-
-            void AddIfAny(string key, List<string>? list)
-            {
-                if (list == null || !list.Any())
-                    return;
-
-                // ✅ Repeat query string keys so API binds List<string> correctly
-                foreach (var v in list.Where(x => !string.IsNullOrWhiteSpace(x)))
+                var queryParts = new List<string>
                 {
-                    queryParts.Add($"{key}={Uri.EscapeDataString(v.Trim())}");
-                }
+                    $"startDate={Uri.EscapeDataString(startDate.ToString("s"))}",
+                    $"endDate={Uri.EscapeDataString(endDate.ToString("s"))}",
+                    $"page={pageNumber}",
+                    $"pageSize={pageSize}"
+                };
+
+                AddIfAny(queryParts, "operationalShift", operationalShift);
+                AddIfAny(queryParts, "tollOperators", tollOperators);
+
+                var url = BuildUrlFromConfig("ApiSettings:VarientPerformanceEndpoint", queryParts);
+
+                using var request = CreateAuthorizedGetRequest(url);
+                var response = await _httpClient.SendAsync(request);
+
+                if (!response.IsSuccessStatusCode)
+                    return new PageVarientPerfomanceModel();
+
+                var json = await response.Content.ReadAsStringAsync();
+                return JsonConvert.DeserializeObject<PageVarientPerfomanceModel>(json)
+                       ?? new PageVarientPerfomanceModel();
             }
-
-            AddIfAny("operationalShift", operationalShift);
-            AddIfAny("tollOperators", tollOperators);
-
-            string baseUrl = _configuration["BaseApiUrl:Link"];
-            string endpoint = _configuration["ApiSettings:VarientPerformanceEndpoint"];
-
-            if (string.IsNullOrWhiteSpace(baseUrl))
-                throw new InvalidOperationException("BaseApiUrl:Link is missing in appsettings.json.");
-
-            if (string.IsNullOrWhiteSpace(endpoint))
-                throw new InvalidOperationException("ApiSettings:VarientPerformanceEndpoint is missing in appsettings.json.");
-
-            string url = $"{baseUrl}{endpoint}?{string.Join("&", queryParts)}";
-
-            var response = await _httpClient.GetAsync(url);
-            if (!response.IsSuccessStatusCode)
+            catch
+            {
                 return new PageVarientPerfomanceModel();
-
-            var json = await response.Content.ReadAsStringAsync();
-            return JsonConvert.DeserializeObject<PageVarientPerfomanceModel>(json) ?? new PageVarientPerfomanceModel();
+            }
         }
 
-        // =====================================================
-        // ✅ NEW: ALL SHIFTS (system-wide)
-        // =====================================================
         public async Task<List<string>> GetAllShiftsAsync()
         {
-            var url = BuildUrlFromConfig("ApiSettings:VarientPerformanceShiftsEndpoint");
+            try
+            {
+                var url = BuildUrlFromConfig("ApiSettings:VarientPerformanceShiftsEndpoint");
 
-            var response = await _httpClient.GetAsync(url);
-            if (!response.IsSuccessStatusCode)
+                using var request = CreateAuthorizedGetRequest(url);
+                var response = await _httpClient.SendAsync(request);
+
+                if (!response.IsSuccessStatusCode)
+                    return new List<string>();
+
+                var json = await response.Content.ReadAsStringAsync();
+                var result = JsonConvert.DeserializeObject<List<string>>(json) ?? new List<string>();
+
+                return result
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Select(x => x.Trim())
+                    .Distinct()
+                    .OrderBy(x => x)
+                    .ToList();
+            }
+            catch
+            {
                 return new List<string>();
-
-            var json = await response.Content.ReadAsStringAsync();
-            var result = JsonConvert.DeserializeObject<List<string>>(json) ?? new List<string>();
-
-            return result
-                .Where(x => !string.IsNullOrWhiteSpace(x))
-                .Select(x => x.Trim())
-                .Distinct()
-                .OrderBy(x => x)
-                .ToList();
+            }
         }
 
-        // =====================================================
-        // ✅ NEW: ALL OPERATORS (system-wide)
-        // =====================================================
         public async Task<List<string>> GetAllTollOperatorsAsync()
         {
-            var url = BuildUrlFromConfig("ApiSettings:VarientPerformanceOperatorsEndpoint");
+            try
+            {
+                var url = BuildUrlFromConfig("ApiSettings:VarientPerformanceOperatorsEndpoint");
 
-            var response = await _httpClient.GetAsync(url);
-            if (!response.IsSuccessStatusCode)
+                using var request = CreateAuthorizedGetRequest(url);
+                var response = await _httpClient.SendAsync(request);
+
+                if (!response.IsSuccessStatusCode)
+                    return new List<string>();
+
+                var json = await response.Content.ReadAsStringAsync();
+                var result = JsonConvert.DeserializeObject<List<string>>(json) ?? new List<string>();
+
+                return result
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Select(x => x.Trim())
+                    .Distinct()
+                    .OrderBy(x => x)
+                    .ToList();
+            }
+            catch
+            {
                 return new List<string>();
-
-            var json = await response.Content.ReadAsStringAsync();
-            var result = JsonConvert.DeserializeObject<List<string>>(json) ?? new List<string>();
-
-            return result
-                .Where(x => !string.IsNullOrWhiteSpace(x))
-                .Select(x => x.Trim())
-                .Distinct()
-                .OrderBy(x => x)
-                .ToList();
+            }
         }
 
-        // =====================================================
-        // Helper: build full URL from BaseApiUrl + endpoint key
-        // =====================================================
-        private string BuildUrlFromConfig(string endpointKey)
+        private HttpRequestMessage CreateAuthorizedGetRequest(string url)
         {
-            string baseUrl = _configuration["BaseApiUrl:Link"];
-            string endpoint = _configuration[endpointKey];
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            AddBearerToken(request);
+            return request;
+        }
+
+        private void AddBearerToken(HttpRequestMessage request)
+        {
+            var token = _httpContextAccessor.HttpContext?.User?.FindFirst("access_token")?.Value;
+
+            if (string.IsNullOrWhiteSpace(token))
+                throw new UnauthorizedAccessException("No JWT token found for current user.");
+
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+
+        private static void AddIfAny(List<string> queryParts, string key, List<string>? list)
+        {
+            if (list == null || !list.Any())
+                return;
+
+            foreach (var value in list.Where(x => !string.IsNullOrWhiteSpace(x)))
+            {
+                queryParts.Add($"{key}={Uri.EscapeDataString(value.Trim())}");
+            }
+        }
+
+        private string BuildUrlFromConfig(string endpointKey, IEnumerable<string>? queryParts = null)
+        {
+            var baseUrl = _configuration["BaseApiUrl:Link"];
+            var endpoint = _configuration[endpointKey];
 
             if (string.IsNullOrWhiteSpace(baseUrl))
                 throw new InvalidOperationException("BaseApiUrl:Link is missing in appsettings.json.");
@@ -128,8 +161,12 @@ namespace MIS.Web.Services
             if (string.IsNullOrWhiteSpace(endpoint))
                 throw new InvalidOperationException($"{endpointKey} is missing in appsettings.json.");
 
-            // Ensure no double slashes issues
-            return $"{baseUrl.TrimEnd('/')}/{endpoint.TrimStart('/')}";
+            var url = $"{baseUrl.TrimEnd('/')}/{endpoint.TrimStart('/')}";
+
+            if (queryParts != null && queryParts.Any())
+                url += "?" + string.Join("&", queryParts);
+
+            return url;
         }
     }
 }

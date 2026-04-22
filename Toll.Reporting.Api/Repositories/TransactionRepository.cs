@@ -13,7 +13,7 @@ namespace Toll.Reporting.Api.Repositories
             _context = context;
         }
 
-        // 🔹 Fetch Transaction Details
+        // Fetch Transaction Details
         public async Task<PagedResult<TransactionDetailsDto>> GetTransactionDetailsAsync(
             DateTime startDate,
             DateTime endDate,
@@ -21,6 +21,7 @@ namespace Toll.Reporting.Api.Repositories
             List<string>? tollOperators = null,
             List<string>? laneNames = null,
             List<string>? paymentMethods = null,
+            List<string>? tollCollectorClasses = null,
             int page = 1,
             int pageSize = 10)
         {
@@ -97,6 +98,9 @@ namespace Toll.Reporting.Api.Repositories
             if (paymentMethods?.Any() == true && !paymentMethods.Contains("-- All --"))
                 query = query.Where(x => x.Type != null && paymentMethods.Contains(x.Type.Description));
 
+            if (tollCollectorClasses?.Any() == true && !tollCollectorClasses.Contains("-- All --"))
+                query = query.Where(x => x.TollClass1 != null && tollCollectorClasses.Contains(x.TollClass1.ClassDescription));
+
             var totalCount = await query.CountAsync();
 
             var items = await query
@@ -160,6 +164,13 @@ namespace Toll.Reporting.Api.Repositories
                 .OrderBy(pm => pm)
                 .ToListAsync();
 
+            var tollCollectorClasses = await _context.TollClasses
+                .Where(tc => tc.ClassDescription != null && tc.ClassDescription != "")
+                .Select(tc => tc.ClassDescription)
+                .Distinct()
+                .OrderBy(tc => tc)
+                .ToListAsync();
+
             return new TransactionDetailsDto
             {
                 StartDate = startDate,
@@ -167,7 +178,8 @@ namespace Toll.Reporting.Api.Repositories
                 Shifts = shifts,
                 TollOperators = operators,
                 Lanes = lanes,
-                PaymentMethods = paymentMethods
+                PaymentMethods = paymentMethods,
+                TollCollectorClasses = tollCollectorClasses
             };
         }
     }

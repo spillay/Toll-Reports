@@ -1,12 +1,14 @@
-﻿using System;
+﻿using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
+using MIS.Web.Models;
+using MIS.Web.Models.TopUp;
+using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Configuration;
-using Newtonsoft.Json;
-using MIS.Web.Models;
-using MIS.Web.Models.TopUp;
 
 namespace MIS.Web.Services
 {
@@ -14,55 +16,40 @@ namespace MIS.Web.Services
     {
         private readonly HttpClient _client;
         private readonly IConfiguration _config;
+        private readonly IHttpContextAccessor _httpContextAccessor;
 
-        public TopUpReportService(HttpClient client, IConfiguration config)
+        public TopUpReportService(
+            HttpClient client,
+            IConfiguration config,
+            IHttpContextAccessor httpContextAccessor)
         {
-            _client = client;
-            _config = config;
+            _client = client ?? throw new ArgumentNullException(nameof(client));
+            _config = config ?? throw new ArgumentNullException(nameof(config));
+            _httpContextAccessor = httpContextAccessor ?? throw new ArgumentNullException(nameof(httpContextAccessor));
         }
 
-        // ✅ Helper: append list values as repeated query params
-        private static void AddListParams(List<string> query, string key, List<string>? values)
+        public async Task<TopUpInputModel> GetTopUpFilterOptionsAsync()
         {
-            if (values == null) return;
-
-            foreach (var v in values.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()))
+            try
             {
-                query.Add($"{key}={Uri.EscapeDataString(v)}");
+                var endpoint = _config["ApiSettings:TopUpFilterOptionsEndpoint"] ?? "api/TopUp/filter-options";
+                var url = BuildUrl(endpoint, new List<string>());
+
+                using var request = CreateAuthorizedGetRequest(url);
+                var response = await _client.SendAsync(request);
+
+                if (!response.IsSuccessStatusCode)
+                    return new TopUpInputModel();
+
+                var json = await response.Content.ReadAsStringAsync();
+                return JsonConvert.DeserializeObject<TopUpInputModel>(json) ?? new TopUpInputModel();
+            }
+            catch
+            {
+                return new TopUpInputModel();
             }
         }
 
-        private string BuildUrl(string endpoint, List<string> queryParts)
-        {
-            var baseUrl = _config["BaseApiUrl:Link"]?.TrimEnd('/') ?? "";
-            endpoint = (endpoint ?? "").TrimStart('/');
-            return $"{baseUrl}/{endpoint}?{string.Join("&", queryParts)}";
-        }
-
-        // =====================================================
-        // 0) FILTER OPTIONS (GLOBAL CHECKBOX LISTS)
-        // =====================================================
-        public async Task<TopUpInputModel> GetTopUpFilterOptionsAsync()
-        {
-            string endpoint = _config["ApiSettings:TopUpFilterOptionsEndpoint"]
-                              ?? "api/TopUp/filter-options";
-
-            var url = BuildUrl(endpoint, new List<string>());
-
-            var resp = await _client.GetAsync(url);
-            if (!resp.IsSuccessStatusCode)
-                return new TopUpInputModel();
-
-            var json = await resp.Content.ReadAsStringAsync();
-
-            // The API returns a TopUpDto-like object. We only care about the Options lists.
-            // We'll deserialize into TopUpInputModel because we added matching properties there.
-            return JsonConvert.DeserializeObject<TopUpInputModel>(json) ?? new TopUpInputModel();
-        }
-
-        // =====================================================
-        // 1) RAZOR PAGE - PAGED RESULTS
-        // =====================================================
         public async Task<PageTopUpModel> GetTopUpAsync(
             DateTime startDate,
             DateTime endDate,
@@ -74,36 +61,43 @@ namespace MIS.Web.Services
             int page = 1,
             int pageSize = 30)
         {
-            string endpoint = _config["ApiSettings:TopUpEndpoint"];  // api/TopUp/details
-
-            var query = new List<string>
+            try
             {
-                $"startDate={Uri.EscapeDataString(startDate.ToString("yyyy-MM-ddTHH:mm:ss"))}",
-                $"endDate={Uri.EscapeDataString(endDate.ToString("yyyy-MM-ddTHH:mm:ss"))}",
-                $"page={page}",
-                $"pageSize={pageSize}"
-            };
+                var endpoint = _config["ApiSettings:TopUpEndpoint"] ?? "api/TopUp/details";
 
-            //  checkbox lists
-            AddListParams(query, "shifts", shifts);
-            AddListParams(query, "operatorIds", operatorIds);
-            AddListParams(query, "lanes", lanes);
-            AddListParams(query, "paymentMethods", paymentMethods);
+                var query = new List<string>
+                {
+                    $"startDate={Uri.EscapeDataString(startDate.ToString("yyyy-MM-ddTHH:mm:ss"))}",
+                    $"endDate={Uri.EscapeDataString(endDate.ToString("yyyy-MM-ddTHH:mm:ss"))}",
+                    $"page={page}",
+                    $"pageSize={pageSize}"
+                };
 
-            if (!string.IsNullOrWhiteSpace(accountNumber))
-                query.Add($"accountNumber={Uri.EscapeDataString(accountNumber.Trim())}");
+                AddListParams(query, "shifts", shifts);
+                AddListParams(query, "operatorIds", operatorIds);
+                AddListParams(query, "lanes", lanes);
+                AddListParams(query, "paymentMethods", paymentMethods);
 
-            string url = BuildUrl(endpoint, query);
+                if (!string.IsNullOrWhiteSpace(accountNumber))
+                    query.Add($"accountNumber={Uri.EscapeDataString(accountNumber.Trim())}");
 
-            var resp = await _client.GetAsync(url);
-            if (!resp.IsSuccessStatusCode)
+                var url = BuildUrl(endpoint, query);
+
+                using var request = CreateAuthorizedGetRequest(url);
+                var response = await _client.SendAsync(request);
+
+                if (!response.IsSuccessStatusCode)
+                    return new PageTopUpModel();
+
+                var json = await response.Content.ReadAsStringAsync();
+                return JsonConvert.DeserializeObject<PageTopUpModel>(json) ?? new PageTopUpModel();
+            }
+            catch
+            {
                 return new PageTopUpModel();
-
-            string json = await resp.Content.ReadAsStringAsync();
-            return JsonConvert.DeserializeObject<PageTopUpModel>(json) ?? new PageTopUpModel();
+            }
         }
 
-        // 2) EXPORT MODE - FULL DATASET (NO PAGING)
         public async Task<PageTopUpModel> GetTopUpFullAsync(
             DateTime startDate,
             DateTime endDate,
@@ -113,33 +107,82 @@ namespace MIS.Web.Services
             List<string>? paymentMethods = null,
             string? accountNumber = null)
         {
-            string endpoint = _config["ApiSettings:TopUpEndpoint"];
-
-            var query = new List<string>
+            try
             {
-                $"startDate={Uri.EscapeDataString(startDate.ToString("yyyy-MM-ddTHH:mm:ss"))}",
-                $"endDate={Uri.EscapeDataString(endDate.ToString("yyyy-MM-ddTHH:mm:ss"))}",
-                $"page=1",
-                $"pageSize=1000000" 
-            };
+                var endpoint = _config["ApiSettings:TopUpEndpoint"] ?? "api/TopUp/details";
 
-            // checkbox lists
-            AddListParams(query, "shifts", shifts);
-            AddListParams(query, "operatorIds", operatorIds);
-            AddListParams(query, "lanes", lanes);
-            AddListParams(query, "paymentMethods", paymentMethods);
+                var query = new List<string>
+                {
+                    $"startDate={Uri.EscapeDataString(startDate.ToString("yyyy-MM-ddTHH:mm:ss"))}",
+                    $"endDate={Uri.EscapeDataString(endDate.ToString("yyyy-MM-ddTHH:mm:ss"))}",
+                    "page=1",
+                    "pageSize=1000000"
+                };
 
-            if (!string.IsNullOrWhiteSpace(accountNumber))
-                query.Add($"accountNumber={Uri.EscapeDataString(accountNumber.Trim())}");
+                AddListParams(query, "shifts", shifts);
+                AddListParams(query, "operatorIds", operatorIds);
+                AddListParams(query, "lanes", lanes);
+                AddListParams(query, "paymentMethods", paymentMethods);
 
-            string url = BuildUrl(endpoint, query);
+                if (!string.IsNullOrWhiteSpace(accountNumber))
+                    query.Add($"accountNumber={Uri.EscapeDataString(accountNumber.Trim())}");
 
-            var resp = await _client.GetAsync(url);
-            if (!resp.IsSuccessStatusCode)
+                var url = BuildUrl(endpoint, query);
+
+                using var request = CreateAuthorizedGetRequest(url);
+                var response = await _client.SendAsync(request);
+
+                if (!response.IsSuccessStatusCode)
+                    return new PageTopUpModel();
+
+                var json = await response.Content.ReadAsStringAsync();
+                return JsonConvert.DeserializeObject<PageTopUpModel>(json) ?? new PageTopUpModel();
+            }
+            catch
+            {
                 return new PageTopUpModel();
+            }
+        }
 
-            string json = await resp.Content.ReadAsStringAsync();
-            return JsonConvert.DeserializeObject<PageTopUpModel>(json) ?? new PageTopUpModel();
+        private HttpRequestMessage CreateAuthorizedGetRequest(string url)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            AddBearerToken(request);
+            return request;
+        }
+
+        private void AddBearerToken(HttpRequestMessage request)
+        {
+            var token = _httpContextAccessor.HttpContext?.User?.FindFirst("access_token")?.Value;
+
+            if (string.IsNullOrWhiteSpace(token))
+                throw new UnauthorizedAccessException("No JWT token found for current user.");
+
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+
+        private static void AddListParams(List<string> query, string key, List<string>? values)
+        {
+            if (values == null)
+                return;
+
+            foreach (var value in values.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()))
+            {
+                query.Add($"{key}={Uri.EscapeDataString(value)}");
+            }
+        }
+
+        private string BuildUrl(string endpoint, List<string> queryParts)
+        {
+            var baseUrl = _config["BaseApiUrl:Link"]?.TrimEnd('/') ?? string.Empty;
+            endpoint = (endpoint ?? string.Empty).TrimStart('/');
+
+            var url = $"{baseUrl}/{endpoint}";
+
+            if (queryParts != null && queryParts.Count > 0)
+                url += "?" + string.Join("&", queryParts);
+
+            return url;
         }
     }
 }

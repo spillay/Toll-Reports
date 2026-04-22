@@ -1,5 +1,7 @@
 ﻿using MIS.Web.Models.AccountHistory;
+using Microsoft.AspNetCore.Http;
 using Newtonsoft.Json;
+using System.Net.Http.Headers;
 
 namespace MIS.Web.Services
 {
@@ -8,29 +10,33 @@ namespace MIS.Web.Services
         private readonly HttpClient _httpClient;
         private readonly IConfiguration _config;
         private readonly ILogger<AccountHistoryService> _logger;
+        private readonly IHttpContextAccessor _httpContextAccessor;
 
-        public AccountHistoryService(HttpClient httpClient, IConfiguration config, ILogger<AccountHistoryService> logger)
+        public AccountHistoryService(
+            HttpClient httpClient,
+            IConfiguration config,
+            ILogger<AccountHistoryService> logger,
+            IHttpContextAccessor httpContextAccessor)
         {
             _httpClient = httpClient;
             _config = config;
             _logger = logger;
+            _httpContextAccessor = httpContextAccessor;
         }
 
-        // ✅ FETCH ACCOUNT LIST (Dropdown)
         public async Task<List<string>> GetAccountsAsync()
         {
-            string baseUrl = _config["BaseApiUrl:Link"];
-            string endpoint = _config["ApiSettings:AccountListEndpoint"];
-            string url = $"{baseUrl}{endpoint}";
-
             try
             {
-                _logger.LogInformation("📌 Fetching account numbers → {Url}", url);
+                var url = BuildUrl("ApiSettings:AccountListEndpoint");
+                _logger.LogInformation("Fetching account numbers → {Url}", url);
 
-                var response = await _httpClient.GetAsync(url);
+                using var request = CreateAuthorizedGetRequest(url);
+                using var response = await _httpClient.SendAsync(request);
+
                 if (!response.IsSuccessStatusCode)
                 {
-                    _logger.LogWarning("⚠ Account list fetch failed: HTTP {Code}", response.StatusCode);
+                    _logger.LogWarning("Account list fetch failed: HTTP {Code}", response.StatusCode);
                     return new();
                 }
 
@@ -39,33 +45,25 @@ namespace MIS.Web.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "❌ Error fetching accounts");
+                _logger.LogError(ex, "Error fetching accounts");
                 return new();
             }
         }
 
-        // ✅ FETCH ACCOUNT HISTORY
-
         public async Task<AccountHistoryInputModel> GetAccountHistoryAsync(
-    string? accountNumber,
-    DateTime? startDate,
-    DateTime? endDate,
-    bool? operational)
+            string? accountNumber,
+            DateTime? startDate,
+            DateTime? endDate,
+            bool? operational)
         {
-            // If user did nothing yet, return empty model
             if (startDate == null && endDate == null && string.IsNullOrWhiteSpace(accountNumber))
                 return new AccountHistoryInputModel { PageData = new PageAccountHistoryModel() };
 
-            var baseUrl = (_config["BaseApiUrl:Link"] ?? "").TrimEnd('/');
-            var endpoint = (_config["ApiSettings:AccountHistoryEndpoint"] ?? "").TrimStart('/');
-
-            // Build query params
             var query = new Dictionary<string, string>();
 
             if (!string.IsNullOrWhiteSpace(accountNumber))
                 query["accountNumber"] = accountNumber.Trim();
 
-            // ✅ keep time part if provided (better for datetime-local)
             if (startDate.HasValue)
                 query["startDate"] = startDate.Value.ToString("yyyy-MM-ddTHH:mm:ss");
 
@@ -75,21 +73,20 @@ namespace MIS.Web.Services
             if (operational.HasValue)
                 query["operational"] = operational.Value ? "true" : "false";
 
-            var queryString = string.Join("&", query.Select(x => $"{x.Key}={Uri.EscapeDataString(x.Value)}"));
-            var url = $"{baseUrl}/{endpoint}?{queryString}";
+            var url = BuildUrl("ApiSettings:AccountHistoryEndpoint", query);
 
             try
             {
-                _logger.LogInformation("📘 Requesting Account History → {Url}", url);
+                _logger.LogInformation("Requesting Account History → {Url}", url);
 
-                using var response = await _httpClient.GetAsync(url);
+                using var request = CreateAuthorizedGetRequest(url);
+                using var response = await _httpClient.SendAsync(request);
 
-                // ✅ read once
                 var json = await response.Content.ReadAsStringAsync();
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    _logger.LogError("❌ Account history API failed. Status={Status} Url={Url} Body={Body}",
+                    _logger.LogError("Account history API failed. Status={Status} Url={Url} Body={Body}",
                         (int)response.StatusCode, url, json);
 
                     return new AccountHistoryInputModel { PageData = new PageAccountHistoryModel() };
@@ -99,7 +96,7 @@ namespace MIS.Web.Services
 
                 if (payload == null)
                 {
-                    _logger.LogWarning("⚠ Invalid JSON payload for account {Acc}. Raw={Raw}", accountNumber, json);
+                    _logger.LogWarning("Invalid JSON payload for account {Acc}. Raw={Raw}", accountNumber, json);
                     return new AccountHistoryInputModel { PageData = new PageAccountHistoryModel() };
                 }
 
@@ -134,51 +131,105 @@ namespace MIS.Web.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "❌ Error fetching account history for {Acc}", accountNumber);
+                _logger.LogError(ex, "Error fetching account history for {Acc}", accountNumber);
                 return new AccountHistoryInputModel { PageData = new PageAccountHistoryModel() };
             }
         }
+
         public async Task<List<AccountSearchItem>> SearchAccountsAsync(string q, int take = 20)
         {
             q = (q ?? "").Trim();
-            if (q.Length < 2) return new();
+
+            if (q.Length < 3)
+                return new();
 
             take = Math.Clamp(take, 1, 50);
 
-            string baseUrl = _config["BaseApiUrl:Link"];
-            string endpoint = _config["ApiSettings:AccountHistorySearchEndpoint"]; // "api/AccountHistory/search-accounts"
-            string url = $"{baseUrl}{endpoint}?q={Uri.EscapeDataString(q)}&take={take}";
+            var query = new Dictionary<string, string>
+            {
+                ["q"] = q,
+                ["take"] = take.ToString()
+            };
+
+            var url = BuildUrl("ApiSettings:AccountHistorySearchEndpoint", query);
 
             try
             {
-                _logger.LogInformation("🔎 Searching accounts → {Url}", url);
+                _logger.LogInformation("Searching accounts → {Url}", url);
 
-                var response = await _httpClient.GetAsync(url);
-                if (!response.IsSuccessStatusCode) return new();
+                using var request = CreateAuthorizedGetRequest(url);
 
-                var json = await response.Content.ReadAsStringAsync();
+                // Shorter timeout just for live search
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
 
-                // Deserialize into anonymous shape using Newtonsoft (safe)
+                using var response = await _httpClient.SendAsync(request, cts.Token);
+
+                if (!response.IsSuccessStatusCode)
+                    return new();
+
+                var json = await response.Content.ReadAsStringAsync(cts.Token);
                 var raw = JsonConvert.DeserializeObject<List<dynamic>>(json) ?? new();
 
-                // Map into a strong shape for your UI
-                var results = raw.Select(x => new AccountSearchItem
+                return raw.Select(x => new AccountSearchItem
                 {
                     AccountNumber = (string?)x.accountNumber,
                     Description = (string?)x.description,
                     Balance = x.balance != null ? (decimal)x.balance : 0m
                 }).ToList();
-
-                return results;
+            }
+            catch (TaskCanceledException ex)
+            {
+                _logger.LogWarning(ex, "Account search timed out for query {Query}", q);
+                return new();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "❌ Error searching accounts");
+                _logger.LogError(ex, "Error searching accounts");
                 return new();
             }
         }
 
-        // ✅ LOCAL API RESPONSE MODELS 
+        private HttpRequestMessage CreateAuthorizedGetRequest(string url)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            AddBearerToken(request);
+            return request;
+        }
+
+        private void AddBearerToken(HttpRequestMessage request)
+        {
+            var token = _httpContextAccessor.HttpContext?.User?.FindFirst("access_token")?.Value;
+
+            if (string.IsNullOrWhiteSpace(token))
+                throw new UnauthorizedAccessException("No JWT token found for current user.");
+
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+
+        private string BuildUrl(string endpointConfigKey, IDictionary<string, string>? query = null)
+        {
+            var baseUrl = (_config["BaseApiUrl:Link"] ?? "").TrimEnd('/');
+            var endpoint = (_config[endpointConfigKey] ?? "").TrimStart('/');
+
+            if (string.IsNullOrWhiteSpace(baseUrl))
+                throw new InvalidOperationException("BaseApiUrl:Link is missing in configuration.");
+
+            if (string.IsNullOrWhiteSpace(endpoint))
+                throw new InvalidOperationException($"{endpointConfigKey} is missing in configuration.");
+
+            var url = $"{baseUrl}/{endpoint}";
+
+            if (query != null && query.Count > 0)
+            {
+                var queryString = string.Join("&",
+                    query.Select(x => $"{x.Key}={Uri.EscapeDataString(x.Value)}"));
+
+                url += "?" + queryString;
+            }
+
+            return url;
+        }
+
         private class AccountHistoryApiResponse
         {
             [JsonProperty("accountHeader")]
@@ -187,7 +238,6 @@ namespace MIS.Web.Services
             [JsonProperty("historyRecords")]
             public List<AccountHistoryModel>? HistoryRecords { get; set; }
 
-            // If your API returns these, keep them (otherwise remove)
             [JsonProperty("totalTopUps")]
             public decimal TotalTopUps { get; set; }
 

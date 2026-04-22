@@ -11,6 +11,7 @@ namespace Toll.Reporting.Api.Repositories
             List<string>? tollOperators = null,
             List<string>? laneNames = null,
             List<string>? paymentMethods = null,
+            List<string>? tollCollectorClasses = null,
             int page = 1,
             int pageSize = 10);
 

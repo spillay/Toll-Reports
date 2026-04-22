@@ -1,8 +1,4 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Toll.Reporting.Api.DTOs;
 using Toll.Reporting.Api.Repositories.Interfaces;
 using TollReportingSystem.Data;

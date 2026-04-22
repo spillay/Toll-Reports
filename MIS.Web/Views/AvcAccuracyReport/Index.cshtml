@@ -445,7 +445,7 @@
         }
 
         function getSafeText(value) {
-        return (value ?? "").toString().trim();
+        return (value ?? "").toString().replace(/\s+/g, " ").trim();
         }
 
         function loadImage(src) {
@@ -456,6 +456,18 @@
         img.onerror = () => resolve(null);
         img.src = src;
         });
+        }
+
+        function hasTableData() {
+        const table = getTable();
+        if (!table) return false;
+
+        const bodyRows = table.querySelectorAll("tbody tr");
+        if (!bodyRows.length) return false;
+
+        return Array.from(bodyRows).some(tr =>
+        Array.from(tr.querySelectorAll("td")).some(td => getSafeText(td.innerText) !== "")
+        );
         }
 
         function extractFullTableData() {
@@ -498,32 +510,47 @@
         return headers;
         }
 
-        function extractTableBody() {
-        const body = [];
+        function extractStructuredBodyRows() {
+        const rows = [];
         const table = getTable();
 
-        if (!table) return body;
+        if (!table) return rows;
 
         table.querySelectorAll("tbody tr").forEach(tr => {
-        const row = [];
+        const cells = [];
         tr.querySelectorAll("td").forEach(td => {
-        row.push(getSafeText(td.innerText));
+        cells.push(getSafeText(td.innerText));
         });
 
-        if (row.length > 0) {
-        body.push(row);
+        if (cells.length > 0) {
+        const firstCell = cells[0] || "";
+
+        rows.push({
+        cells,
+        firstCell,
+        isTotalRow: tr.classList.contains("avc-total-row"),
+        isLaneTitleRow: firstCell !== "" && cells.slice(1).every(x => x === ""),
+        isMetricRow:
+        firstCell === "Traffic Count" ||
+        firstCell === "Percentage Accuracy",
+        rawClassName: tr.className || ""
+        });
         }
         });
 
-        return body;
+        return rows;
         }
 
         function buildExcelData() {
         const data = [];
 
+        data.push([COMPANY_NAME]);
+        data.push([COMPANY_SUBTITLE]);
+        data.push([REPORT_TITLE]);
+        data.push([]);
+
         data.push(["Start Date and Time:", FILTERS_USED["Start Date and Time"]]);
         data.push(["End Date and Time:", FILTERS_USED["End Date and Time"]]);
-        data.push([]);
         data.push(["Operational Shift:", FILTERS_USED["Operational Shift"]]);
         data.push(["Lane:", FILTERS_USED["Lane"]]);
         data.push(["Class:", FILTERS_USED["Class"]]);
@@ -532,17 +559,8 @@
         extractFullTableData().forEach(row => data.push(row));
 
         data.push([]);
-        data.push([
-        "AVC Accuracy Report (Report name)",
-        "",
-        "Date and Time:",
-        GENERATED_ON,
-        "",
-        "User ID:",
-        GENERATED_BY,
-        "",
-        "Page 1 of 1"
-        ]);
+        data.push(["Date and Time:", GENERATED_ON]);
+        data.push(["User ID:", GENERATED_BY]);
         data.push(["Reports Module Version Number:", REPORT_VERSION]);
 
         return data;
@@ -599,6 +617,11 @@
         }
 
         function exportExcel() {
+        if (!hasTableData()) {
+        alert("No data available to export.");
+        return;
+        }
+
         const wb = XLSX.utils.book_new();
         const ws = XLSX.utils.aoa_to_sheet(buildExcelData());
 
@@ -609,6 +632,11 @@
         }
 
         function exportPdf(leftLogo, rightLogo) {
+        if (!hasTableData()) {
+        alert("No data available to export.");
+        return;
+        }
+
         const doc = new jsPDF("l", "pt", "a4");
         const pageWidth = doc.internal.pageSize.getWidth();
         const pageHeight = doc.internal.pageSize.getHeight();
@@ -620,34 +648,68 @@
         const filtersEndY = addPdfFilters(doc, margin, startY + 80);
 
         const headerRows = extractTableHeaders();
-        const bodyRows = extractTableBody();
+        const structuredBodyRows = extractStructuredBodyRows();
+        const bodyRows = structuredBodyRows.map(x => x.cells);
 
         doc.autoTable({
         startY: filtersEndY + 8,
-        head: headerRows.length ? [headerRows[headerRows.length - 1]] : [["Report"]],
+        head: headerRows.length ? headerRows : [["Report"]],
         body: bodyRows,
         styles: {
         fontSize: 7,
         cellPadding: 3,
         lineColor: [0, 0, 0],
         lineWidth: 0.5,
-        textColor: [0, 0, 0]
+        textColor: [0, 0, 0],
+        halign: "center",
+        valign: "middle",
+        overflow: "linebreak"
         },
         headStyles: {
-        fillColor: [230, 230, 230],
-        textColor: [0, 0, 0],
-        fontStyle: "bold"
+        fillColor: [41, 128, 185],
+        textColor: [255, 255, 255],
+        fontStyle: "bold",
+        halign: "center",
+        valign: "middle"
         },
         theme: "grid",
         margin: {
         left: margin,
         right: margin,
         bottom: 55
+        },
+        didParseCell: function (data) {
+        if (data.section !== "body") return;
+
+        const rowInfo = structuredBodyRows[data.row.index];
+        if (!rowInfo) return;
+
+        if (rowInfo.isLaneTitleRow) {
+        data.cell.styles.fillColor = [248, 249, 250];
+        data.cell.styles.fontStyle = "bold";
+
+        if (data.column.index === 0) {
+        data.cell.styles.halign = "left";
+        }
+        }
+
+        if (rowInfo.isMetricRow && data.column.index === 0) {
+        data.cell.styles.fontStyle = "bold";
+        data.cell.styles.halign = "left";
+        }
+
+        if (rowInfo.isTotalRow) {
+        data.cell.styles.fillColor = [248, 249, 250];
+        data.cell.styles.fontStyle = "bold";
+
+        if (data.column.index === 0) {
+        data.cell.styles.halign = "left";
+        }
+        }
         }
         });
 
         addPdfFooters(doc, pageWidth, pageHeight, margin);
-
         doc.save(`AVC_Accuracy_Report_${fileStamp()}.pdf`);
         }
 

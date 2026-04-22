@@ -1,15 +1,9 @@
-﻿namespace Toll.Reporting.Api.DTOs
+namespace MIS.Web.Models.LoginResponse
 {
-    public class LoginRequestDto
-    {
-        public string Username { get; set; } = "";
-        public string Password { get; set; } = "";
-    }
-
-    public class LoginResponseDto
+    public class LoginApiResponse
     {
         public bool Success { get; set; }
-        public string Message { get; set; } = "";
+        public string Message { get; set; } = string.Empty;
 
         public long? SystemUserId { get; set; }
         public string? Username { get; set; }
@@ -19,8 +13,7 @@
         public bool RequiresPasswordReset { get; set; }
         public bool PasswordExpired { get; set; }
 
-        // JWT fields
-        public string Token { get; set; } = "";
+        public string Token { get; set; } = string.Empty;
         public int ExpiresInMinutes { get; set; }
     }
 }

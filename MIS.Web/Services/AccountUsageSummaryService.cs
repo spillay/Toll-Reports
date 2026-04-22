@@ -1,10 +1,12 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using MIS.Web.Models.AccountUsageSummary;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Threading.Tasks;
 
 namespace MIS.Web.Services
@@ -14,15 +16,18 @@ namespace MIS.Web.Services
         private readonly HttpClient _httpClient;
         private readonly IConfiguration _config;
         private readonly ILogger<AccountUsageSummaryService> _logger;
+        private readonly IHttpContextAccessor _httpContextAccessor;
 
         public AccountUsageSummaryService(
             HttpClient httpClient,
             IConfiguration config,
-            ILogger<AccountUsageSummaryService> logger)
+            ILogger<AccountUsageSummaryService> logger,
+            IHttpContextAccessor httpContextAccessor)
         {
             _httpClient = httpClient;
             _config = config;
             _logger = logger;
+            _httpContextAccessor = httpContextAccessor;
         }
 
         private string GetBaseUrl()
@@ -37,23 +42,7 @@ namespace MIS.Web.Services
             int page = 1,
             int pageSize = 20)
         {
-            var model = new PageAccountUsageSummaryModel
-            {
-                Summary = new AccountUsageSummarySummaryModel(),
-                Items = new List<AccountUsageSummaryModel>(),
-                Filters = new AccountUsageSummaryInputModel
-                {
-                    StartDate = startDate,
-                    EndDate = endDate,
-                    AccountNumber = accountNumber,
-                    Page = page,
-                    PageSize = pageSize
-                },
-                page = page,
-                pageSize = pageSize,
-                totalCount = 0,
-                totalPages = 0
-            };
+            var model = CreateEmptyModel(startDate, endDate, accountNumber, page, pageSize);
 
             var baseUrl = GetBaseUrl();
             if (string.IsNullOrWhiteSpace(baseUrl))
@@ -82,7 +71,8 @@ namespace MIS.Web.Services
             {
                 _logger.LogInformation("Calling AccountUsageSummary API: {Url}", url);
 
-                var response = await _httpClient.GetAsync(url);
+                using var request = CreateAuthorizedGetRequest(url);
+                using var response = await _httpClient.SendAsync(request);
 
                 if (!response.IsSuccessStatusCode)
                 {
@@ -142,6 +132,49 @@ namespace MIS.Web.Services
 
                 return model;
             }
+        }
+
+        private HttpRequestMessage CreateAuthorizedGetRequest(string url)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            AddBearerToken(request);
+            return request;
+        }
+
+        private void AddBearerToken(HttpRequestMessage request)
+        {
+            var token = _httpContextAccessor.HttpContext?.User?.FindFirst("access_token")?.Value;
+
+            if (string.IsNullOrWhiteSpace(token))
+                throw new UnauthorizedAccessException("No JWT token found for current user.");
+
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+
+        private static PageAccountUsageSummaryModel CreateEmptyModel(
+            DateTime startDate,
+            DateTime endDate,
+            string? accountNumber,
+            int page,
+            int pageSize)
+        {
+            return new PageAccountUsageSummaryModel
+            {
+                Summary = new AccountUsageSummarySummaryModel(),
+                Items = new List<AccountUsageSummaryModel>(),
+                Filters = new AccountUsageSummaryInputModel
+                {
+                    StartDate = startDate,
+                    EndDate = endDate,
+                    AccountNumber = accountNumber,
+                    Page = page,
+                    PageSize = pageSize
+                },
+                page = page,
+                pageSize = pageSize,
+                totalCount = 0,
+                totalPages = 0
+            };
         }
     }
 }

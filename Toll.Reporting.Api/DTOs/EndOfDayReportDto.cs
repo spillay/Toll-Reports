@@ -14,12 +14,25 @@ namespace Toll.Reporting.Api.DTOs.EndOfDay
         public string ShiftName { get; set; } = "-All-";
 
         public List<TheoreticalIncomeRowDto> TheoreticalIncome { get; set; } = new();
+        public List<EndOfDayReportRowDto> Rows { get; set; } = new();
 
         public ExemptsDto Exempts { get; set; } = new();
         public DiscountsDto Discounts { get; set; } = new();
         public OtherIncomeDto OtherIncome { get; set; } = new();
         public ReconciliationDto Reconciliation { get; set; } = new();
         public EndOfDayTotalsDto Totals { get; set; } = new();
+    }
+
+    public class EndOfDayReportRowDto
+    {
+        public string Col1 { get; set; } = string.Empty;
+        public string Col2 { get; set; } = string.Empty;
+        public string Col3 { get; set; } = string.Empty;
+        public string Col4 { get; set; } = string.Empty;
+        public string Col5 { get; set; } = string.Empty;
+        public string Col6 { get; set; } = string.Empty;
+        public string Col7 { get; set; } = string.Empty;
+        public string Col8 { get; set; } = string.Empty;
     }
 
     public class TheoreticalIncomeRowDto

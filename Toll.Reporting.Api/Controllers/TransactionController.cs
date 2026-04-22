@@ -1,9 +1,11 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Toll.Reporting.Api.Repositories;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Toll.Reporting.Api.DTOs;
+using Toll.Reporting.Api.Repositories;
 
 namespace Toll.Reporting.Api.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("api/[controller]")]
     public class TransactionController : ControllerBase
@@ -28,17 +30,16 @@ namespace Toll.Reporting.Api.Controllers
             [FromQuery] List<string>? tollOperators,
             [FromQuery] List<string>? laneNames,
             [FromQuery] List<string>? paymentMethods,
+            [FromQuery] List<string>? tollCollectorClasses,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 10,
             [FromQuery] bool exportAll = false)
         {
             try
             {
-                // 🔹 Validate dates
                 if (startDate == default || endDate == default)
                     return BadRequest("StartDate and EndDate are required.");
 
-                // 🔹 Export mode (fetch all records)
                 if (exportAll)
                 {
                     _logger.LogInformation("Exporting ALL transaction data from {Start} to {End}", startDate, endDate);
@@ -59,17 +60,18 @@ namespace Toll.Reporting.Api.Controllers
                     tollOperators,
                     laneNames,
                     paymentMethods,
+                    tollCollectorClasses,
                     page,
                     pageSize
                 );
 
-                _logger.LogInformation("✅ Transactions retrieved successfully. Count: {Count}", result.TotalCount);
+                _logger.LogInformation("Transactions retrieved successfully. Count: {Count}", result.TotalCount);
 
                 return Ok(result);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "❌ Error fetching transaction details.");
+                _logger.LogError(ex, "Error fetching transaction details.");
                 return StatusCode(500, "An error occurred while retrieving transaction data.");
             }
         }
@@ -95,7 +97,7 @@ namespace Toll.Reporting.Api.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "❌ Error fetching transaction filter options.");
+                _logger.LogError(ex, "Error fetching transaction filter options.");
                 return StatusCode(500, "An error occurred while retrieving filter data.");
             }
         }

@@ -71,6 +71,7 @@ namespace MIS.Web.Controllers
             model.SelectedTollOperators = NormalizeList(model.SelectedTollOperators);
             model.SelectedLanes = NormalizeList(model.SelectedLanes);
             model.SelectedPaymentMethods = NormalizeList(model.SelectedPaymentMethods);
+            model.SelectedTollCollectorClasses = NormalizeList(model.SelectedTollCollectorClasses);
         }
 
         private static List<string> NormalizeList(List<string>? list)
@@ -90,6 +91,7 @@ namespace MIS.Web.Controllers
             model.TollOperators = filters.TollOperators ?? new List<string>();
             model.Lanes = filters.Lanes ?? new List<string>();
             model.PaymentMethods = filters.PaymentMethods ?? new List<string>();
+            model.TollCollectorClasses = filters.TollCollectorClasses ?? new List<string>();
         }
 
         private async Task PopulatePagedData(TransactionInputModel model)
@@ -114,6 +116,7 @@ namespace MIS.Web.Controllers
                 SelectedTollOperators = model.SelectedTollOperators,
                 SelectedLanes = model.SelectedLanes,
                 SelectedPaymentMethods = model.SelectedPaymentMethods,
+                SelectedTollCollectorClasses = model.SelectedTollCollectorClasses,
 
                 ExportAll = true,
                 page = 1,
@@ -134,10 +137,12 @@ namespace MIS.Web.Controllers
                 TollOperators = new List<string>(),
                 Lanes = new List<string>(),
                 PaymentMethods = new List<string>(),
+                TollCollectorClasses = new List<string>(),
                 SelectedShifts = new List<string>(),
                 SelectedTollOperators = new List<string>(),
                 SelectedLanes = new List<string>(),
-                SelectedPaymentMethods = new List<string>()
+                SelectedPaymentMethods = new List<string>(),
+                SelectedTollCollectorClasses = new List<string>()
             };
         }
     }

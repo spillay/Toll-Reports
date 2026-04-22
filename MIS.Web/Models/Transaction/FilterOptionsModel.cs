@@ -6,5 +6,6 @@
         public List<string> Shifts { get; set; } = new();
         public List<string> TollOperators { get; set; } = new();
         public List<string> Lanes { get; set; } = new();
+        public List<string> TollCollectorClasses { get; set; } = new();
     }
 }

@@ -9,15 +9,12 @@
     var currentUser = User.FindFirst("firstName")?.Value ?? (User.Identity?.Name ?? "Lucky");
     var reportGeneratedAt = DateTime.Now;
 
-    // Filter options from controller
     var allShifts = ViewBag.AllShifts as List<string> ?? new List<string>();
     var allOperators = ViewBag.AllOperators as List<string> ?? new List<string>();
 
-    // Selected values from model
     var selectedShifts = Model.OperationalShift ?? new List<string>();
     var selectedOperators = Model.TollOperators ?? new List<string>();
 
-    // Pagination
     int maxPagesToShow = 3;
     int currentPage = Model.page <= 0 ? 1 : Model.page;
     int totalPages = Model.totalPages <= 0 ? 1 : Model.totalPages;
@@ -30,7 +27,6 @@
         startPage = Math.Max(1, endPage - maxPagesToShow + 1);
     }
 
-    // Helpers
     List<string> CleanList(IEnumerable<string> values) =>
         (values ?? Enumerable.Empty<string>())
             .Where(x => !string.IsNullOrWhiteSpace(x))
@@ -64,103 +60,66 @@
                shift.Equals("GRAND TOTAL", StringComparison.OrdinalIgnoreCase);
     }
 
-    decimal ToDecimal(decimal? value) => value ?? 0m;
-    double ToDouble(double? value) => value ?? 0d;
-
     var rowsOnly = (Model.items ?? new List<MIS.Web.Models.VarientPerfomance.VarientPerfomanceModel>())
         .Where(x => !IsSystemTotalRow(x))
         .ToList();
 
-    // Use full export dataset for totals, not only current page
     var exportCoreItems = (Model.ExportItems ?? new List<MIS.Web.Models.VarientPerfomance.VarientPerfomanceModel>())
         .Where(x => !IsSystemTotalRow(x))
         .ToList();
 
-    var grandExpected = exportCoreItems.Sum(i => Convert.ToDecimal(i.NominalTariff));
-    var grandDeclared = exportCoreItems.Sum(i => Convert.ToDecimal(i.NettAmount));
-    var grandDiff = exportCoreItems.Sum(i => Convert.ToDecimal(i.Difference));
-    var grandDiscrepancies = exportCoreItems.Sum(i => Convert.ToDecimal(i.DiscrepancyDifference ?? 0));
+    var previewTotalSource = exportCoreItems.Any() ? exportCoreItems : rowsOnly;
 
-    var shiftDisplaySource = CleanList(allShifts).Any()
-        ? CleanList(allShifts)
-        : CleanList(exportCoreItems.Select(x => x.ShiftDescription));
+    var screenGrandExpected = previewTotalSource.Sum(i => Convert.ToDecimal(i.NominalTariff));
+    var screenGrandDeclared = previewTotalSource.Sum(i => Convert.ToDecimal(i.NettAmount));
+    var screenGrandDiff = previewTotalSource.Sum(i => Convert.ToDecimal(i.Difference));
+    var screenGrandDiscrepancies = previewTotalSource.Sum(i => Convert.ToDecimal(i.DiscrepancyDifference ?? 0));
 
-    var shiftTotals = shiftDisplaySource
-        .Select(shiftValue =>
+    var screenShiftTotals = previewTotalSource
+        .GroupBy(x => (x.ShiftDescription ?? "").Trim(), StringComparer.OrdinalIgnoreCase)
+        .OrderBy(g => g.Key)
+        .Select(g => new
         {
-            var shiftRows = exportCoreItems
-                .Where(x => string.Equals(
-                    (x.ShiftDescription ?? "").Trim(),
-                    shiftValue,
-                    StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-            return new
-            {
-                Shift = shiftValue,
-                CashExpected = shiftRows.Sum(x => Convert.ToDecimal(x.NominalTariff)),
-                CashDeclared = shiftRows.Sum(x => Convert.ToDecimal(x.NettAmount)),
-                CashDeclaredDifference = shiftRows.Sum(x => Convert.ToDecimal(x.Difference)),
-                Discrepancies = shiftRows.Sum(x => Convert.ToDecimal(x.DiscrepancyDifference ?? 0))
-            };
+            Shift = g.Key,
+            CashExpected = g.Sum(x => Convert.ToDecimal(x.NominalTariff)),
+            CashDeclared = g.Sum(x => Convert.ToDecimal(x.NettAmount)),
+            CashDeclaredDifference = g.Sum(x => Convert.ToDecimal(x.Difference)),
+            Discrepancies = g.Sum(x => Convert.ToDecimal(x.DiscrepancyDifference ?? 0))
         })
         .ToList();
 
-    var isLastPage = currentPage == totalPages;
+    var screenShiftDayTotals = previewTotalSource
+        .GroupBy(x => new
+        {
+            ShiftDate = x.ShiftDate?.Date,
+            Shift = (x.ShiftDescription ?? "").Trim()
+        })
+        .OrderBy(g => g.Key.ShiftDate)
+        .ThenBy(g => g.Key.Shift)
+        .Select(g => new
+        {
+            ShiftDate = g.Key.ShiftDate,
+            Shift = g.Key.Shift,
+            CashExpected = g.Sum(x => Convert.ToDecimal(x.NominalTariff)),
+            CashDeclared = g.Sum(x => Convert.ToDecimal(x.NettAmount)),
+            CashDeclaredDifference = g.Sum(x => Convert.ToDecimal(x.Difference)),
+            Discrepancies = g.Sum(x => Convert.ToDecimal(x.DiscrepancyDifference ?? 0))
+        })
+        .ToList();
+
+    var isLastPage = currentPage >= totalPages;
 
     var shiftText = LabelAll(selectedShifts, allShifts);
     var operatorText = LabelAll(selectedOperators, allOperators);
-}
-@{
-    var screenItems = (Model.items ?? new List<MIS.Web.Models.VarientPerfomance.VarientPerfomanceModel>())
-        .Where(x => !IsSystemTotalRow(x))
-        .ToList();
-
-    var exportItems = (Model.ExportItems ?? new List<MIS.Web.Models.VarientPerfomance.VarientPerfomanceModel>())
-        .Where(x => !IsSystemTotalRow(x))
-        .ToList();
-
-    // SCREEN totals: always based on what the user sees
-    var screenGrandExpected = screenItems.Sum(i => Convert.ToDecimal(i.NominalTariff));
-    var screenGrandDeclared = screenItems.Sum(i => Convert.ToDecimal(i.NettAmount));
-    var screenGrandDiff = screenItems.Sum(i => Convert.ToDecimal(i.Difference));
-    var screenGrandDiscrepancies = screenItems.Sum(i => Convert.ToDecimal(i.DiscrepancyDifference ?? 0));
-
-    var screenShiftSource = CleanList(allShifts).Any()
-        ? CleanList(allShifts)
-        : CleanList(screenItems.Select(x => x.ShiftDescription));
-
-    var screenShiftTotals = screenShiftSource
-        .Select(shiftValue =>
-        {
-            var shiftRows = screenItems
-                .Where(x => string.Equals(
-                    (x.ShiftDescription ?? "").Trim(),
-                    shiftValue,
-                    StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-            return new
-            {
-                Shift = shiftValue,
-                CashExpected = shiftRows.Sum(x => Convert.ToDecimal(x.NominalTariff)),
-                CashDeclared = shiftRows.Sum(x => Convert.ToDecimal(x.NettAmount)),
-                CashDeclaredDifference = shiftRows.Sum(x => Convert.ToDecimal(x.Difference)),
-                Discrepancies = shiftRows.Sum(x => Convert.ToDecimal(x.DiscrepancyDifference ?? 0))
-            };
-        })
-        .ToList();
 }
 
 <div class="card shadow-lg mb-4">
     <div class="card-body">
 
-        <!-- HEADER -->
         <div class="text-center border-bottom mb-3 pb-2">
             <h2 class="fw-bold text-primary mb-0">STAFF PERFORMANCE REPORT</h2>
         </div>
 
-        <!-- EXPORT BUTTONS -->
         <div class="row mb-3">
             <div class="col-md-2">
                 <button id="btnDownloadPdf" class="btn btn-danger w-100 shadow-sm" type="button">
@@ -174,7 +133,6 @@
             </div>
         </div>
 
-        <!-- FILTERS -->
         <form method="get" asp-action="VarientPerfomances" asp-controller="VarientPerfomance" class="row mb-4 g-3">
             <div class="col-md-3">
                 <label class="form-label fw-semibold">Start Date And Time</label>
@@ -206,7 +164,7 @@
                                    name="operationalShift"
                                    value="@shift"
                                    id="@safeId"
-                            @(selectedShifts.Contains(shift) ? "checked" : "") />
+                                   checked="@(selectedShifts.Contains(shift) ? "checked" : null)" />
                             <label class="form-check-label" for="@safeId">@shift</label>
                         </div>
                     }
@@ -240,7 +198,7 @@
                                    name="tollOperators"
                                    value="@op"
                                    id="@safeId"
-                            @(selectedOperators.Contains(op) ? "checked" : "") />
+                                   checked="@(selectedOperators.Contains(op) ? "checked" : null)" />
                             <label class="form-check-label" for="@safeId">@op</label>
                         </div>
                     }
@@ -267,7 +225,6 @@
             </div>
         </form>
 
-        <!-- FILTER SUMMARY -->
         <div class="mb-3">
             <table class="table table-borderless mb-0">
                 <tr>
@@ -289,7 +246,6 @@
             </table>
         </div>
 
-        <!-- DETAIL TABLE -->
         <div class="table-responsive">
             <table id="reportTable" class="table table-bordered table-hover text-center align-middle">
                 <thead class="table-primary">
@@ -329,8 +285,42 @@
             </table>
         </div>
 
-        <!-- TOTAL PER SHIFT -->
-        @if (rowsOnly.Any())
+        @if (isLastPage && previewTotalSource.Any())
+        {
+            <div class="mt-4">
+                <div class="fw-bold mb-2">Total per shift per day</div>
+
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover text-center align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Operational Shift Date</th>
+                                <th>Operational Shift</th>
+                                <th>Cash Expected</th>
+                                <th>Cash Declared</th>
+                                <th>Cash Declared Difference</th>
+                                <th>Discrepancies</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in screenShiftDayTotals)
+                            {
+                                <tr>
+                                    <td>@item.ShiftDate?.ToString("dd/MM/yyyy")</td>
+                                    <td>@item.Shift</td>
+                                    <td>@item.CashExpected.ToString("N2")</td>
+                                    <td>@item.CashDeclared.ToString("N2")</td>
+                                    <td>@item.CashDeclaredDifference.ToString("N2")</td>
+                                    <td>@item.Discrepancies.ToString("N2")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+
+        @if (isLastPage && previewTotalSource.Any())
         {
             <div class="mt-4">
                 <div class="fw-bold mb-2">Total per shift</div>
@@ -370,7 +360,7 @@
                 </div>
             </div>
         }
-        <!-- PAGINATION -->
+
         <div class="mt-4 d-flex flex-column flex-md-row justify-content-between align-items-center border-top pt-3">
             <div class="text-muted mb-2 mb-md-0">
                 Showing page <strong>@currentPage</strong> of <strong>@totalPages</strong> |
@@ -381,16 +371,16 @@
                 <ul class="pagination mb-0">
                     <li class="page-item @(currentPage <= 1 ? "disabled" : "")">
                         <a class="page-link"
-                            href="@Url.Action("VarientPerfomances", "VarientPerfomance",
-                            new
-                            {
-                                page = currentPage - 1,
-                                pageSize = Model.pageSize,
-                                startDate = Model.StartDate,
-                                endDate = Model.EndDate,
-                                operationalShift = Model.OperationalShift,
-                                tollOperators = Model.TollOperators
-                            })">
+                               href="@Url.Action("VarientPerfomances", "VarientPerfomance",
+                                                                                  new
+                                                                                  {
+                                                                                      page = currentPage - 1,
+                                                                                      pageSize = Model.pageSize,
+                                                                                      startDate = Model.StartDate,
+                                                                                      endDate = Model.EndDate,
+                                                                                      operationalShift = Model.OperationalShift,
+                                                                                      tollOperators = Model.TollOperators
+                                                                                  })">
                             &laquo; Previous
                         </a>
                     </li>
@@ -400,30 +390,30 @@
                         <li class="page-item @(i == currentPage ? "active" : "")">
                             <a class="page-link"
                                href="@Url.Action("VarientPerfomances", "VarientPerfomance",
-                            new
-                            {
-                                page = i,
-                                pageSize = Model.pageSize,
-                                startDate = Model.StartDate,
-                                endDate = Model.EndDate,
-                                operationalShift = Model.OperationalShift,
-                                tollOperators = Model.TollOperators
-                            })">@i</a>
+                                                                                          new
+                                                                                          {
+                                                                                              page = i,
+                                                                                              pageSize = Model.pageSize,
+                                                                                              startDate = Model.StartDate,
+                                                                                              endDate = Model.EndDate,
+                                                                                              operationalShift = Model.OperationalShift,
+                                                                                              tollOperators = Model.TollOperators
+                                                                                          })">@i</a>
                         </li>
                     }
 
                     <li class="page-item @(currentPage >= totalPages ? "disabled" : "")">
                         <a class="page-link"
                                href="@Url.Action("VarientPerfomances", "VarientPerfomance",
-                            new
-                            {
-                                page = currentPage + 1,
-                                pageSize = Model.pageSize,
-                                startDate = Model.StartDate,
-                                endDate = Model.EndDate,
-                                operationalShift = Model.OperationalShift,
-                                tollOperators = Model.TollOperators
-                            })">
+                                                                                  new
+                                                                                  {
+                                                                                      page = currentPage + 1,
+                                                                                      pageSize = Model.pageSize,
+                                                                                      startDate = Model.StartDate,
+                                                                                      endDate = Model.EndDate,
+                                                                                      operationalShift = Model.OperationalShift,
+                                                                                      tollOperators = Model.TollOperators
+                                                                                  })">
                             Next &raquo;
                         </a>
                     </li>
@@ -431,7 +421,6 @@
             </nav>
         </div>
 
-        <!-- FOOTER -->
         <hr />
         <div class="mt-4 p-3 border-top">
             <table class="table table-borderless w-100 mb-0 align-middle">
@@ -463,26 +452,20 @@
 <script>
     document.addEventListener("DOMContentLoaded", () => {
 
-    // =====================================================
-    // Checkbox helper
-    // =====================================================
     window.toggleAll = function (name, checked) {
     document
     .querySelectorAll(`input[type="checkbox"][name="${name}"]`)
     .forEach(cb => cb.checked = checked);
     };
 
-    // =====================================================
-    // Razor-backed values
-    // =====================================================
     const selectedShifts = @Html.Raw(JsonSerializer.Serialize(selectedShifts));
     const selectedOperators = @Html.Raw(JsonSerializer.Serialize(selectedOperators));
     const allShifts = @Html.Raw(JsonSerializer.Serialize(allShifts));
     const allOperators = @Html.Raw(JsonSerializer.Serialize(allOperators));
 
-    const reportGeneratedAt = '@reportGeneratedAt.ToString("dd/MM/yyyy HH:mm:ss")';
-    const currentUserId = '@currentUser';
-    const reportVersion = '@reportVersion';
+    const reportGeneratedAt = @Html.Raw(JsonSerializer.Serialize(reportGeneratedAt.ToString("dd/MM/yyyy HH:mm:ss")));
+    const currentUserId = @Html.Raw(JsonSerializer.Serialize(currentUser));
+    const reportVersion = @Html.Raw(JsonSerializer.Serialize(reportVersion));
 
     const startDateIso = '@Model.StartDate.ToString("yyyy-MM-ddTHH:mm:ss")';
     const endDateIso = '@Model.EndDate.ToString("yyyy-MM-ddTHH:mm:ss")';
@@ -492,9 +475,6 @@
 
     const exportEndpoint = '@Url.Action("ExportVarientPerfomanceData", "VarientPerfomance")';
 
-    // =====================================================
-    // Generic helpers
-    // =====================================================
     function cleanList(arr) {
     if (!Array.isArray(arr)) return [];
 
@@ -540,6 +520,27 @@
     const year = d.getFullYear();
 
     return `${day}/${month}/${year}`;
+    }
+
+    function getLocalDateKey(value) {
+    const date = value instanceof Date ? value : new Date(value);
+    if (isNaN(date.getTime())) return "";
+
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
+    }
+
+    function getShiftDateValue(row) {
+    const raw = pick(row, "ShiftDate", "shiftDate");
+    if (!raw) return null;
+
+    const date = new Date(raw);
+    if (isNaN(date.getTime())) return null;
+
+    return date;
     }
 
     function getShiftDescription(row) {
@@ -605,24 +606,16 @@
     .filter(isDetailRow)
     .map(row => {
     const shiftDate = pick(row, "ShiftDate", "shiftDate");
-    const shiftDescription = getShiftDescription(row);
-    const tollOperator = getTollOperator(row);
-
-    const nominal = getNominal(row);
-    const actual = getActual(row);
-    const difference = getDifference(row);
-    const discrepancyDifference = getDiscrepancyDifference(row);
 
     return {
-    shift: shiftDescription,
     values: [
     getSafeDate(shiftDate),
-    shiftDescription,
-    tollOperator,
-    toMoney(nominal),
-    toMoney(actual),
-    toMoney(difference),
-    toMoney(discrepancyDifference)
+    getShiftDescription(row),
+    getTollOperator(row),
+    toMoney(getNominal(row)),
+    toMoney(getActual(row)),
+    toMoney(getDifference(row)),
+    toMoney(getDiscrepancyDifference(row))
     ]
     };
     });
@@ -698,17 +691,48 @@
     }
     }
 
-    // =====================================================
-    // Shift totals
-    // =====================================================
     function getShiftUniverse(exportData) {
-    const configuredShifts = cleanList(allShifts);
-    if (configuredShifts.length > 0) {
-    return configuredShifts;
-    }
-
     const detailRows = getExportRows(exportData).filter(isDetailRow);
     return cleanList(detailRows.map(getShiftDescription));
+    }
+
+    function buildShiftDayTotals(exportData) {
+    const detailRows = getExportRows(exportData).filter(isDetailRow);
+    const grouped = new Map();
+
+    detailRows.forEach(row => {
+    const date = getShiftDateValue(row);
+    const shift = getShiftDescription(row);
+    const dateKey = date ? getLocalDateKey(date) : "";
+    const mapKey = `${dateKey}__${shift.toLowerCase()}`;
+
+    if (!grouped.has(mapKey)) {
+    grouped.set(mapKey, {
+    sortDate: date,
+    shiftDate: date ? getSafeDate(date) : "",
+    shift,
+    expected: 0,
+    declared: 0,
+    difference: 0,
+    discrepancies: 0
+    });
+    }
+
+    const bucket = grouped.get(mapKey);
+    bucket.expected += getNominal(row);
+    bucket.declared += getActual(row);
+    bucket.difference += getDifference(row);
+    bucket.discrepancies += getDiscrepancyDifference(row);
+    });
+
+    return Array.from(grouped.values()).sort((a, b) => {
+    const aTime = a.sortDate ? a.sortDate.getTime() : 0;
+    const bTime = b.sortDate ? b.sortDate.getTime() : 0;
+
+    if (aTime !== bTime) return aTime - bTime;
+
+    return a.shift.localeCompare(b.shift);
+    });
     }
 
     function buildShiftTotals(exportData) {
@@ -744,11 +768,9 @@
     };
     }
 
-    // =====================================================
-    // Excel export builder
-    // =====================================================
     function buildExcelWorksheetData(exportData) {
     const rows = buildTableBodyRows(getExportRows(exportData));
+    const shiftDayTotals = buildShiftDayTotals(exportData);
     const shiftTotals = buildShiftTotals(exportData);
     const grandTotals = buildGrandTotals(shiftTotals);
 
@@ -764,7 +786,6 @@
     worksheetData.push([
     "Operational Shift Date",
     "Operational Shift",
-    "Toll Operator ID",
     "Cash Expected",
     "Cash Declared",
     "Cash Declared Difference",
@@ -773,6 +794,28 @@
 
     rows.forEach(row => {
     worksheetData.push(row.values);
+    });
+
+    worksheetData.push([]);
+    worksheetData.push(["Total per shift per day"]);
+    worksheetData.push([
+    "Operational Shift Date",
+    "Operational Shift",
+    "Cash Expected",
+    "Cash Declared",
+    "Cash Declared Difference",
+    "Discrepancies"
+    ]);
+
+    shiftDayTotals.forEach(item => {
+    worksheetData.push([
+    item.shiftDate,
+    item.shift,
+    toMoney(item.expected),
+    toMoney(item.declared),
+    toMoney(item.difference),
+    toMoney(item.discrepancies)
+    ]);
     });
 
     worksheetData.push([]);
@@ -809,9 +852,6 @@
     return worksheetData;
     }
 
-    // =====================================================
-    // PDF helpers
-    // =====================================================
     function drawPdfHeader(doc, pageWidth, margin, leftLogo, rightLogo, reportName) {
     const topY = 25;
 
@@ -885,14 +925,31 @@
 
     function buildPdfTableBody(exportData) {
     const detailRows = buildTableBodyRows(getExportRows(exportData)).map(row => row.values);
+    const shiftDayTotals = buildShiftDayTotals(exportData);
     const shiftTotals = buildShiftTotals(exportData);
     const grandTotals = buildGrandTotals(shiftTotals);
 
     const totalRows = [
     ["", "", "", "", "", "", ""],
-    ["Total per shift", "", "", "", "", "", ""],
-    ["", "Operational Shift", "", "Cash Expected", "Cash Declared", "Cash Declared Difference", "Discrepancies"]
+    ["Total per shift per day", "", "", "", "", "", ""]
     ];
+
+    shiftDayTotals.forEach(item => {
+    totalRows.push([
+    item.shiftDate,
+    item.shift,
+    "",
+    toMoney(item.expected),
+    toMoney(item.declared),
+    toMoney(item.difference),
+    toMoney(item.discrepancies)
+    ]);
+    });
+
+    totalRows.push(
+    ["", "", "", "", "", "", ""],
+    ["Total per shift", "", "", "", "", "", ""]
+    );
 
     shiftTotals.forEach(item => {
     totalRows.push([
@@ -919,9 +976,6 @@
     return [...detailRows, ...totalRows];
     }
 
-    // =====================================================
-    // Excel export
-    // =====================================================
     document.getElementById("btnDownloadExcel")?.addEventListener("click", async () => {
     try {
     ensureExcelLibrary();
@@ -959,9 +1013,6 @@
     }
     });
 
-    // =====================================================
-    // PDF export
-    // =====================================================
     document.getElementById("btnDownloadPdf")?.addEventListener("click", async () => {
     try {
     ensurePdfLibrary();
@@ -1013,8 +1064,8 @@
     startY: filtersBottomY + 10,
     theme: "grid",
     headStyles: {
-    fillColor: [230, 230, 230],
-    textColor: [0, 0, 0],
+    fillColor: [41, 128, 185],
+    textColor: [255, 255, 255],
     fontStyle: "bold"
     },
     styles: {
@@ -1036,13 +1087,14 @@
 
     const col1 = String(row[0] || "").trim().toUpperCase();
     const col2 = String(row[1] || "").trim().toUpperCase();
-    const col4 = String(row[3] || "").trim().toUpperCase();
 
-    const isSectionTitle = col1 === "TOTAL PER SHIFT";
-    const isSectionHeader = col2 === "OPERATIONAL SHIFT" && col4 === "CASH EXPECTED";
+    const isSectionTitle =
+    col1 === "TOTAL PER SHIFT" ||
+    col1 === "TOTAL PER SHIFT PER DAY";
+
     const isGrandTotal = col2 === "GRAND TOTAL";
 
-    if (isSectionTitle || isSectionHeader) {
+    if (isSectionTitle) {
     data.cell.styles.fontStyle = "bold";
     data.cell.styles.fillColor = [245, 245, 245];
     data.cell.styles.textColor = [0, 0, 0];

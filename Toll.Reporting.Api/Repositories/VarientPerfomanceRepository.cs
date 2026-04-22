@@ -1,11 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Toll.Reporting.Api.DTOs;
-using Toll.Reporting.Api.Repositories.Interfaces;
 using TollReportingSystem.Data;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace Toll.Reporting.Api.Repositories
 {
@@ -185,6 +180,7 @@ namespace Toll.Reporting.Api.Repositories
                    && t.TransactionDateTime <= endDate
                 select new
                 {
+                    t.ShiftDate,
                     ShiftDescription = s.Description,
                     TollOperator = su.Username,
                     ManualClass = tc1.ClassDescription,
@@ -213,11 +209,13 @@ namespace Toll.Reporting.Api.Repositories
             var discrepancyTotals = await discrepancyBaseQuery
                 .GroupBy(x => new
                 {
+                    x.ShiftDate,
                     ShiftDescription = x.ShiftDescription ?? "-- None --",
                     TollOperator = x.TollOperator ?? "-- None --"
                 })
                 .Select(g => new
                 {
+                    g.Key.ShiftDate,
                     g.Key.ShiftDescription,
                     g.Key.TollOperator,
 
@@ -229,7 +227,7 @@ namespace Toll.Reporting.Api.Repositories
                 .ToListAsync();
 
             var discrepancyLookup = discrepancyTotals.ToDictionary(
-                x => $"{x.ShiftDescription}|||{x.TollOperator}",
+                x => $"{x.ShiftDate:yyyy-MM-dd}|||{x.ShiftDescription}|||{x.TollOperator}",
                 x => x.DiscrepancyDifference,
                 StringComparer.OrdinalIgnoreCase);
 
@@ -245,7 +243,7 @@ namespace Toll.Reporting.Api.Repositories
                             ? (declared ?? 0.0)
                             : 0.0);
 
-                    var discrepancyKey = $"{x.ShiftDescription}|||{x.TollOperator}";
+                    var discrepancyKey = $"{x.ShiftDate:yyyy-MM-dd}|||{x.ShiftDescription}|||{x.TollOperator}";
                     var discrepancyDifference = discrepancyLookup.TryGetValue(discrepancyKey, out var totalDiscrepancy)
                         ? totalDiscrepancy
                         : 0.0;
@@ -266,63 +264,14 @@ namespace Toll.Reporting.Api.Repositories
                 .ToList();
 
             // =========================================================
-            // 7. ADD SHIFT TOTALS
+            // 7. PAGINATION
             // =========================================================
-            var withShiftTotals = new List<VarientPerformanceDto>();
+            var totalCount = operatorRows.Count;
 
-            foreach (var shiftGroup in operatorRows
-                .GroupBy(x => x.ShiftDescription)
-                .OrderBy(g => g.Key))
-            {
-                var rows = shiftGroup.ToList();
-
-                withShiftTotals.AddRange(rows);
-
-                withShiftTotals.Add(new VarientPerformanceDto
-                {
-                    ShiftDate = rows.First().ShiftDate,
-                    ShiftDescription = $"{shiftGroup.Key!.ToUpper()} TOTAL",
-                    TollOperator = "—",
-                    NominalTariff = rows.Sum(x => x.NominalTariff ?? 0.0),
-                    ActualAmount = rows.Sum(x => x.ActualAmount ?? 0.0),
-                    Difference = rows.Sum(x => x.Difference),
-                    DiscrepancyDifference = rows.Sum(x => x.DiscrepancyDifference),
-                    StartDate = startDate,
-                    EndDate = endDate
-                });
-            }
-
-            // =========================================================
-            // 8. ADD GRAND TOTAL
-            // =========================================================
-            var shiftTotals = withShiftTotals
-                .Where(x => x.ShiftDescription != null
-                         && x.ShiftDescription.EndsWith("TOTAL")
-                         && x.ShiftDescription != "GRAND TOTAL")
-                .ToList();
-
-            if (shiftTotals.Any())
-            {
-                withShiftTotals.Add(new VarientPerformanceDto
-                {
-                    ShiftDate = shiftTotals.First().ShiftDate,
-                    ShiftDescription = "GRAND TOTAL",
-                    TollOperator = "—",
-                    NominalTariff = shiftTotals.Sum(x => x.NominalTariff ?? 0.0),
-                    ActualAmount = shiftTotals.Sum(x => x.ActualAmount ?? 0.0),
-                    Difference = shiftTotals.Sum(x => x.Difference),
-                    DiscrepancyDifference = shiftTotals.Sum(x => x.DiscrepancyDifference),
-                    StartDate = startDate,
-                    EndDate = endDate
-                });
-            }
-
-            // =========================================================
-            // 9. PAGINATION
-            // =========================================================
-            var totalCount = withShiftTotals.Count;
-
-            var pagedItems = withShiftTotals
+            var pagedItems = operatorRows
+                .OrderBy(x => x.ShiftDate)
+                .ThenBy(x => x.ShiftDescription)
+                .ThenBy(x => x.TollOperator)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToList();

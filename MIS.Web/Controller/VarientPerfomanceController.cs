@@ -59,6 +59,12 @@ namespace MIS.Web.Controllers
             operationalShift ??= new List<string>();
             tollOperators ??= new List<string>();
 
+            if (page <= 0)
+                page = 1;
+
+            if (pageSize <= 0)
+                pageSize = 10;
+
             ViewBag.AllShifts = await _reportService.GetAllShiftsAsync();
             ViewBag.AllOperators = await _reportService.GetAllTollOperatorsAsync();
 
@@ -67,7 +73,7 @@ namespace MIS.Web.Controllers
             ViewBag.StartDate = startDate.Value;
             ViewBag.EndDate = endDate.Value;
 
-            var data = await _reportService.GetVarientPerfomanceDetailsAsync(
+            var pagedData = await _reportService.GetVarientPerfomanceDetailsAsync(
                 page,
                 pageSize,
                 startDate.Value,
@@ -75,14 +81,22 @@ namespace MIS.Web.Controllers
                 operationalShift.Any() ? operationalShift : null,
                 tollOperators.Any() ? tollOperators : null);
 
-            int totalPages = data.totalCount > 0
-                ? (int)Math.Ceiling((double)data.totalCount / pageSize)
+            var exportData = await _reportService.GetVarientPerfomanceDetailsAsync(
+                1,
+                int.MaxValue,
+                startDate.Value,
+                endDate.Value,
+                operationalShift.Any() ? operationalShift : null,
+                tollOperators.Any() ? tollOperators : null);
+
+            int totalPages = pagedData.totalCount > 0
+                ? (int)Math.Ceiling((double)pagedData.totalCount / pageSize)
                 : 0;
 
             var model = new VarientPerfomanceInputModel
             {
-                items = data.items ?? new List<VarientPerfomanceModel>(),
-                totalCount = data.totalCount,
+                items = pagedData.items ?? new List<VarientPerfomanceModel>(),
+                totalCount = pagedData.totalCount,
                 page = page,
                 pageSize = pageSize,
                 totalPages = totalPages,
@@ -90,9 +104,7 @@ namespace MIS.Web.Controllers
                 EndDate = endDate.Value,
                 OperationalShift = operationalShift,
                 TollOperators = tollOperators,
-
-                // No preload for export
-                ExportItems = new List<VarientPerfomanceModel>()
+                ExportItems = exportData.items ?? new List<VarientPerfomanceModel>()
             };
 
             return View("~/Views/VarientPerfomance/Index.cshtml", model);

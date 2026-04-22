@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
@@ -14,20 +16,20 @@ namespace MIS.Web.Services
         private readonly HttpClient _httpClient;
         private readonly IConfiguration _config;
         private readonly ILogger<DailyCashupReportService> _logger;
+        private readonly IHttpContextAccessor _httpContextAccessor;
 
         public DailyCashupReportService(
             HttpClient httpClient,
             IConfiguration config,
-            ILogger<DailyCashupReportService> logger)
+            ILogger<DailyCashupReportService> logger,
+            IHttpContextAccessor httpContextAccessor)
         {
             _httpClient = httpClient;
             _config = config;
             _logger = logger;
+            _httpContextAccessor = httpContextAccessor;
         }
 
-        // =========================================================
-        // 1) MAIN REPORT DATA
-        // =========================================================
         public async Task<PageDailyCashupModel> GetDailyCashupAsync(
             DateTime startDate,
             DateTime endDate,
@@ -65,7 +67,8 @@ namespace MIS.Web.Services
             {
                 _logger.LogInformation("Calling DailyCashup API: {Url}", url);
 
-                using var response = await _httpClient.GetAsync(url);
+                using var request = CreateAuthorizedGetRequest(url);
+                using var response = await _httpClient.SendAsync(request);
                 var body = await response.Content.ReadAsStringAsync();
 
                 if (!response.IsSuccessStatusCode)
@@ -111,9 +114,6 @@ namespace MIS.Web.Services
             }
         }
 
-        // =========================================================
-        // 2) FILTER OPTIONS
-        // =========================================================
         public async Task<(List<CheckItemModel<int>> Shifts, List<CheckItemModel<long>> Operators)> GetFiltersAsync()
         {
             var baseUrl = (_config["BaseApiUrl:Link"] ?? string.Empty).TrimEnd('/');
@@ -125,7 +125,8 @@ namespace MIS.Web.Services
             {
                 _logger.LogInformation("Calling DailyCashup Filters API: {Url}", url);
 
-                using var response = await _httpClient.GetAsync(url);
+                using var request = CreateAuthorizedGetRequest(url);
+                using var response = await _httpClient.SendAsync(request);
                 var body = await response.Content.ReadAsStringAsync();
 
                 if (!response.IsSuccessStatusCode)
@@ -167,9 +168,23 @@ namespace MIS.Web.Services
             }
         }
 
-        // =========================================================
-        // HELPERS
-        // =========================================================
+        private HttpRequestMessage CreateAuthorizedGetRequest(string url)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            AddBearerToken(request);
+            return request;
+        }
+
+        private void AddBearerToken(HttpRequestMessage request)
+        {
+            var token = _httpContextAccessor.HttpContext?.User?.FindFirst("access_token")?.Value;
+
+            if (string.IsNullOrWhiteSpace(token))
+                throw new UnauthorizedAccessException("No JWT token found for current user.");
+
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+
         private static PageDailyCashupModel BuildEmptyPageModel(
             DateTime startDate,
             DateTime endDate,
@@ -198,9 +213,6 @@ namespace MIS.Web.Services
             };
         }
 
-        // =========================================================
-        // API DTOS FOR DESERIALIZATION
-        // =========================================================
         private class ApiDailyCashupResultDto
         {
             [JsonProperty("fullItems")]

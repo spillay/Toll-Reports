@@ -1,10 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+﻿
 using Microsoft.EntityFrameworkCore;
 using Toll.Reporting.Api.DTOs;
-using Toll.Reporting.Api.Repositories.Interfaces;
 using TollReportingSystem.Data;
 
 namespace Toll.Reporting.Api.Repositories
@@ -148,9 +144,9 @@ namespace Toll.Reporting.Api.Repositories
                         ? x.SystemUser.Username
                         : x.TopUp.SystemUserId.ToString(),
 
-                    AccountNumber = x.User != null && !string.IsNullOrWhiteSpace(x.User.AccNr)
-                        ? x.User.AccNr
-                        : (x.User != null ? x.User.RegisterUserId.ToString() : string.Empty),
+                    AccountNumber = x.User != null
+                    ? x.User.RegisterUserId.ToString()
+                    : string.Empty,
 
                     AccountName = x.User != null
                         ? (x.User.CompanyName ?? string.Empty)

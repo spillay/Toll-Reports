@@ -38,6 +38,7 @@
     var operatorText = FilterText(Model.SelectedTollOperators, Model.TollOperators);
     var laneText = FilterText(Model.SelectedLanes, Model.Lanes);
     var paymentText = FilterText(Model.SelectedPaymentMethods, Model.PaymentMethods);
+    var collectorClassText = FilterText(Model.SelectedTollCollectorClasses, Model.TollCollectorClasses);
 
     var filters = Model;
     int startPage = Math.Max(1, currentPage - 1);
@@ -75,6 +76,7 @@
                 <div class="col-md-3"><strong>Operator:</strong> @operatorText</div>
                 <div class="col-md-3"><strong>Lane:</strong> @laneText</div>
                 <div class="col-md-3"><strong>Payment:</strong> @paymentText</div>
+                <div class="col-md-3"><strong>Collector Class:</strong> @collectorClassText</div>
             </div>
         </div>
 
@@ -147,6 +149,7 @@
                                 <div><strong>Toll Operator:</strong> @operatorText</div>
                                 <div><strong>Lane:</strong> @laneText</div>
                                 <div><strong>Payment Method:</strong> @paymentText</div>
+                                <div><strong>Toll Collector Class:</strong> @collectorClassText</div>
                             </div>
                         </div>
                     </div>
@@ -180,6 +183,7 @@
                                 SelectedTollOperators = filters.SelectedTollOperators,
                                 SelectedLanes = filters.SelectedLanes,
                                 SelectedPaymentMethods = filters.SelectedPaymentMethods,
+                                SelectedTollCollectorClasses = filters.SelectedTollCollectorClasses,
                                 StartDate = filters.StartDate.ToString("yyyy-MM-ddTHH:mm"),
                                 EndDate = filters.EndDate.ToString("yyyy-MM-ddTHH:mm")
                             })">Previous</a>
@@ -195,6 +199,7 @@
                                     SelectedTollOperators = filters.SelectedTollOperators,
                                     SelectedLanes = filters.SelectedLanes,
                                     SelectedPaymentMethods = filters.SelectedPaymentMethods,
+                                    SelectedTollCollectorClasses = filters.SelectedTollCollectorClasses,
                                     StartDate = filters.StartDate.ToString("yyyy-MM-ddTHH:mm"),
                                     EndDate = filters.EndDate.ToString("yyyy-MM-ddTHH:mm")
                                 })">@i</a>
@@ -209,6 +214,7 @@
                                 SelectedTollOperators = filters.SelectedTollOperators,
                                 SelectedLanes = filters.SelectedLanes,
                                 SelectedPaymentMethods = filters.SelectedPaymentMethods,
+                                SelectedTollCollectorClasses = filters.SelectedTollCollectorClasses,
                                 StartDate = filters.StartDate.ToString("yyyy-MM-ddTHH:mm"),
                                 EndDate = filters.EndDate.ToString("yyyy-MM-ddTHH:mm")
                             })">Next</a>
@@ -259,7 +265,8 @@ document.addEventListener("DOMContentLoaded", () => {
         "Shift": '@shiftText',
         "Toll Operator": '@operatorText',
         "Lane": '@laneText',
-        "Payment Method": '@paymentText'
+        "Payment Method": '@paymentText',
+        "Toll Collector Class": '@collectorClassText'
     };
 
     const fileStamp = () => new Date().toISOString().replace(/[:.]/g, "-");
@@ -452,6 +459,7 @@ document.addEventListener("DOMContentLoaded", () => {
         rows.unshift([]);
         rows.unshift(["FILTERS USED"]);
         rows.unshift(["Payment Method", filtersUsed["Payment Method"]]);
+        rows.unshift(["Toll Collector Class", filtersUsed["Toll Collector Class"]]);
         rows.unshift(["Lane", filtersUsed["Lane"]]);
         rows.unshift(["Toll Operator", filtersUsed["Toll Operator"]]);
         rows.unshift(["Shift", filtersUsed["Shift"]]);

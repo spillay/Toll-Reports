@@ -164,7 +164,7 @@
                                    name="operationalShift"
                                    value="@shift"
                                    id="@safeId"
-                                   checked="@(selectedShifts.Contains(shift) ? "checked" : null)" />
+                                   checked="@(!string.IsNullOrWhiteSpace(shift) && selectedShifts.Contains(shift) ? "checked" : null)" />
                             <label class="form-check-label" for="@safeId">@shift</label>
                         </div>
                     }
@@ -198,7 +198,7 @@
                                    name="tollOperators"
                                    value="@op"
                                    id="@safeId"
-                                   checked="@(selectedOperators.Contains(op) ? "checked" : null)" />
+                                   checked="@(!string.IsNullOrWhiteSpace(op) && selectedOperators.Contains(op) ? "checked" : null)" />
                             <label class="form-check-label" for="@safeId">@op</label>
                         </div>
                     }

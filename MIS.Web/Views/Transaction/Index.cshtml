@@ -66,7 +66,7 @@
             </div>
         </div>
 
-        @Html.Partial("_TransactionFilters", Model)
+        @await Html.PartialAsync("_TransactionFilters", Model)
 
         <div class="alert alert-light border mt-3">
             <div class="row g-2 small">

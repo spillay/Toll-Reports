@@ -131,10 +131,11 @@ namespace Toll.Reporting.Api.Repositories
                       && t.SystemUserId != null
                       && t.TransactionTypeId == CashTransactionTypeId
                       && (!hasShiftFilter || shiftIds.Contains((int)t.ShiftId))
+                      && t.SystemUserId.HasValue
                       && (!hasOperatorFilter || systemUserIds.Contains(t.SystemUserId.Value))
                 select new
                 {
-                    SystemUserId = t.SystemUserId.Value,
+                    SystemUserId = t.SystemUserId.GetValueOrDefault(),
                     ShiftId = (int)t.ShiftId,
                     ShiftDate = t.ShiftDate.Date,
                     NettAmount = (decimal)t.NettAmount

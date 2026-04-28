@@ -185,7 +185,7 @@ public class ComprehensiveRepository : IComprehensiveRepository
             query = query.Where(x => shiftIds.Contains(x.ShiftId));
 
         if (operatorIds?.Any() == true)
-            query = query.Where(x => operatorIds.Contains(x.SystemUserId.Value));
+            query = query.Where(x => x.SystemUserId.HasValue && operatorIds.Contains(x.SystemUserId.Value));
 
         if (laneIds?.Any() == true)
             query = query.Where(x => laneIds.Contains(x.LaneId));

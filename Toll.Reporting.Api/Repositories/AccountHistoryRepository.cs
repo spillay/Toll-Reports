@@ -53,7 +53,7 @@ public class AccountHistoryRepository : IAccountHistoryRepository
                 TransactionAmount = 0m,
                 TopUpAmount = x.Amount,
                 UserBalance = x.Balance,
-                PaymentMethod = x.PaymentMethod,
+                PaymentMethod = x.PaymentMethod ?? string.Empty,
                 TransactionDateTime = x.RechargedOn,
                 RegisteredIdentifier = x.RegisteredIdentifier ?? "N/A",
                 NumberPlate = x.NumberPlate ?? "N/A",

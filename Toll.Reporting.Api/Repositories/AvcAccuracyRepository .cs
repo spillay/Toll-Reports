@@ -36,11 +36,11 @@ namespace Toll.Reporting.Api.Repositories
 
             var actualCounts = await transactionsQuery
                 .Where(t => t.AutomaticTollClassId.HasValue)
-                .Where(t => !classIds.Any() || classIds.Contains((int)t.AutomaticTollClassId.Value))
+                .Where(t => !classIds.Any() || classIds.Contains((int)t.AutomaticTollClassId.GetValueOrDefault()))
                 .GroupBy(t => new
                 {
                     LaneId = (int)t.LaneId,
-                    TollClassId = (int)t.AutomaticTollClassId.Value
+                    TollClassId = (int)t.AutomaticTollClassId.GetValueOrDefault()
                 })
                 .Select(g => new
                 {
@@ -52,11 +52,11 @@ namespace Toll.Reporting.Api.Repositories
 
             var adjustedCounts = await transactionsQuery
                 .Where(t => t.ActualTollClassId.HasValue)
-                .Where(t => !classIds.Any() || classIds.Contains((int)t.ActualTollClassId.Value))
+                .Where(t => !classIds.Any() || classIds.Contains((int)t.ActualTollClassId.GetValueOrDefault()))
                 .GroupBy(t => new
                 {
                     LaneId = (int)t.LaneId,
-                    TollClassId = (int)t.ActualTollClassId.Value
+                    TollClassId = (int)t.ActualTollClassId.GetValueOrDefault()
                 })
                 .Select(g => new
                 {

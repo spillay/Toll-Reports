@@ -1,30 +1,18 @@
-﻿using MIS.Web.Models.VarientPerfomance;
-using Newtonsoft.Json;
+using MIS.Web.Models.VarientPerfomance;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net.Http;
-using System.Net.Http.Headers;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Configuration;
-using Microsoft.AspNetCore.Http;
 
 namespace MIS.Web.Services
 {
     public class VarientPerfomanceReportService : IVarientPerfomanceReportService
     {
-        private readonly HttpClient _httpClient;
-        private readonly IConfiguration _configuration;
-        private readonly IHttpContextAccessor _httpContextAccessor;
+        private readonly IApiClientService _apiClient;
 
-        public VarientPerfomanceReportService(
-            HttpClient httpClient,
-            IConfiguration configuration,
-            IHttpContextAccessor httpContextAccessor)
+        public VarientPerfomanceReportService(IApiClientService apiClient)
         {
-            _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-            _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
-            _httpContextAccessor = httpContextAccessor ?? throw new ArgumentNullException(nameof(httpContextAccessor));
+            _apiClient = apiClient ?? throw new ArgumentNullException(nameof(apiClient));
         }
 
         public async Task<PageVarientPerfomanceModel> GetVarientPerfomanceDetailsAsync(
@@ -48,17 +36,10 @@ namespace MIS.Web.Services
                 AddIfAny(queryParts, "operationalShift", operationalShift);
                 AddIfAny(queryParts, "tollOperators", tollOperators);
 
-                var url = BuildUrlFromConfig("ApiSettings:VarientPerformanceEndpoint", queryParts);
-
-                using var request = CreateAuthorizedGetRequest(url);
-                var response = await _httpClient.SendAsync(request);
-
-                if (!response.IsSuccessStatusCode)
-                    return new PageVarientPerfomanceModel();
-
-                var json = await response.Content.ReadAsStringAsync();
-                return JsonConvert.DeserializeObject<PageVarientPerfomanceModel>(json)
-                       ?? new PageVarientPerfomanceModel();
+                return await _apiClient.GetAsync<PageVarientPerfomanceModel>(
+                    "ApiSettings:VarientPerformanceEndpoint",
+                    queryParts)
+                    ?? new PageVarientPerfomanceModel();
             }
             catch
             {
@@ -70,23 +51,11 @@ namespace MIS.Web.Services
         {
             try
             {
-                var url = BuildUrlFromConfig("ApiSettings:VarientPerformanceShiftsEndpoint");
+                var result = await _apiClient.GetAsync<List<string>>(
+                    "ApiSettings:VarientPerformanceShiftsEndpoint")
+                    ?? new List<string>();
 
-                using var request = CreateAuthorizedGetRequest(url);
-                var response = await _httpClient.SendAsync(request);
-
-                if (!response.IsSuccessStatusCode)
-                    return new List<string>();
-
-                var json = await response.Content.ReadAsStringAsync();
-                var result = JsonConvert.DeserializeObject<List<string>>(json) ?? new List<string>();
-
-                return result
-                    .Where(x => !string.IsNullOrWhiteSpace(x))
-                    .Select(x => x.Trim())
-                    .Distinct()
-                    .OrderBy(x => x)
-                    .ToList();
+                return CleanSorted(result);
             }
             catch
             {
@@ -98,45 +67,16 @@ namespace MIS.Web.Services
         {
             try
             {
-                var url = BuildUrlFromConfig("ApiSettings:VarientPerformanceOperatorsEndpoint");
+                var result = await _apiClient.GetAsync<List<string>>(
+                    "ApiSettings:VarientPerformanceOperatorsEndpoint")
+                    ?? new List<string>();
 
-                using var request = CreateAuthorizedGetRequest(url);
-                var response = await _httpClient.SendAsync(request);
-
-                if (!response.IsSuccessStatusCode)
-                    return new List<string>();
-
-                var json = await response.Content.ReadAsStringAsync();
-                var result = JsonConvert.DeserializeObject<List<string>>(json) ?? new List<string>();
-
-                return result
-                    .Where(x => !string.IsNullOrWhiteSpace(x))
-                    .Select(x => x.Trim())
-                    .Distinct()
-                    .OrderBy(x => x)
-                    .ToList();
+                return CleanSorted(result);
             }
             catch
             {
                 return new List<string>();
             }
-        }
-
-        private HttpRequestMessage CreateAuthorizedGetRequest(string url)
-        {
-            var request = new HttpRequestMessage(HttpMethod.Get, url);
-            AddBearerToken(request);
-            return request;
-        }
-
-        private void AddBearerToken(HttpRequestMessage request)
-        {
-            var token = _httpContextAccessor.HttpContext?.User?.FindFirst("access_token")?.Value;
-
-            if (string.IsNullOrWhiteSpace(token))
-                throw new UnauthorizedAccessException("No JWT token found for current user.");
-
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         }
 
         private static void AddIfAny(List<string> queryParts, string key, List<string>? list)
@@ -150,23 +90,14 @@ namespace MIS.Web.Services
             }
         }
 
-        private string BuildUrlFromConfig(string endpointKey, IEnumerable<string>? queryParts = null)
+        private static List<string> CleanSorted(IEnumerable<string> values)
         {
-            var baseUrl = _configuration["BaseApiUrl:Link"];
-            var endpoint = _configuration[endpointKey];
-
-            if (string.IsNullOrWhiteSpace(baseUrl))
-                throw new InvalidOperationException("BaseApiUrl:Link is missing in appsettings.json.");
-
-            if (string.IsNullOrWhiteSpace(endpoint))
-                throw new InvalidOperationException($"{endpointKey} is missing in appsettings.json.");
-
-            var url = $"{baseUrl.TrimEnd('/')}/{endpoint.TrimStart('/')}";
-
-            if (queryParts != null && queryParts.Any())
-                url += "?" + string.Join("&", queryParts);
-
-            return url;
+            return values
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(x => x.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(x => x)
+                .ToList();
         }
     }
 }

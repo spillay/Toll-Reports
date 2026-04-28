@@ -26,8 +26,8 @@ namespace MIS.Web.Services
         {
             try
             {
-                var baseUrl = _configuration["BaseApiUrl:Link"];
-                var endpoint = _configuration["ApiSettings:ComprehensiveOptionsEndpoint"];
+                var baseUrl = _configuration["BaseApiUrl:Link"] ?? "";
+                var endpoint = _configuration["ApiSettings:ComprehensiveOptionsEndpoint"] ?? "";
                 var url = CombineUrl(baseUrl, endpoint);
 
                 using var request = CreateAuthorizedGetRequest(url);
@@ -58,8 +58,8 @@ namespace MIS.Web.Services
         {
             try
             {
-                var baseUrl = _configuration["BaseApiUrl:Link"];
-                var endpoint = _configuration["ApiSettings:ComprehensiveReportEndpoint"];
+                var baseUrl = _configuration["BaseApiUrl:Link"] ?? "";
+                var endpoint = _configuration["ApiSettings:ComprehensiveReportEndpoint"] ?? "";
                 var url = CombineUrl(baseUrl, endpoint);
 
                 var query = new List<string>

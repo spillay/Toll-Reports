@@ -7,14 +7,16 @@
 
         var reportVersion = "3.0.0.0";
 
-        var items = Model.Items ?? new List<MIS.Web.Models.Comprehensive.ComprehensiveModel>();
+        var viewModel = Model ?? new MIS.Web.Models.Comprehensive.PageComprehensiveModel();
+        var input = viewModel.Input ?? new ComprehensiveInputModel();
+        var items = viewModel.Items ?? new List<MIS.Web.Models.Comprehensive.ComprehensiveModel>();
         var grandTotalCount = items.Count;
         var grandTotalRevenue = items.Sum(x => x.AmountInclusive ?? 0);
 
         var safeGrandCount = grandTotalCount == 0 ? 1 : grandTotalCount;
         var safeGrandRevenue = Math.Abs(grandTotalRevenue) < 0.0000001 ? 1 : grandTotalRevenue;
 
-        var groupByLabel = Model.Input?.GroupBy switch
+        var groupByLabel = input.GroupBy switch
         {
             "Shift" => "OPERATIONAL SHIFT",
             "Lane" => "LANE",
@@ -37,24 +39,24 @@
                 <div class="col-md-3">
                     <label class="form-label fw-semibold">Start Date and Time</label>
                     <input type="datetime-local" class="form-control" name="StartDate"
-                           value="@Model.Input.StartDate.ToString("yyyy-MM-ddTHH:mm")" />
+                           value="@input.StartDate.ToString("yyyy-MM-ddTHH:mm")" />
                 </div>
 
                 <div class="col-md-3">
                     <label class="form-label fw-semibold">End Date and Time</label>
                     <input type="datetime-local" class="form-control" name="EndDate"
-                           value="@Model.Input.EndDate.ToString("yyyy-MM-ddTHH:mm")" />
+                           value="@input.EndDate.ToString("yyyy-MM-ddTHH:mm")" />
                 </div>
 
                 <div class="col-md-3">
                     <label class="form-label fw-semibold">Operational Shift</label>
                     <div class="border rounded p-2" style="max-height:150px; overflow-y:auto;">
-                        @foreach (var s in Model.Shifts)
+                        @foreach (var s in viewModel.Shifts)
                         {
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox"
                                        name="ShiftIds" value="@s.Id"
-                                       @(Model.Input.ShiftIds.Contains(s.Id) ? "checked" : "") />
+                                       @(input.ShiftIds.Contains(s.Id) ? "checked" : "") />
                                 <label class="form-check-label">@s.Name</label>
                             </div>
                         }
@@ -64,12 +66,12 @@
                 <div class="col-md-3">
                     <label class="form-label fw-semibold">Toll Operator</label>
                     <div class="border rounded p-2" style="max-height:150px; overflow-y:auto;">
-                        @foreach (var op in Model.TollOperators)
+                        @foreach (var op in viewModel.TollOperators)
                         {
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox"
                                        name="OperatorIds" value="@op.Id"
-                                       @(Model.Input.OperatorIds.Contains(op.Id) ? "checked" : "") />
+                                       @(input.OperatorIds.Contains(op.Id) ? "checked" : "") />
                                 <label class="form-check-label">@op.Name</label>
                             </div>
                         }
@@ -79,12 +81,12 @@
                 <div class="col-md-3">
                     <label class="form-label fw-semibold">Lane</label>
                     <div class="border rounded p-2" style="max-height:150px; overflow-y:auto;">
-                        @foreach (var ln in Model.Lanes)
+                        @foreach (var ln in viewModel.Lanes)
                         {
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox"
                                        name="LaneIds" value="@ln.Id"
-                                       @(Model.Input.LaneIds.Contains(ln.Id) ? "checked" : "") />
+                                       @(input.LaneIds.Contains(ln.Id) ? "checked" : "") />
                                 <label class="form-check-label">@ln.Name</label>
                             </div>
                         }
@@ -94,12 +96,12 @@
                 <div class="col-md-3">
                     <label class="form-label fw-semibold">Payment Method</label>
                     <div class="border rounded p-2" style="max-height:150px; overflow-y:auto;">
-                        @foreach (var pm in Model.PaymentMethods)
+                        @foreach (var pm in viewModel.PaymentMethods)
                         {
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox"
                                        name="PaymentMethodIds" value="@pm.Id"
-                                       @(Model.Input.PaymentMethodIds.Contains(pm.Id) ? "checked" : "") />
+                                       @(input.PaymentMethodIds.Contains(pm.Id) ? "checked" : "") />
                                 <label class="form-check-label">@pm.Name</label>
                             </div>
                         }
@@ -109,12 +111,12 @@
                 <div class="col-md-3">
                     <label class="form-label fw-semibold">Lane Discount Type</label>
                     <div class="border rounded p-2" style="max-height:150px; overflow-y:auto;">
-                        @foreach (var dt in Model.DiscountTypes)
+                        @foreach (var dt in viewModel.DiscountTypes)
                         {
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox"
                                        name="DiscountTypeIds" value="@dt.Id"
-                                       @(Model.Input.DiscountTypeIds.Contains(dt.Id) ? "checked" : "") />
+                                       @(input.DiscountTypeIds.Contains(dt.Id) ? "checked" : "") />
                                 <label class="form-check-label">@dt.Name</label>
                             </div>
                         }
@@ -124,12 +126,12 @@
                 <div class="col-md-3">
                     <label class="form-label fw-semibold">Classification</label>
                     <div class="border rounded p-2" style="max-height:150px; overflow-y:auto;">
-                        @foreach (var tc in Model.Classifications)
+                        @foreach (var tc in viewModel.Classifications)
                         {
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox"
                                        name="TollClassIds" value="@tc.Id"
-                                       @(Model.Input.TollClassIds.Contains(tc.Id) ? "checked" : "") />
+                                       @(input.TollClassIds.Contains(tc.Id) ? "checked" : "") />
                                 <label class="form-check-label">@tc.Name</label>
                             </div>
                         }
@@ -155,7 +157,7 @@
                         <tr>
                             <th>@groupByLabel</th>
                             <th></th>
-                            @foreach (var cls in Model.TollClasses)
+                            @foreach (var cls in viewModel.TollClasses)
                             {
                                 <th>@(cls == "Motor Cycle" ? "Class M" : cls)</th>
                             }
@@ -164,15 +166,15 @@
                     </thead>
 
                     <tbody>
-                        @if (Model.GroupedDataTyped != null && Model.GroupedDataTyped.Any())
+                        @if (viewModel.GroupedDataTyped.Any())
                         {
-                            foreach (var row in Model.GroupedDataTyped)
+                            foreach (var row in viewModel.GroupedDataTyped)
                             {
                                 <tr>
                                     <td class="fw-bold">@row.Method</td>
                                     <td>Count:<br />Count %:<br />Revenue:<br />Revenue %:</td>
 
-                                    @foreach (var cls in Model.TollClasses)
+                                    @foreach (var cls in viewModel.TollClasses)
                                     {
                                         var dataCell = row.Classes.TryGetValue(cls, out var m)
                                         ? m
@@ -199,7 +201,7 @@
                                 <td>Grand Total</td>
                                 <td>Count:<br />Count %:<br />Revenue:<br />Revenue %:</td>
 
-                                @foreach (var cls in Model.TollClasses)
+                                @foreach (var cls in viewModel.TollClasses)
                                 {
                                     var totalCount = items.Count(x => string.Equals(x.ManualTollClassName, cls, StringComparison.OrdinalIgnoreCase));
                                     var totalRevenue = items.Where(x => string.Equals(x.ManualTollClassName, cls, StringComparison.OrdinalIgnoreCase))
@@ -225,7 +227,7 @@
                         else
                         {
                             <tr>
-                                <td colspan="@(Model.TollClasses.Count + 3)" class="text-center text-muted">No data found</td>
+                                <td colspan="@(viewModel.TollClasses.Count + 3)" class="text-center text-muted">No data found</td>
                             </tr>
                         }
                     </tbody>
@@ -258,11 +260,11 @@
     document.addEventListener("DOMContentLoaded", () => {
 
       const groupedData = @Html.Raw(JsonSerializer.Serialize(
-                    Model.GroupedDataTyped ?? new List<MIS.Web.Models.Comprehensive.PageComprehensiveModel.GroupedRow>()
+                    viewModel.GroupedDataTyped
             ));
-      const tollClasses = @Html.Raw(JsonSerializer.Serialize(Model.TollClasses ?? new List<string>()));
+      const tollClasses = @Html.Raw(JsonSerializer.Serialize(viewModel.TollClasses));
       const items = @Html.Raw(JsonSerializer.Serialize(
-                    Model.Items ?? new List<MIS.Web.Models.Comprehensive.ComprehensiveModel>()
+                    viewModel.Items ?? new List<MIS.Web.Models.Comprehensive.ComprehensiveModel>()
             ));
 
       const groupByLabel = @Html.Raw(JsonSerializer.Serialize(groupByLabel));
@@ -275,14 +277,14 @@
 
       //  Filters text 
       const filterText = {
-        "Start Date and Time": '@Model.Input.StartDate.ToString("dd/MM/yyyy HH:mm")',
-        "End Date and Time": '@Model.Input.EndDate.ToString("dd/MM/yyyy HH:mm")',
-        "Operational Shift": '@(Model.FilterTextOperationalShift ?? "All")',
-        "Toll Operator": '@(Model.FilterTextOperators ?? "All")',
-        "Lane": '@(Model.FilterTextLanes ?? "All")',
-        "Payment Method": '@(Model.FilterTextPaymentMethods ?? "All")',
-        "Lane Discount Type": '@(Model.FilterTextDiscountTypes ?? "All")',
-        "Classification": '@(Model.FilterTextClassifications ?? "All")'
+        "Start Date and Time": '@input.StartDate.ToString("dd/MM/yyyy HH:mm")',
+        "End Date and Time": '@input.EndDate.ToString("dd/MM/yyyy HH:mm")',
+        "Operational Shift": '@(viewModel.FilterTextOperationalShift ?? "All")',
+        "Toll Operator": '@(viewModel.FilterTextOperators ?? "All")',
+        "Lane": '@(viewModel.FilterTextLanes ?? "All")',
+        "Payment Method": '@(viewModel.FilterTextPaymentMethods ?? "All")',
+        "Lane Discount Type": '@(viewModel.FilterTextDiscountTypes ?? "All")',
+        "Classification": '@(viewModel.FilterTextClassifications ?? "All")'
       };
 
       const n = (v) => (Number(v) || 0);

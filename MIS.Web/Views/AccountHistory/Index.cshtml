@@ -94,14 +94,14 @@
         <div class="col-md-3">
             <label class="form-label fw-semibold">Start Date And Time</label>
             <input type="datetime-local" name="startDate" id="startDateInput" class="form-control"
-                   value="@(Model.StartDate?.ToString("yyyy-MM-ddTHH:mm") ?? "")" />
+                   value="@(Model?.StartDate?.ToString("yyyy-MM-ddTHH:mm") ?? "")" />
         </div>
 
         <!-- END DATE -->
         <div class="col-md-3">
             <label class="form-label fw-semibold">End Date And Time</label>
             <input type="datetime-local" name="endDate" id="endDateInput" class="form-control"
-                   value="@(Model.EndDate?.ToString("yyyy-MM-ddTHH:mm") ?? "")" />
+                   value="@(Model?.EndDate?.ToString("yyyy-MM-ddTHH:mm") ?? "")" />
         </div>
 
         <!-- OPERATIONAL -->
@@ -109,8 +109,8 @@
             <label class="form-label fw-semibold">Operational Period</label>
             <select name="operational" id="operationalSelect" class="form-select">
                 <option value="">-- Select --</option>
-                <option value="true" @(Model.Operational == true ? "selected" : "")>Yes</option>
-                <option value="false" @(Model.Operational == false ? "selected" : "")>No</option>
+                <option value="true" @(Model?.Operational == true ? "selected" : "")>Yes</option>
+                <option value="false" @(Model?.Operational == false ? "selected" : "")>No</option>
             </select>
         </div>
 

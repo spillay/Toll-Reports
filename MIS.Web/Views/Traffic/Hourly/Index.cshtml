@@ -102,7 +102,7 @@
             </div>
         </div>
 
-        @Html.Partial("Hourly/_HourlyTrafficFilters", Model)
+        @await Html.PartialAsync("Hourly/_HourlyTrafficFilters", Model)
 
         <div class="table-responsive">
             <table class="table table-bordered table-striped align-middle">

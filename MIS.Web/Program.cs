@@ -6,10 +6,14 @@ using OfficeOpenXml;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var configBuilder = new ConfigurationBuilder().AddJsonFile("appsettings.json").Build();
-var configServer = configBuilder.GetSection("Server");
+builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
+
+var configServer = builder.Configuration.GetSection("Server");
 var port = configServer["Port"];
 var host = configServer["Host"];
+var allowedOrigins = builder.Configuration
+    .GetSection("Cors:AllowedOrigins")
+    .Get<string[]>() ?? Array.Empty<string>();
 
 ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
 
@@ -34,6 +38,7 @@ builder.Services.AddScoped<IAccountUsageSummaryService, AccountUsageSummaryServi
 builder.Services.AddHttpClient<IAccountUsageDetailsService, AccountUsageDetailsService>();
 builder.Services.AddHttpClient<IEndOfDayReportService, EndOfDayReportService>();
 builder.Services.AddHttpClient<IAvcAccuracyReportService, AvcAccuracyReportService>();
+builder.Services.AddHttpClient<IApiClientService, ApiClientService>();
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
@@ -56,10 +61,15 @@ builder.Services.AddWindowsService();
 
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll", policy =>
-        policy.AllowAnyOrigin()
-              .AllowAnyMethod()
-              .AllowAnyHeader());
+    options.AddPolicy("ConfiguredOrigins", policy =>
+    {
+        if (allowedOrigins.Length > 0)
+        {
+            policy.WithOrigins(allowedOrigins)
+                  .AllowAnyMethod()
+                  .AllowAnyHeader();
+        }
+    });
 });
 
 var app = builder.Build();
@@ -72,7 +82,7 @@ if (!app.Environment.IsDevelopment())
 
 //app.UseHttpsRedirection(); // Enable this if you want HTTPS
 app.UseStaticFiles();
-app.UseCors("AllowAll");
+app.UseCors("ConfiguredOrigins");
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();

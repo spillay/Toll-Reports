@@ -10,6 +10,8 @@ using TollReportingSystem.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
+
 // ====================
 // Windows Service
 // ====================
@@ -69,6 +71,9 @@ var connectionString =
 
 var host = builder.Configuration["Server:Host"] ?? "localhost";
 var port = builder.Configuration["Server:Port"] ?? "4567";
+var allowedOrigins = builder.Configuration
+    .GetSection("Cors:AllowedOrigins")
+    .Get<string[]>() ?? Array.Empty<string>();
 
 var jwtKey = builder.Configuration["JwtSettings:SecretKey"]
     ?? throw new InvalidOperationException("JWT SecretKey is missing in configuration.");
@@ -94,9 +99,14 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
-        policy.WithOrigins("http://localhost:8081")
-              .AllowAnyMethod()
-              .AllowAnyHeader());
+    {
+        if (allowedOrigins.Length > 0)
+        {
+            policy.WithOrigins(allowedOrigins)
+                  .AllowAnyMethod()
+                  .AllowAnyHeader();
+        }
+    });
 });
 
 // ====================

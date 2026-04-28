@@ -85,8 +85,8 @@ namespace MIS.Web.Services
         {
             try
             {
-                string baseUrl = _config["BaseApiUrl:Link"];
-                string endpoint = _config["ApiSettings:TransactionEndpoint"];
+                string baseUrl = _config["BaseApiUrl:Link"] ?? "";
+                string endpoint = _config["ApiSettings:TransactionEndpoint"] ?? "";
 
                 string query = BuildTransactionQuery(model);
                 string url = $"{baseUrl}{endpoint}?{query}";
@@ -120,8 +120,8 @@ namespace MIS.Web.Services
         {
             try
             {
-                string baseUrl = _config["BaseApiUrl:Link"];
-                string endpoint = _config["ApiSettings:TransactionEndpoint"];
+                string baseUrl = _config["BaseApiUrl:Link"] ?? "";
+                string endpoint = _config["ApiSettings:TransactionEndpoint"] ?? "";
 
                 string query = BuildTransactionQuery(model, exportAll: true);
                 string url = $"{baseUrl}{endpoint}?{query}";
@@ -155,8 +155,8 @@ namespace MIS.Web.Services
         {
             try
             {
-                string baseUrl = _config["BaseApiUrl:Link"];
-                string endpoint = _config["ApiSettings:TransactionFilterOptionsEndpoint"];
+                string baseUrl = _config["BaseApiUrl:Link"] ?? "";
+                string endpoint = _config["ApiSettings:TransactionFilterOptionsEndpoint"] ?? "";
 
                 var sb = new StringBuilder();
                 AppendQueryParam(sb, "startDate", model.StartDate.ToString("yyyy-MM-ddTHH:mm:ss"));

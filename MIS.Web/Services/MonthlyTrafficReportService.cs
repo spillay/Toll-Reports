@@ -54,8 +54,8 @@ namespace MIS.Web.Services
                 queryParams.Add($"shifts={Uri.EscapeDataString(string.Join(",", shifts))}");
             }
 
-            string baseUrl = _configuration["BaseApiUrl:Link"];
-            string endpoint = _configuration["ApiSettings:MonthlyTrafficEndpoint"];
+            string baseUrl = _configuration["BaseApiUrl:Link"] ?? "";
+            string endpoint = _configuration["ApiSettings:MonthlyTrafficEndpoint"] ?? "";
             string url = $"{CombineUrl(baseUrl, endpoint)}?{string.Join("&", queryParams)}";
 
             try
@@ -90,8 +90,8 @@ namespace MIS.Web.Services
 
         public async Task<List<int>> GetAvailableYearsAsync()
         {
-            string baseUrl = _configuration["BaseApiUrl:Link"];
-            string endpoint = _configuration["ApiSettings:MonthlyTrafficEndpoint"];
+            string baseUrl = _configuration["BaseApiUrl:Link"] ?? "";
+            string endpoint = _configuration["ApiSettings:MonthlyTrafficEndpoint"] ?? "";
             string url = CombineUrl(baseUrl, $"{endpoint}/years");
 
             try
@@ -113,8 +113,8 @@ namespace MIS.Web.Services
 
         public async Task<List<int>> GetAvailableMonthsAsync(int year)
         {
-            string baseUrl = _configuration["BaseApiUrl:Link"];
-            string endpoint = _configuration["ApiSettings:MonthlyTrafficEndpoint"];
+            string baseUrl = _configuration["BaseApiUrl:Link"] ?? "";
+            string endpoint = _configuration["ApiSettings:MonthlyTrafficEndpoint"] ?? "";
             string url = CombineUrl(baseUrl, $"{endpoint}/months/{year}");
 
             try
@@ -136,8 +136,8 @@ namespace MIS.Web.Services
 
         public async Task<List<string>> GetAvailableClassificationsAsync()
         {
-            string baseUrl = _configuration["BaseApiUrl:Link"];
-            string endpoint = _configuration["ApiSettings:MonthlyTrafficEndpoint"];
+            string baseUrl = _configuration["BaseApiUrl:Link"] ?? "";
+            string endpoint = _configuration["ApiSettings:MonthlyTrafficEndpoint"] ?? "";
             string url = CombineUrl(baseUrl, $"{endpoint}/classifications");
 
             try

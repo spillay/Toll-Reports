@@ -63,7 +63,7 @@
                     <label class="form-label">Year</label>
                     <select name="year" id="yearSelect" class="form-select">
                         <option value="">- All -</option>
-                        @foreach (var y in Model.AvailableYears)
+                        @foreach (var y in Model?.AvailableYears ?? new List<int>())
                         {
                             <option value="@y" selected="@(filters.Year == y)">@y</option>
                         }
@@ -75,7 +75,7 @@
                     <label class="form-label">Month</label>
                     <select name="month" id="monthSelect" class="form-select" @(filters.Year.HasValue ? "" : "disabled")>
                         <option value="">- All -</option>
-                        @foreach (var m in Model.AvailableMonths)
+                        @foreach (var m in Model?.AvailableMonths ?? new List<int>())
                         {
                             <option value="@m" selected="@(filters.Month == m)">
                                 @CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(m)
@@ -181,7 +181,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @if (Model.Items.Any())
+                    @if (Model?.Items.Any() == true)
                     {
                         var monthGroups = Model.Items
                         .GroupBy(x => new { x.Year, x.Month })

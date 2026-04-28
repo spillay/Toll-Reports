@@ -5,6 +5,6 @@ namespace MIS.Web.Models.AccountHistory
 {
     public class PageAccountHistoryModel : PageModel
     {
-        public List<AccountHistoryModel> Items { get; set; } 
+        public List<AccountHistoryModel> Items { get; set; } = new();
     }
 }

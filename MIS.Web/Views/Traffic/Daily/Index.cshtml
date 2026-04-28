@@ -449,10 +449,10 @@
         doc.setFontSize(10);
 
         const filters = {
-            "Start Date": '@Model.Filters.StartDate.ToString("dd/MM/yyyy")',
-            "End Date": '@Model.Filters.EndDate.ToString("dd/MM/yyyy")',
-            "Classification": '@(Model.Filters.ClassificationList != null && Model.Filters.ClassificationList.Any() ? string.Join(", ", Model.Filters.ClassificationList) : "All")',
-            "Operational Day": '@(Model.Filters.OperationalDay ? "Yes" : "No")'
+            "Start Date": '@input.StartDate.ToString("dd/MM/yyyy")',
+            "End Date": '@input.EndDate.ToString("dd/MM/yyyy")',
+            "Classification": '@(input.ClassificationList.Any() ? string.Join(", ", input.ClassificationList) : "All")',
+            "Operational Day": '@(input.OperationalDay ? "Yes" : "No")'
         };
 
         let y = startY;

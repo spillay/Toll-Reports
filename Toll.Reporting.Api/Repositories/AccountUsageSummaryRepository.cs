@@ -108,7 +108,7 @@ namespace Toll.Reporting.Api.Repositories
             var transactionMap = transactionAgg
                 .Where(x => x.RegisteredUserId != null)
                 .ToDictionary(
-                    x => x.RegisteredUserId!,
+                    x => x.RegisteredUserId!.Value,
                     x => new
                     {
                         x.LaneTransactionCount,

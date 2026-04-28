@@ -35,10 +35,10 @@
             </label>
 
             <div class="border rounded p-2" style="max-height:170px; overflow:auto;">
-                @foreach (var shift in Model.Shifts ?? new List<string>())
+                @foreach (var shift in Model?.Shifts ?? new List<string>())
                 {
-                    var id = "shift_" + shift.Replace(" ", "_");
-                    var isChecked = Model.SelectedShifts?.Contains(shift) == true;
+                    var id = "shift_" + (shift ?? "").Replace(" ", "_");
+                    var isChecked = !string.IsNullOrWhiteSpace(shift) && Model?.SelectedShifts?.Contains(shift) == true;
 
                     <div class="form-check">
                         <input class="form-check-input"
@@ -64,10 +64,10 @@
             </label>
 
             <div class="border rounded p-2" style="max-height:170px; overflow:auto;">
-                @foreach (var op in Model.TollOperators ?? new List<string>())
+                @foreach (var op in Model?.TollOperators ?? new List<string>())
                 {
-                    var id = "op_" + op.Replace(" ", "_");
-                    var isChecked = Model.SelectedTollOperators?.Contains(op) == true;
+                    var id = "op_" + (op ?? "").Replace(" ", "_");
+                    var isChecked = !string.IsNullOrWhiteSpace(op) && Model?.SelectedTollOperators?.Contains(op) == true;
 
                     <div class="form-check">
                         <input class="form-check-input"
@@ -93,10 +93,10 @@
             </label>
 
             <div class="border rounded p-2" style="max-height:170px; overflow:auto;">
-                @foreach (var lane in Model.Lanes ?? new List<string>())
+                @foreach (var lane in Model?.Lanes ?? new List<string>())
                 {
-                    var id = "lane_" + lane.Replace(" ", "_");
-                    var isChecked = Model.SelectedLanes?.Contains(lane) == true;
+                    var id = "lane_" + (lane ?? "").Replace(" ", "_");
+                    var isChecked = !string.IsNullOrWhiteSpace(lane) && Model?.SelectedLanes?.Contains(lane) == true;
 
                     <div class="form-check">
                         <input class="form-check-input"
@@ -122,10 +122,10 @@
             </label>
 
             <div class="border rounded p-2" style="max-height:170px; overflow:auto;">
-                @foreach (var pm in Model.PaymentMethods ?? new List<string>())
+                @foreach (var pm in Model?.PaymentMethods ?? new List<string>())
                 {
-                    var id = "pm_" + pm.Replace(" ", "_");
-                    var isChecked = Model.SelectedPaymentMethods?.Contains(pm) == true;
+                    var id = "pm_" + (pm ?? "").Replace(" ", "_");
+                    var isChecked = !string.IsNullOrWhiteSpace(pm) && Model?.SelectedPaymentMethods?.Contains(pm) == true;
 
                     <div class="form-check">
                         <input class="form-check-input"
@@ -151,10 +151,10 @@
             </label>
 
             <div class="border rounded p-2" style="max-height:170px; overflow:auto;">
-                @foreach (var collectorClass in Model.TollCollectorClasses ?? new List<string>())
+                @foreach (var collectorClass in Model?.TollCollectorClasses ?? new List<string>())
                 {
-                    var id = "collector_" + collectorClass.Replace(" ", "_");
-                    var isChecked = Model.SelectedTollCollectorClasses?.Contains(collectorClass) == true;
+                    var id = "collector_" + (collectorClass ?? "").Replace(" ", "_");
+                    var isChecked = !string.IsNullOrWhiteSpace(collectorClass) && Model?.SelectedTollCollectorClasses?.Contains(collectorClass) == true;
 
                     <div class="form-check">
                         <input class="form-check-input"

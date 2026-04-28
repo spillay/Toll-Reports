@@ -6,8 +6,9 @@
 @{
     ViewData["Title"] = "AVC Accuracy Report";
 
-    var lanes = Model?.Lanes ?? new List<MIS.Web.Models.AvcAccuracy.AvcAccuracyLaneRowModel>();
-    var total = Model?.GrandTotal ?? new MIS.Web.Models.AvcAccuracy.AvcAccuracyTotalsModel();
+    var viewModel = Model ?? new MIS.Web.Models.AvcAccuracy.PageAvcAccuracyReportModel();
+    var lanes = viewModel.Lanes;
+    var total = viewModel.GrandTotal;
 
     var reportGeneratedAt = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
     var currentUserId = User.FindFirst("firstName")?.Value ?? User.Identity?.Name ?? "Unknown User";
@@ -19,16 +20,16 @@
         .ToList()
         ?? new List<MIS.Web.Models.AvcAccuracy.AvcAccuracyClassCellModel>();
 
-    string shiftText = Model.SelectedShiftIds != null && Model.SelectedShiftIds.Any()
-        ? string.Join(", ", Model.ShiftOptions.Where(x => Model.SelectedShiftIds.Contains(x.Id)).Select(x => x.Name))
+    string shiftText = viewModel.SelectedShiftIds.Any()
+        ? string.Join(", ", viewModel.ShiftOptions.Where(x => viewModel.SelectedShiftIds.Contains(x.Id)).Select(x => x.Name))
         : "-All-";
 
-    string laneText = Model.SelectedLaneIds != null && Model.SelectedLaneIds.Any()
-        ? string.Join(", ", Model.LaneOptions.Where(x => Model.SelectedLaneIds.Contains(x.Id)).Select(x => x.Name))
+    string laneText = viewModel.SelectedLaneIds.Any()
+        ? string.Join(", ", viewModel.LaneOptions.Where(x => viewModel.SelectedLaneIds.Contains(x.Id)).Select(x => x.Name))
         : "-All-";
 
-    string classText = Model.SelectedClassIds != null && Model.SelectedClassIds.Any()
-        ? string.Join(", ", Model.ClassOptions.Where(x => Model.SelectedClassIds.Contains(x.Id)).Select(x => x.Name))
+    string classText = viewModel.SelectedClassIds.Any()
+        ? string.Join(", ", viewModel.ClassOptions.Where(x => viewModel.SelectedClassIds.Contains(x.Id)).Select(x => x.Name))
         : "-All-";
 
     string Count(decimal value) => value.ToString("N0", CultureInfo.InvariantCulture);
@@ -136,7 +137,7 @@
                 <input type="datetime-local"
                        name="startDate"
                        class="form-control"
-                       value="@(Model.StartDate == default ? "" : Model.StartDate.ToString("yyyy-MM-ddTHH:mm"))" />
+                       value="@(viewModel.StartDate == default ? "" : viewModel.StartDate.ToString("yyyy-MM-ddTHH:mm"))" />
             </div>
 
             <div class="col-md-3">
@@ -144,17 +145,17 @@
                 <input type="datetime-local"
                        name="endDate"
                        class="form-control"
-                       value="@(Model.EndDate == default ? "" : Model.EndDate.ToString("yyyy-MM-ddTHH:mm"))" />
+                       value="@(viewModel.EndDate == default ? "" : viewModel.EndDate.ToString("yyyy-MM-ddTHH:mm"))" />
             </div>
 
             <div class="col-md-2">
                 <label class="form-label fw-semibold">Operational Shift</label>
                 <div class="avc-checkbox-panel">
-                    @if (Model.ShiftOptions != null && Model.ShiftOptions.Any())
+                    @if (viewModel.ShiftOptions.Any())
                     {
-                        foreach (var item in Model.ShiftOptions.OrderBy(x => x.Name))
+                        foreach (var item in viewModel.ShiftOptions.OrderBy(x => x.Name))
                         {
-                            var isChecked = Model.SelectedShiftIds != null && Model.SelectedShiftIds.Contains(item.Id);
+                            var isChecked = viewModel.SelectedShiftIds.Contains(item.Id);
 
                             <div class="form-check">
                                 <input class="form-check-input"
@@ -177,11 +178,11 @@
             <div class="col-md-2">
                 <label class="form-label fw-semibold">Lane</label>
                 <div class="avc-checkbox-panel">
-                    @if (Model.LaneOptions != null && Model.LaneOptions.Any())
+                    @if (viewModel.LaneOptions.Any())
                     {
-                        foreach (var item in Model.LaneOptions.OrderBy(x => x.Name))
+                        foreach (var item in viewModel.LaneOptions.OrderBy(x => x.Name))
                         {
-                            var isChecked = Model.SelectedLaneIds != null && Model.SelectedLaneIds.Contains(item.Id);
+                            var isChecked = viewModel.SelectedLaneIds.Contains(item.Id);
 
                             <div class="form-check">
                                 <input class="form-check-input"
@@ -204,11 +205,11 @@
             <div class="col-md-2">
                 <label class="form-label fw-semibold">Class</label>
                 <div class="avc-checkbox-panel">
-                    @if (Model.ClassOptions != null && Model.ClassOptions.Any())
+                    @if (viewModel.ClassOptions.Any())
                     {
-                        foreach (var item in Model.ClassOptions.OrderBy(x => x.Name))
+                        foreach (var item in viewModel.ClassOptions.OrderBy(x => x.Name))
                         {
-                            var isChecked = Model.SelectedClassIds != null && Model.SelectedClassIds.Contains(item.Id);
+                            var isChecked = viewModel.SelectedClassIds.Contains(item.Id);
 
                             <div class="form-check">
                                 <input class="form-check-input"
@@ -238,11 +239,11 @@
     <table class="table table-borderless mb-3 avc-filter-summary">
         <tr>
             <td style="width:220px;"><strong>Start Date and Time:</strong></td>
-            <td>@(Model.StartDate == default ? "" : Model.StartDate.ToString("dd/MM/yyyy hh:mm tt"))</td>
+            <td>@(viewModel.StartDate == default ? "" : viewModel.StartDate.ToString("dd/MM/yyyy hh:mm tt"))</td>
         </tr>
         <tr>
             <td><strong>End Date and Time:</strong></td>
-            <td>@(Model.EndDate == default ? "" : Model.EndDate.ToString("dd/MM/yyyy hh:mm tt"))</td>
+            <td>@(viewModel.EndDate == default ? "" : viewModel.EndDate.ToString("dd/MM/yyyy hh:mm tt"))</td>
         </tr>
         <tr>
             <td><strong>Operational Shift:</strong></td>
@@ -334,7 +335,7 @@
                     }
 
                     var totalClasses = orderedClasses
-                        .Select(c => total.Classes.FirstOrDefault(x => x.ClassId == c.ClassId) ?? EmptyClassCell())
+                        .Select(c => (total.Classes ?? new List<MIS.Web.Models.AvcAccuracy.AvcAccuracyClassCellModel>()).FirstOrDefault(x => x.ClassId == c.ClassId) ?? EmptyClassCell())
                         .ToList();
 
                     <tr class="avc-total-row">
@@ -422,8 +423,8 @@
         const REPORT_VERSION = "@reportVersion";
 
         const FILTERS_USED = {
-        "Start Date and Time": "@(Model.StartDate == default ? "" : Model.StartDate.ToString("dd/MM/yyyy hh:mm tt"))",
-        "End Date and Time": "@(Model.EndDate == default ? "" : Model.EndDate.ToString("dd/MM/yyyy hh:mm tt"))",
+        "Start Date and Time": "@(viewModel.StartDate == default ? "" : viewModel.StartDate.ToString("dd/MM/yyyy hh:mm tt"))",
+        "End Date and Time": "@(viewModel.EndDate == default ? "" : viewModel.EndDate.ToString("dd/MM/yyyy hh:mm tt"))",
         "Operational Shift": "@shiftText",
         "Lane": "@laneText",
         "Class": "@classText"

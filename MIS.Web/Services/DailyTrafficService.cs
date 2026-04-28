@@ -52,8 +52,8 @@ namespace MIS.Web.Services
                 queryParams.Add($"shifts={Uri.EscapeDataString(string.Join(",", shifts))}");
             }
 
-            string baseUrl = _configuration["BaseApiUrl:Link"];
-            string endpoint = _configuration["ApiSettings:DailyTrafficEndpoint"];
+            string baseUrl = _configuration["BaseApiUrl:Link"] ?? "";
+            string endpoint = _configuration["ApiSettings:DailyTrafficEndpoint"] ?? "";
             string url = $"{CombineUrl(baseUrl, endpoint)}?{string.Join("&", queryParams)}";
 
             try
@@ -89,8 +89,8 @@ namespace MIS.Web.Services
 
         public async Task<List<string>> GetAllClassificationsAsync()
         {
-            string baseUrl = _configuration["BaseApiUrl:Link"];
-            string endpoint = _configuration["ApiSettings:DailyTrafficClassificationsEndpoint"];
+            string baseUrl = _configuration["BaseApiUrl:Link"] ?? "";
+            string endpoint = _configuration["ApiSettings:DailyTrafficClassificationsEndpoint"] ?? "";
             string url = CombineUrl(baseUrl, endpoint);
 
             try

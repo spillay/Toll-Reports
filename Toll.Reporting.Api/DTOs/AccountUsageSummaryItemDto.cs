@@ -2,8 +2,8 @@
 {
     public class AccountUsageSummaryItemDto
     {
-        public string AccountNumber { get; set; }
-        public string AccountStatus { get; set; }
+        public string AccountNumber { get; set; } = string.Empty;
+        public string AccountStatus { get; set; } = string.Empty;
 
         public decimal OpeningBalance { get; set; }
         public decimal ClosingBalance { get; set; }

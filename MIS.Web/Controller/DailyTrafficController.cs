@@ -33,13 +33,15 @@ namespace MIS.Web.Controllers
             var end = endDate ?? now;
 
             // ✅ If nothing selected -> treat as "All" (null)
-            var selectedClasses = (classification != null && classification.Any())
-                ? classification
-                    .Select(x => x?.Trim())
-                    .Where(x => !string.IsNullOrWhiteSpace(x))
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToList()
-                : null;
+            var selectedClasses = classification?
+                .Select(x => x?.Trim())
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(x => x!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (selectedClasses?.Any() != true)
+                selectedClasses = null;
 
             // ✅ Only send shifts if operational day is enabled
             var shiftsToSend = operationalDay ? (shifts ?? new List<int>()) : null;

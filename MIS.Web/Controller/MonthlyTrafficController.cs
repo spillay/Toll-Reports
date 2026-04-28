@@ -32,18 +32,18 @@ namespace MIS.Web.Controllers
                 month,
                 operationalMonth,
                 classification,
-                operationalMonth ? shifts : null
+                operationalMonth == true ? shifts : null
             );
 
             model ??= new PageMonthlyTrafficModel();
 
             // 2) Load filter values
-            model.AvailableYears = await _trafficService.GetAvailableYearsAsync();
+            model.AvailableYears = await (_trafficService?.GetAvailableYearsAsync() ?? Task.FromResult(new List<int>()));
             model.AvailableMonths = year.HasValue
-                ? await _trafficService.GetAvailableMonthsAsync(year.Value)
+                ? await (_trafficService?.GetAvailableMonthsAsync(year.Value) ?? Task.FromResult(new List<int>()))
                 : new List<int>();
 
-            model.AvailableClassifications = await _trafficService.GetAvailableClassificationsAsync();
+            model.AvailableClassifications = await (_trafficService?.GetAvailableClassificationsAsync() ?? Task.FromResult(new List<string>()));
 
             // 3) Preserve filters
             model.Filters = new MonthlyTrafficInputModel

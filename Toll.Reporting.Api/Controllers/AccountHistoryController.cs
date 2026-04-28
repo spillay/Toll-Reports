@@ -58,6 +58,21 @@ namespace Toll.Reporting.Api.Controllers
             }
         }
 
+        [HttpGet("accounts")]
+        public async Task<IActionResult> GetAccounts([FromQuery] int take = 500)
+        {
+            take = Math.Clamp(take, 1, 5000);
+
+            var accounts = await _context.RegisteredUsers
+                .AsNoTracking()
+                .OrderBy(u => u.RegisterUserId)
+                .Take(take)
+                .Select(u => u.RegisterUserId.ToString())
+                .ToListAsync();
+
+            return Ok(accounts);
+        }
+
         [HttpGet("search-accounts")]
         public async Task<IActionResult> SearchAccounts([FromQuery] string q, [FromQuery] int take = 20)
         {

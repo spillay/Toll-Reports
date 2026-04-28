@@ -11,18 +11,6 @@ namespace MIS.Web.Models.Discrepancy
         [JsonProperty("fullItems")]
         public List<DiscrepancyModel>? FullItems { get; set; }
 
-        [JsonProperty("totalCount")]
-        public int totalCount { get; set; }
-
-        [JsonProperty("page")]
-        public int page { get; set; }
-
-        [JsonProperty("pageSize")]
-        public int pageSize { get; set; }
-
-        [JsonProperty("totalPages")]
-        public int totalPages { get; set; }
-
         public DiscrepancyInputModel Filters { get; set; } = new();
         public List<DiscrepancyModel> ExportItems { get; set; } = new();
 
